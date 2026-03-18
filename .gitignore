@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.env
+*.local
+backend/data/quotes.json
+backend/generated/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

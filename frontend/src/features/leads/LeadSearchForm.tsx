@@ -15,6 +15,7 @@ export function LeadSearchForm({ onSearch, loading }: LeadSearchFormProps) {
   const [form, setForm] = useState<LeadSearchParams>({
     searchTerm: '',
     city: '',
+    maxResults: 20,
   });
 
   const [queues, setQueues] = useState<PhoneQueue[]>([]);
@@ -69,7 +70,7 @@ export function LeadSearchForm({ onSearch, loading }: LeadSearchFormProps) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Input
             label="Nicho / Segmento"
             placeholder="ex: estúdio de tatuagem, barbearia, clínica odontológica"
@@ -82,6 +83,15 @@ export function LeadSearchForm({ onSearch, loading }: LeadSearchFormProps) {
             placeholder="ex: Belo Horizonte"
             value={form.city}
             onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
+            required
+          />
+          <Input
+            label="Máximo de resultados"
+            type="number"
+            min={1}
+            max={100}
+            value={form.maxResults ?? 20}
+            onChange={(e) => setForm((prev) => ({ ...prev, maxResults: Number(e.target.value) }))}
             required
           />
         </div>

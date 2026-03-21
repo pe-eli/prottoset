@@ -1,12 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { whatsappAPI } from '../features/whatsapp/whatsapp.api';
+import { conversationsAPI } from '../features/conversations/conversations.api';
 import { queuesAPI } from '../features/queues/queues.api';
 import type { PhoneQueue } from '../features/queues/queues.types';
 import { QueueManagerModal } from '../features/queues/QueueManagerModal';
+import { useWaBlast } from '../contexts/WaBlastContext';
 
+type BlastMode = 'direct' | 'funnel';
 type JobStatus = 'pending' | 'sending' | 'sent' | 'failed';
 
 interface QueueJob { phone: string; status: JobStatus; error?: string }
@@ -61,7 +64,16 @@ function WaIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
   );
 }
 
+function ChatIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  );
+}
+
 export function WhatsAppBlastPage() {
+  const [mode, setMode] = useState<BlastMode>('direct');
   const [phoneInput, setPhoneInput] = useState('');
   const [phones, setPhones] = useState<string[]>([]);
   const [promptBase, setPromptBase] = useState('');
@@ -79,12 +91,23 @@ export function WhatsAppBlastPage() {
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [configSnapshot, setConfigSnapshot] = useState<{ batchSize: number }>({ batchSize: 5 });
+  const [batchMessages, setBatchMessages] = useState<Array<{ batch: number; message: string }>>([]);
 
   const [phoneQueues, setPhoneQueues] = useState<PhoneQueue[]>([]);
   const [showQueuePicker, setShowQueuePicker] = useState(false);
   const [showQueueManager, setShowQueueManager] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  // Funnel-specific state
+  const [funnelSummary, setFunnelSummary] = useState<{ sent: number; failed: number; skipped: number; total: number } | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<{ valid: number; invalid: number } | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
+  const blastIdRef = useRef<string | null>(null);
+  const reconnectedRef = useRef(false);
+
+  const { active: globalActive, setActive: setGlobalActive, updateProgress, clearActive } = useWaBlast();
 
   useEffect(() => { return () => { esRef.current?.close(); }; }, []);
 
@@ -106,83 +129,231 @@ export function WhatsAppBlastPage() {
     if (e.key === 'Enter') { e.preventDefault(); addPhones(); }
   };
 
+  /* ─── Direct blast SSE ─── */
+  const connectToBlast = useCallback((blastId: string) => {
+    blastIdRef.current = blastId;
+    esRef.current?.close();
+    const es = new EventSource(whatsappAPI.blastStreamUrl(blastId));
+    esRef.current = es;
+
+    es.addEventListener('config', (e) => {
+      const cfg = JSON.parse(e.data) as { batchSize: number };
+      setConfigSnapshot({ batchSize: cfg.batchSize });
+    });
+
+    es.addEventListener('catchup', (e) => {
+      const jobs: Array<{ phone: string; status: JobStatus; error?: string }> = JSON.parse(e.data);
+      const restored = jobs.map((j) => ({ phone: j.phone, status: j.status, error: j.error }));
+      setQueue(restored);
+      // Sync context immediately so notification shows correct values
+      const sent = restored.filter((j) => j.status === 'sent').length;
+      if (restored.length > 0) updateProgress(sent, restored.length, 'sending');
+    });
+
+    es.addEventListener('batch_generating', (e) => {
+      const info = JSON.parse(e.data) as { batch: number; totalBatches: number; count: number };
+      setBatchInfo({ current: info.batch, total: info.totalBatches, count: info.count });
+      setBatchGenerating(true);
+      setCountdown(null);
+      setGenError(null);
+    });
+
+    es.addEventListener('batch_start', (e) => {
+      const info = JSON.parse(e.data) as { batch: number; totalBatches: number; count: number };
+      setBatchInfo({ current: info.batch, total: info.totalBatches, count: info.count });
+      setBatchGenerating(false);
+    });
+
+    es.addEventListener('batch_message', (e) => {
+      const { batch, message } = JSON.parse(e.data) as { batch: number; message: string };
+      setBatchMessages((prev) => [...prev, { batch, message }]);
+    });
+
+    es.addEventListener('gen_error', (e) => {
+      const { error } = JSON.parse(e.data) as { error: string };
+      setGenError(error);
+      setBatchGenerating(false);
+    });
+
+    es.addEventListener('progress', (e) => {
+      const { phone, status, error } = JSON.parse(e.data) as { phone: string; status: JobStatus; error?: string };
+      // Pure updater — no side effects inside
+      setQueue((prev) => prev.map((j) => (j.phone === phone ? { ...j, status, error } : j)));
+    });
+
+    es.addEventListener('tick', (e) => {
+      const { remaining, total } = JSON.parse(e.data) as { remaining: number; total: number };
+      setCountdown({ remaining, total });
+    });
+
+    const finalize = (d: BlastSummary) => {
+      setSummary(d);
+      setCountdown(null);
+      setBatchGenerating(false);
+      setCancelling(false);
+      setPhase('done');
+      clearActive();
+      es.close();
+      esRef.current = null;
+    };
+
+    es.addEventListener('done', (e) => finalize(JSON.parse(e.data)));
+    es.addEventListener('cancelled', (e) => finalize(JSON.parse(e.data)));
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        // Server rejected permanently (404 — backend restarted, blastId gone)
+        setPhase('compose');
+        setCancelling(false);
+        clearActive();
+        setQueue([]);
+        es.close();
+        esRef.current = null;
+        return;
+      }
+      // Transient error — let EventSource auto-reconnect
+    };
+  }, [clearActive, updateProgress]);
+
+  /* ─── Funnel blast SSE ─── */
+  const connectToFunnelBlast = useCallback((blastId: string) => {
+    blastIdRef.current = blastId;
+    esRef.current?.close();
+    const es = new EventSource(conversationsAPI.startStreamUrl(blastId));
+    esRef.current = es;
+
+    // Validation events
+    es.addEventListener('validating', () => {
+      setValidating(true);
+    });
+
+    es.addEventListener('validated', (e) => {
+      const data = JSON.parse(e.data) as { valid: number; invalid: number; total: number };
+      setValidating(false);
+      setValidationResult({ valid: data.valid, invalid: data.invalid });
+    });
+
+    const applyProgress = (phone: string, status: 'sent' | 'failed' | 'skipped', error?: string) => {
+      const jobStatus: JobStatus = status === 'skipped' ? 'failed' : status;
+      setQueue((prev) =>
+        prev.map((j) =>
+          j.phone === phone
+            ? { ...j, status: jobStatus, error: status === 'skipped' ? 'Conversa já existe' : error }
+            : j,
+        ),
+      );
+    };
+
+    // Replay buffered events from before SSE was connected
+    es.addEventListener('catchup', (e) => {
+      const { events } = JSON.parse(e.data) as {
+        events: Array<{ event: string; data: { phone: string; status: 'sent' | 'failed' | 'skipped'; error?: string; remaining?: number; total?: number } }>;
+        total: number; sent: number; failed: number;
+      };
+      for (const { event, data } of events) {
+        if (event === 'progress' && data.phone) {
+          applyProgress(data.phone, data.status, data.error);
+        }
+      }
+    });
+
+    es.addEventListener('progress', (e) => {
+      const { phone, status, error } = JSON.parse(e.data) as { phone: string; status: 'sent' | 'failed' | 'skipped'; error?: string };
+      applyProgress(phone, status, error);
+    });
+
+    es.addEventListener('tick', (e) => {
+      const { remaining, total } = JSON.parse(e.data) as { remaining: number; total: number };
+      setCountdown({ remaining, total });
+    });
+
+    es.addEventListener('cancelled', (e) => {
+      const data = JSON.parse(e.data) as { sent: number; failed: number; total: number };
+      setFunnelSummary({ ...data, skipped: 0 });
+      setCountdown(null);
+      setPhase('done');
+      clearActive();
+      setCancelling(false);
+      es.close();
+      esRef.current = null;
+    });
+
+    es.addEventListener('done', (e) => {
+      const data = JSON.parse(e.data) as { sent: number; failed: number; skipped: number; total: number };
+      setFunnelSummary(data);
+      setCountdown(null);
+      setPhase('done');
+      clearActive();
+      es.close();
+      esRef.current = null;
+    });
+
+    es.onerror = () => {
+      // readyState CLOSED = server rejected permanently (404, wrong content-type)
+      // This happens when backend restarted and blastId no longer exists
+      if (es.readyState === EventSource.CLOSED) {
+        console.log('[Funnel SSE] Connection permanently rejected — clearing stale state');
+        setPhase('compose');
+        clearActive();
+        setCancelling(false);
+        setQueue([]);
+        es.close();
+        esRef.current = null;
+        return;
+      }
+      // Transient error — EventSource reconnects automatically
+    };
+  }, [clearActive]);
+
+  // Sync queue changes to global context (avoids calling updateProgress inside setQueue updater)
+  useEffect(() => {
+    if (phase !== 'active' || queue.length === 0) return;
+    const sent = queue.filter((j) => j.status === 'sent').length;
+    updateProgress(sent, queue.length, 'sending');
+  }, [queue, phase, updateProgress]);
+
+  useEffect(() => {
+    if (reconnectedRef.current || !globalActive || globalActive.phase !== 'sending' || esRef.current) return;
+    reconnectedRef.current = true;
+    setMode(globalActive.mode);
+    setPhase('active');
+    if (globalActive.mode === 'funnel') {
+      connectToFunnelBlast(globalActive.blastId);
+    } else {
+      connectToBlast(globalActive.blastId);
+    }
+  }, [globalActive, connectToBlast, connectToFunnelBlast]);
+
   const handleSend = async () => {
     if (phones.length === 0 || !promptBase.trim()) return;
     setStarting(true);
     try {
-      const { data } = await whatsappAPI.startBlast(phones, promptBase, { batchSize, intervalMinSeconds: intervalMin, intervalMaxSeconds: intervalMax });
-      const { blastId } = data;
-
-      setQueue(phones.map((phone) => ({ phone, status: 'pending' })));
-      setConfigSnapshot({ batchSize });
-      setPhase('active');
-      setPhones([]);
-
-      const es = new EventSource(whatsappAPI.blastStreamUrl(blastId));
-      esRef.current = es;
-
-      es.addEventListener('config', (e) => {
-        const cfg = JSON.parse(e.data) as { batchSize: number };
-        setConfigSnapshot(cfg);
-      });
-
-      es.addEventListener('catchup', (e) => {
-        const jobs: Array<{ phone: string; status: JobStatus; error?: string }> = JSON.parse(e.data);
-        setQueue(jobs.map((j) => ({ phone: j.phone, status: j.status, error: j.error })));
-      });
-
-      es.addEventListener('batch_generating', (e) => {
-        const info = JSON.parse(e.data) as { batch: number; totalBatches: number; count: number };
-        setBatchInfo({ current: info.batch, total: info.totalBatches, count: info.count });
-        setBatchGenerating(true);
-        setCountdown(null);
-        setGenError(null);
-      });
-
-      es.addEventListener('batch_start', (e) => {
-        const info = JSON.parse(e.data) as { batch: number; totalBatches: number; count: number };
-        setBatchInfo({ current: info.batch, total: info.totalBatches, count: info.count });
-        setBatchGenerating(false);
-      });
-
-      es.addEventListener('gen_error', (e) => {
-        const { error } = JSON.parse(e.data) as { error: string };
-        setGenError(error);
-        setBatchGenerating(false);
-      });
-
-      es.addEventListener('progress', (e) => {
-        const { phone, status, error } = JSON.parse(e.data) as { phone: string; status: JobStatus; error?: string };
-        setQueue((prev) => prev.map((j) => (j.phone === phone ? { ...j, status, error } : j)));
-      });
-
-      es.addEventListener('tick', (e) => {
-        const { remaining, total } = JSON.parse(e.data) as { remaining: number; total: number };
-        setCountdown({ remaining, total });
-      });
-
-      es.addEventListener('done', (e) => {
-        const d: BlastSummary = JSON.parse(e.data);
-        setSummary(d);
-        setCountdown(null);
-        setBatchGenerating(false);
-        setPhase('done');
-        es.close();
-        esRef.current = null;
-      });
-
-      es.onerror = () => {
-        setQueue((prev) =>
-          prev.map((j) =>
-            j.status === 'pending' || j.status === 'sending'
-              ? { ...j, status: 'failed', error: 'Conexão perdida' }
-              : j,
-          ),
-        );
-        setPhase('done');
-        es.close();
-        esRef.current = null;
-      };
+      if (mode === 'funnel') {
+        const { data } = await conversationsAPI.startConversations(phones, promptBase, {
+          intervalMinSeconds: intervalMin,
+          intervalMaxSeconds: intervalMax,
+        });
+        const { blastId } = data;
+        // Normalize phones to match backend format (with 55 prefix)
+        const normalized = phones.map((p) => {
+          const clean = p.replace(/\D/g, '');
+          return clean.startsWith('55') ? clean : '55' + clean;
+        });
+        setQueue(normalized.map((phone) => ({ phone, status: 'pending' })));
+        setPhase('active');
+        setPhones([]);
+        setGlobalActive(blastId, data.total, 'funnel');
+        connectToFunnelBlast(blastId);
+      } else {
+        const { data } = await whatsappAPI.startBlast(phones, promptBase, { batchSize, intervalMinSeconds: intervalMin, intervalMaxSeconds: intervalMax });
+        const { blastId } = data;
+        setQueue(phones.map((phone) => ({ phone, status: 'pending' })));
+        setConfigSnapshot({ batchSize });
+        setPhase('active');
+        setPhones([]);
+        setGlobalActive(blastId, data.total, 'direct');
+        connectToBlast(blastId);
+      }
     } catch (err: any) {
       alert(err.response?.data?.error || 'Erro ao iniciar disparo');
     } finally {
@@ -192,13 +363,67 @@ export function WhatsAppBlastPage() {
 
   const handleReset = () => {
     esRef.current?.close();
+    esRef.current = null;
+    blastIdRef.current = null;
+    reconnectedRef.current = false;
+    clearActive();
     setPhase('compose');
     setQueue([]);
     setSummary(null);
+    setFunnelSummary(null);
+    setValidating(false);
+    setValidationResult(null);
     setCountdown(null);
     setBatchInfo(null);
     setBatchGenerating(false);
     setGenError(null);
+    setBatchMessages([]);
+    setCancelling(false);
+  };
+
+  const handleCancel = async () => {
+    console.log('[Cancel] clicked', { blastId: blastIdRef.current, cancelling, mode });
+    if (!blastIdRef.current || cancelling) {
+      console.log('[Cancel] early return', { blastId: blastIdRef.current, cancelling });
+      return;
+    }
+    setCancelling(true);
+    try {
+      if (mode === 'funnel') {
+        console.log('[Cancel] calling conversationsAPI.cancelBlast', blastIdRef.current);
+        await conversationsAPI.cancelBlast(blastIdRef.current);
+      } else {
+        console.log('[Cancel] calling whatsappAPI.cancelBlast', blastIdRef.current);
+        await whatsappAPI.cancelBlast(blastIdRef.current);
+      }
+      console.log('[Cancel] API success, finalizing');
+      // Finaliza imediatamente — não espera o SSE 'cancelled' (pode sofrer buffering)
+      const sent = queue.filter((j) => j.status === 'sent').length;
+      const failed = queue.filter((j) => j.status === 'failed').length;
+      esRef.current?.close();
+      esRef.current = null;
+      if (mode === 'funnel') {
+        setFunnelSummary({ sent, failed, skipped: 0, total: queue.length });
+      } else {
+        setSummary({ sent, failed, total: queue.length });
+      }
+      setCountdown(null);
+      setBatchGenerating(false);
+      setPhase('done');
+      clearActive();
+      setCancelling(false);
+    } catch (err: any) {
+      console.error('[Cancel] error:', err.response?.status, err.response?.data || err.message);
+      // If 404 — blast no longer exists (backend restarted) — clear everything
+      if (err.response?.status === 404) {
+        esRef.current?.close();
+        esRef.current = null;
+        setPhase('compose');
+        clearActive();
+        setQueue([]);
+      }
+      setCancelling(false);
+    }
   };
 
   const sentCount = queue.filter((j) => j.status === 'sent').length;
@@ -217,13 +442,79 @@ export function WhatsAppBlastPage() {
         </Link>
         <div>
           <h2 className="text-2xl font-bold text-brand-950">Disparo de WhatsApp</h2>
-          <p className="text-sm text-brand-400">Mensagem nova gerada pela IA a cada lote — enviada via Evolution API</p>
+          <p className="text-sm text-brand-400">
+            {mode === 'direct'
+              ? 'Mensagem nova gerada pela IA a cada lote — enviada via Evolution API'
+              : 'Abordagem casual + funil automático de vendas com IA'}
+          </p>
         </div>
       </div>
 
       {/* ─── COMPOSE ─── */}
       {phase === 'compose' && (
         <>
+          {/* Mode selector */}
+          <Card>
+            <h3 className="text-sm font-bold text-brand-950 mb-3">Modo de envio</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setMode('direct')}
+                className={`relative flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all duration-200 ${
+                  mode === 'direct'
+                    ? 'border-emerald-400 bg-emerald-50 shadow-sm shadow-emerald-100'
+                    : 'border-border-light bg-surface-secondary hover:bg-brand-50 hover:border-brand-200'
+                }`}
+              >
+                {mode === 'direct' && (
+                  <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </span>
+                )}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  mode === 'direct' ? 'bg-emerald-100 text-emerald-600' : 'bg-brand-50 text-brand-400'
+                }`}>
+                  <WaIcon className="w-5 h-5" />
+                </div>
+                <span className={`text-sm font-semibold ${mode === 'direct' ? 'text-emerald-700' : 'text-brand-700'}`}>
+                  Disparo direto
+                </span>
+                <span className={`text-[11px] leading-tight text-center ${mode === 'direct' ? 'text-emerald-500' : 'text-brand-400'}`}>
+                  IA gera mensagem por lote e envia
+                </span>
+              </button>
+
+              <button
+                onClick={() => setMode('funnel')}
+                className={`relative flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all duration-200 ${
+                  mode === 'funnel'
+                    ? 'border-violet-400 bg-violet-50 shadow-sm shadow-violet-100'
+                    : 'border-border-light bg-surface-secondary hover:bg-brand-50 hover:border-brand-200'
+                }`}
+              >
+                {mode === 'funnel' && (
+                  <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </span>
+                )}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  mode === 'funnel' ? 'bg-violet-100 text-violet-600' : 'bg-brand-50 text-brand-400'
+                }`}>
+                  <ChatIcon className="w-5 h-5" />
+                </div>
+                <span className={`text-sm font-semibold ${mode === 'funnel' ? 'text-violet-700' : 'text-brand-700'}`}>
+                  Iniciar conversa
+                </span>
+                <span className={`text-[11px] leading-tight text-center ${mode === 'funnel' ? 'text-violet-500' : 'text-brand-400'}`}>
+                  Abordagem casual + funil automático
+                </span>
+              </button>
+            </div>
+          </Card>
+
           {/* Destinatários */}
           <Card gradient>
             <h3 className="text-sm font-bold text-brand-950 mb-1">Destinatários</h3>
@@ -330,26 +621,32 @@ export function WhatsAppBlastPage() {
           {/* Prompt de IA */}
           <Card>
             <div className="flex items-start gap-2 mb-4">
-              <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center shrink-0 mt-0.5">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                mode === 'funnel' ? 'bg-violet-50' : 'bg-violet-50'
+              }`}>
                 <SparkleIcon className="w-4 h-4 text-violet-500" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-brand-950">
-                  Prompt da Mensagem
+                  {mode === 'funnel' ? 'Contexto do Negócio' : 'Prompt da Mensagem'}
                   <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full text-[10px] font-semibold border border-violet-100">
                     <SparkleIcon className="w-2.5 h-2.5" />
-                    Gemini AI
+                    DeepSeek AI
                   </span>
                 </h3>
                 <p className="text-xs text-brand-400 mt-0.5">
-                  Descreva a intenção da mensagem. A IA cria um texto diferente antes de cada lote — nunca envia este campo diretamente.
+                  {mode === 'funnel'
+                    ? 'Descreva seu negócio e serviços. A IA usará isso para conduzir as conversas pelo funil de vendas automaticamente.'
+                    : 'Descreva a intenção da mensagem. A IA cria um texto diferente antes de cada lote — nunca envia este campo diretamente.'}
                 </p>
               </div>
             </div>
             <textarea
               value={promptBase}
               onChange={(e) => setPromptBase(e.target.value)}
-              placeholder={`Ex: Sou desenvolvedor na Prottocode e quero apresentar nossos serviços de sites e sistemas. Quero parecer simpático, direto, e sugerir uma conversa rápida para entender as necessidades deles.`}
+              placeholder={mode === 'funnel'
+                ? 'Ex: Somos a Prottocode, desenvolvemos sites, sistemas e aplicativos. Nosso diferencial é o atendimento personalizado e prazos rápidos. Preço médio de R$2.000 a R$15.000.'
+                : 'Ex: Sou desenvolvedor na Prottocode e quero apresentar nossos serviços de sites e sistemas. Quero parecer simpático, direto, e sugerir uma conversa rápida para entender as necessidades deles.'}
               rows={6}
               className="w-full px-4 py-3 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
                 placeholder:text-brand-300 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-400
@@ -358,7 +655,9 @@ export function WhatsAppBlastPage() {
             {promptBase.trim().length > 0 && (
               <p className="mt-2 text-xs text-brand-300 flex items-center gap-1">
                 <SparkleIcon className="w-3 h-3 text-violet-400" />
-                A IA vai escrever uma mensagem nova antes de cada lote — nunca o texto acima
+                {mode === 'funnel'
+                  ? 'A IA vai usar esse contexto para conduzir as conversas pelo funil de vendas'
+                  : 'A IA vai escrever uma mensagem nova antes de cada lote — nunca o texto acima'}
               </p>
             )}
           </Card>
@@ -374,23 +673,29 @@ export function WhatsAppBlastPage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-brand-950">Configurações de Disparo</h3>
-                <p className="text-xs text-brand-400">Intervalo aleatório entre cada envio — anti-spam</p>
+                <p className="text-xs text-brand-400">
+                  {mode === 'funnel'
+                    ? 'Intervalo aleatório entre cada envio de abordagem — anti-spam'
+                    : 'Intervalo aleatório entre cada envio — anti-spam'}
+                </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-brand-900">Mensagens por lote</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number" min={1} max={50} value={batchSize}
-                    onChange={(e) => setBatchSize(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                    className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
-                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
-                  />
-                  <span className="text-xs text-brand-400">máx. 50</span>
+            <div className={`grid grid-cols-1 gap-4 ${mode === 'direct' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+              {mode === 'direct' && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-brand-900">Mensagens por lote</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min={1} max={50} value={batchSize}
+                      onChange={(e) => setBatchSize(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                      className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
+                        focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                    />
+                    <span className="text-xs text-brand-400">máx. 50</span>
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-brand-900">Intervalo mínimo</label>
                 <div className="flex items-center gap-2">
@@ -424,7 +729,7 @@ export function WhatsAppBlastPage() {
               </div>
             </div>
 
-            {phones.length > 0 && (
+            {mode === 'direct' && phones.length > 0 && (
               <div className="mt-4 px-4 py-3 bg-brand-50/60 border border-brand-100 rounded-xl">
                 <p className="text-xs font-semibold text-brand-700 mb-1">Prévia do disparo</p>
                 <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-brand-500">
@@ -434,11 +739,21 @@ export function WhatsAppBlastPage() {
                         Lote {i + 1}: {Math.min(batchSize, phones.length - i * batchSize)} msgs
                       </span>
                       {i < totalBatches - 1 && (
-                        <span className="text-brand-300">→ aguarda {formatInterval(intervalMin)}–{formatInterval(intervalMax)} →</span>
+                        <span className="text-brand-300">&rarr; aguarda {formatInterval(intervalMin)}–{formatInterval(intervalMax)} &rarr;</span>
                       )}
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {mode === 'funnel' && phones.length > 0 && (
+              <div className="mt-4 px-4 py-3 bg-violet-50/60 border border-violet-100 rounded-xl">
+                <p className="text-xs font-semibold text-violet-700 mb-1">Prévia do funil</p>
+                <p className="text-xs text-violet-500">
+                  {phones.length} {phones.length === 1 ? 'conversa será iniciada' : 'conversas serão iniciadas'} com abordagem casual.
+                  Respostas dos clientes serão conduzidas automaticamente pelo funil de vendas.
+                </p>
               </div>
             )}
           </Card>
@@ -451,6 +766,11 @@ export function WhatsAppBlastPage() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
                 Iniciando...
+              </>
+            ) : mode === 'funnel' ? (
+              <>
+                <ChatIcon className="w-4 h-4" />
+                Iniciar {phones.length} {phones.length === 1 ? 'conversa' : 'conversas'}
               </>
             ) : (
               <>
@@ -489,7 +809,15 @@ export function WhatsAppBlastPage() {
               <div>
                 <h3 className="text-sm font-bold text-brand-950 flex items-center gap-1.5">
                   {phase === 'done' ? (
-                    'Disparo concluído'
+                    mode === 'funnel' ? 'Conversas iniciadas' : 'Disparo concluído'
+                  ) : validating ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin text-amber-500" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span className="text-amber-700">Validando números no WhatsApp...</span>
+                    </>
                   ) : batchGenerating && batchInfo ? (
                     <>
                       <SparkleIcon className="w-3.5 h-3.5 text-violet-500" />
@@ -499,18 +827,65 @@ export function WhatsAppBlastPage() {
                     </>
                   ) : batchInfo ? (
                     `Enviando lote ${batchInfo.current} de ${batchInfo.total}...`
+                  ) : mode === 'funnel' ? (
+                    'Enviando abordagens...'
                   ) : (
                     'Iniciando...'
                   )}
                 </h3>
                 <p className="text-xs text-brand-400 mt-0.5">
-                  {sentCount} de {queue.length} mensagens enviadas
-                  {queue.filter((j) => j.status === 'failed').length > 0 && (
-                    <span className="text-red-400 ml-1">· {queue.filter((j) => j.status === 'failed').length} falharam</span>
+                  {validating ? (
+                    'Verificando quais números possuem WhatsApp...'
+                  ) : validationResult && !validating ? (
+                    <>
+                      {validationResult.valid} válidos
+                      {validationResult.invalid > 0 && (
+                        <span className="text-red-400 ml-1">· {validationResult.invalid} sem WhatsApp</span>
+                      )}
+                      {' · '}{sentCount} de {queue.length} {mode === 'funnel' ? 'abordagens enviadas' : 'mensagens enviadas'}
+                      {queue.filter((j) => j.status === 'failed').length > 0 && (
+                        <span className="text-red-400 ml-1">· {queue.filter((j) => j.status === 'failed').length} falharam</span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {sentCount} de {queue.length} {mode === 'funnel' ? 'abordagens enviadas' : 'mensagens enviadas'}
+                      {queue.filter((j) => j.status === 'failed').length > 0 && (
+                        <span className="text-red-400 ml-1">· {queue.filter((j) => j.status === 'failed').length} falharam</span>
+                      )}
+                    </>
                   )}
                 </p>
               </div>
-              <span className="text-2xl font-bold gradient-text">{progress}%</span>
+              <div className="flex flex-col items-end gap-2">
+                <span className="text-2xl font-bold gradient-text">{progress}%</span>
+                {phase === 'active' && (
+                  <button
+                    onClick={handleCancel}
+                    disabled={cancelling}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100
+                      text-red-500 hover:text-red-600 text-xs font-semibold rounded-lg border border-red-200
+                      transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {cancelling ? (
+                      <>
+                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Cancelando...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Parar disparo
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="w-full h-2 bg-brand-100 rounded-full overflow-hidden">
@@ -518,7 +893,9 @@ export function WhatsAppBlastPage() {
                 className={`h-full rounded-full transition-all duration-500 ${
                   batchGenerating
                     ? 'bg-gradient-to-r from-violet-500 to-violet-300 animate-pulse'
-                    : 'bg-gradient-to-r from-emerald-500 to-emerald-400'
+                    : mode === 'funnel'
+                      ? 'bg-gradient-to-r from-violet-500 to-violet-400'
+                      : 'bg-gradient-to-r from-emerald-500 to-emerald-400'
                 }`}
                 style={{ width: batchGenerating ? '100%' : `${progress}%` }}
               />
@@ -545,12 +922,16 @@ export function WhatsAppBlastPage() {
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-amber-700">Aguardando próximo lote</p>
+                  <p className="text-sm font-semibold text-amber-700">
+                    {mode === 'funnel' ? 'Aguardando próximo envio' : 'Aguardando próximo lote'}
+                  </p>
                   <p className="text-xs text-amber-500">
-                    Nova mensagem gerada em {formatInterval(countdown.remaining)} — anti-spam
+                    {mode === 'funnel'
+                      ? `Próxima abordagem em ${formatInterval(countdown.remaining)} — anti-spam`
+                      : `Nova mensagem gerada em ${formatInterval(countdown.remaining)} — anti-spam`}
                   </p>
                 </div>
-                {batchInfo && batchInfo.current < batchInfo.total && (
+                {mode === 'direct' && batchInfo && batchInfo.current < batchInfo.total && (
                   <div className="ml-auto text-right">
                     <p className="text-[10px] text-amber-400 font-medium">PRÓXIMO</p>
                     <p className="text-xs font-bold text-amber-600">Lote {batchInfo.current + 1} de {batchInfo.total}</p>
@@ -560,8 +941,8 @@ export function WhatsAppBlastPage() {
             )}
           </Card>
 
-          {/* Done summary */}
-          {phase === 'done' && summary && (
+          {/* Done summary — direct */}
+          {phase === 'done' && mode === 'direct' && summary && (
             <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl px-5 py-4 animate-fade-in">
               <p className="text-sm font-semibold text-emerald-800">
                 Disparo finalizado — <strong>{summary.sent}</strong>{' '}
@@ -570,7 +951,7 @@ export function WhatsAppBlastPage() {
               </p>
               <div className="flex items-center gap-3 mt-2">
                 <Link to="/leads/contatos" className="text-xs text-emerald-600 hover:underline font-semibold">
-                  Ver contatos salvos →
+                  Ver contatos salvos &rarr;
                 </Link>
                 <button onClick={handleReset} className="text-xs text-emerald-500 hover:text-emerald-700 font-medium">
                   Novo disparo
@@ -579,21 +960,62 @@ export function WhatsAppBlastPage() {
             </div>
           )}
 
+          {/* Done summary — funnel */}
+          {phase === 'done' && mode === 'funnel' && funnelSummary && (
+            <div className="bg-violet-50/80 border border-violet-200 rounded-2xl px-5 py-4 animate-fade-in">
+              <p className="text-sm font-semibold text-violet-800">
+                Abordagens enviadas — <strong>{funnelSummary.sent}</strong>{' '}
+                {funnelSummary.sent === 1 ? 'conversa iniciada' : 'conversas iniciadas'}
+                {funnelSummary.skipped > 0 && <span className="text-amber-500">, {funnelSummary.skipped} já existiam</span>}
+                {funnelSummary.failed > 0 && <span className="text-red-500">, {funnelSummary.failed} falharam</span>}
+              </p>
+              <p className="text-xs text-violet-500 mt-1">
+                As conversas serão conduzidas automaticamente pelo funil de vendas quando os clientes responderem.
+              </p>
+              <div className="flex items-center gap-3 mt-2">
+                <Link to="/leads/whatsapp/conversas" className="text-xs text-violet-600 hover:underline font-semibold">
+                  Acompanhar conversas &rarr;
+                </Link>
+                <button onClick={handleReset} className="text-xs text-violet-500 hover:text-violet-700 font-medium">
+                  Novo envio
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Generated messages (direct only) */}
+          {mode === 'direct' && batchMessages.length > 0 && (
+            <Card>
+              <h3 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <SparkleIcon className="w-3.5 h-3.5 text-violet-400" />
+                Mensagens geradas ({batchMessages.length})
+              </h3>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {batchMessages.map((m) => (
+                  <div key={m.batch} className="px-4 py-3 bg-violet-50/50 border border-violet-100 rounded-xl">
+                    <p className="text-[10px] font-semibold text-violet-500 mb-1">Lote {m.batch}</p>
+                    <p className="text-sm text-brand-950 whitespace-pre-wrap leading-relaxed">{m.message}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           {/* Queue list */}
           <Card>
             <h3 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-3">
-              Fila de envio ({queue.length})
+              {mode === 'funnel' ? 'Fila de abordagens' : 'Fila de envio'} ({queue.length})
             </h3>
             <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
               {queue.map((job, idx) => {
                 const s = STATUS_STYLE[job.status];
-                const batchNum = Math.floor(idx / configSnapshot.batchSize) + 1;
+                const batchNum = mode === 'direct' ? Math.floor(idx / configSnapshot.batchSize) + 1 : null;
                 return (
                   <div key={job.phone} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all duration-300 ${s.bg}`}>
                     <span className={`shrink-0 ${s.text}`}>{s.icon}</span>
                     <WaIcon className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
                     <span className="flex-1 text-sm text-brand-950 font-medium truncate">{job.phone}</span>
-                    <span className="text-[10px] text-brand-300 shrink-0">Lote {batchNum}</span>
+                    {batchNum && <span className="text-[10px] text-brand-300 shrink-0">Lote {batchNum}</span>}
                     <span className={`text-[11px] font-semibold shrink-0 ${s.text}`}>{s.label}</span>
                     {job.error && (
                       <span className="text-[10px] text-red-400 truncate max-w-[140px]" title={job.error}>{job.error}</span>

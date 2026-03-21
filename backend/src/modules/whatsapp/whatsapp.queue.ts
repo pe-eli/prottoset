@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { evolutionService } from '../../services/evolution.service';
-import { geminiService } from '../../services/gemini.service';
+import { deepseekService } from '../../services/deepseek.service';
 
 export type WaJobStatus = 'pending' | 'sending' | 'sent' | 'failed';
 
@@ -8,6 +8,7 @@ export interface WaJob {
   phone: string;
   status: WaJobStatus;
   error?: string;
+  message?: string;
 }
 
 export interface WaBlastConfig {
@@ -20,7 +21,8 @@ interface WaBlastEntry {
   jobs: WaJob[];
   promptBase: string;
   config: WaBlastConfig;
-  phase: 'sending' | 'done';
+  phase: 'sending' | 'done' | 'cancelled';
+  cancelled: boolean;
   subscribers: Set<Response>;
   startedAt: string;
   finishedAt?: string;
@@ -52,6 +54,7 @@ function closeAll(entry: WaBlastEntry) {
 
 async function countdownDelay(entry: WaBlastEntry, seconds: number): Promise<void> {
   for (let remaining = seconds; remaining > 0; remaining--) {
+    if (entry.cancelled) return;
     emit(entry, 'tick', { remaining, total: seconds });
     await new Promise((res) => setTimeout(res, 1000));
   }
@@ -67,6 +70,8 @@ async function processBlast(blastId: string) {
   entry.phase = 'sending';
 
   for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+    if (entry.cancelled) break;
+
     const batchStart = batchIndex * batchSize;
     const batchJobs = entry.jobs.slice(batchStart, batchStart + batchSize);
 
@@ -79,19 +84,21 @@ async function processBlast(blastId: string) {
 
     let batchMessage: string;
     try {
-      batchMessage = await geminiService.generateWhatsAppMessage(entry.promptBase);
+      batchMessage = await deepseekService.generateWhatsAppMessage(entry.promptBase);
       if (!batchMessage || batchMessage.trim() === entry.promptBase.trim()) {
-        // Gemini devolveu o prompt cru — sinaliza erro claro
-        throw new Error('Gemini retornou o prompt sem transformação. Verifique a GEMINI_API_KEY no .env');
+        throw new Error('DeepSeek retornou o prompt sem transformação. Verifique a DEEPSEEK_API_KEY no .env');
       }
     } catch (genErr: any) {
-      // Emite evento de erro de geração para o frontend poder exibir o aviso
       emit(entry, 'gen_error', { batch: batchIndex + 1, error: genErr.message ?? 'Erro na geração de mensagem' });
-      // Continua com o prompt como fallback para não travar o disparo
-      batchMessage = entry.promptBase;
+      // Aborta o disparo — nunca envia o prompt como mensagem
+      break;
     }
 
     // ── Fase de envio: dispara todos os phones do lote ──
+    emit(entry, 'batch_message', {
+      batch: batchIndex + 1,
+      message: batchMessage,
+    });
     emit(entry, 'batch_start', {
       batch: batchIndex + 1,
       totalBatches,
@@ -99,10 +106,12 @@ async function processBlast(blastId: string) {
     });
 
     for (let i = 0; i < batchJobs.length; i++) {
+      if (entry.cancelled) break;
       const job = batchJobs[i];
       const globalIndex = batchStart + i;
 
       job.status = 'sending';
+      job.message = batchMessage;
       emit(entry, 'progress', { phone: job.phone, status: 'sending', index: globalIndex, total });
 
       const result = await evolutionService.sendMessage(job.phone, batchMessage);
@@ -137,11 +146,12 @@ async function processBlast(blastId: string) {
   // ── Finalizado ──
   const finalEntry = blasts.get(blastId);
   if (finalEntry) {
-    finalEntry.phase = 'done';
+    finalEntry.phase = finalEntry.cancelled ? 'cancelled' : 'done';
     finalEntry.finishedAt = new Date().toISOString();
     const sent = finalEntry.jobs.filter((j) => j.status === 'sent').length;
     const failed = finalEntry.jobs.filter((j) => j.status === 'failed').length;
-    emit(finalEntry, 'done', { sent, failed, total });
+    const event = finalEntry.cancelled ? 'cancelled' : 'done';
+    emit(finalEntry, event, { sent, failed, total });
     setTimeout(() => closeAll(finalEntry), 500);
   }
 }
@@ -159,6 +169,7 @@ export const waBlastQueue = {
       promptBase,
       config,
       phase: 'sending',
+      cancelled: false,
       subscribers: new Set(),
       startedAt: new Date().toISOString(),
     };
@@ -178,7 +189,7 @@ export const waBlastQueue = {
     res.flushHeaders();
 
     // Config para o frontend reconstruir o preview de lotes
-    res.write(`event: config\ndata: ${JSON.stringify(entry.config)}\n\n`);
+    res.write(`event: config\ndata: ${JSON.stringify({ ...entry.config, phase: entry.phase })}\n\n`);
 
     // Catch-up do estado atual dos jobs
     const catchup = entry.jobs.map((j, i) => ({
@@ -193,8 +204,9 @@ export const waBlastQueue = {
     if (entry.finishedAt) {
       const sent = entry.jobs.filter((j) => j.status === 'sent').length;
       const failed = entry.jobs.filter((j) => j.status === 'failed').length;
+      const event = entry.cancelled ? 'cancelled' : 'done';
       res.write(
-        `event: done\ndata: ${JSON.stringify({ sent, failed, total: entry.jobs.length })}\n\n`,
+        `event: ${event}\ndata: ${JSON.stringify({ sent, failed, total: entry.jobs.length })}\n\n`,
       );
       res.end();
       return true;
@@ -207,5 +219,22 @@ export const waBlastQueue = {
 
   get(blastId: string): WaBlastEntry | undefined {
     return blasts.get(blastId);
+  },
+
+  cancel(blastId: string): boolean {
+    const entry = blasts.get(blastId);
+    if (!entry || entry.phase !== 'sending') return false;
+    entry.cancelled = true;
+    return true;
+  },
+
+  status(blastId: string): { phase: string; sent: number; total: number } | null {
+    const entry = blasts.get(blastId);
+    if (!entry) return null;
+    return {
+      phase: entry.phase,
+      sent: entry.jobs.filter((j) => j.status === 'sent').length,
+      total: entry.jobs.length,
+    };
   },
 };

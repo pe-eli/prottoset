@@ -27,7 +27,7 @@ export interface GenerateLeadsResult {
  * 6. Retorna leads[] + métricas
  */
 export async function generateLeads(params: LeadSearchParams): Promise<GenerateLeadsResult> {
-  const { searchTerm, city } = params;
+  const { searchTerm, city, maxResults } = params;
   logger.info(`Iniciando workflow: "${searchTerm}" em "${city}"`);
 
   // --- PASSO 1: Bairros via OpenStreetMap ---
@@ -55,7 +55,7 @@ export async function generateLeads(params: LeadSearchParams): Promise<GenerateL
     const query = `${searchTerm} ${neighborhood}`;
 
     try {
-      const places = await googleMapsService.searchPlaces(query, city);
+      const places = await googleMapsService.searchPlaces(query, city, maxResults);
 
       for (const place of places) {
         // Deduplica por nome normalizado (evita duplicar empresas sem website)

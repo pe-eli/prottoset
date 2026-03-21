@@ -1,20 +1,10 @@
-import fs from 'fs';
-import path from 'path';
+import { getFirestore } from '../../services/firebase.service';
 import { Lead, LeadPriority, LeadStatus } from '../../types/leads.types';
 
-const DATA_DIR = path.join(__dirname, '../../../data');
-const LEADS_FILE = path.join(DATA_DIR, 'leads.json');
-
-function ensureFile(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(LEADS_FILE)) {
-    fs.writeFileSync(LEADS_FILE, '[]', 'utf-8');
-  }
+function collection() {
+  return getFirestore().collection('leads');
 }
 
-/** Preenche campos que podem faltar em leads antigos */
 function migrateLead(raw: any): Lead {
   const hasWebsite = raw.hasWebsite ?? !!raw.website;
   const hasPhone = !!raw.phone;
@@ -44,54 +34,58 @@ function migrateLead(raw: any): Lead {
   };
 }
 
-function readLeads(): Lead[] {
-  ensureFile();
-  const raw = JSON.parse(fs.readFileSync(LEADS_FILE, 'utf-8'));
-  return (raw as any[]).map(migrateLead);
+function toLead(doc: FirebaseFirestore.DocumentSnapshot): Lead {
+  return migrateLead({ ...doc.data(), id: doc.id });
 }
 
-function writeLeads(leads: Lead[]): void {
-  ensureFile();
-  fs.writeFileSync(LEADS_FILE, JSON.stringify(leads, null, 2), 'utf-8');
-}
-
-/** Deduplica por nome+endereço normalizado */
 function dedupeKey(lead: Lead): string {
   return `${lead.name.toLowerCase().trim()}|${lead.address.toLowerCase().trim()}`;
 }
 
 export const leadsRepository = {
-  getAll(): Lead[] {
-    return readLeads();
+  async getAll(): Promise<Lead[]> {
+    const snap = await collection().get();
+    return snap.docs.map(toLead);
   },
 
-  getById(id: string): Lead | null {
-    return readLeads().find((l) => l.id === id) || null;
+  async getById(id: string): Promise<Lead | null> {
+    const doc = await collection().doc(id).get();
+    if (!doc.exists) return null;
+    return toLead(doc);
   },
 
-  saveMany(newLeads: Lead[]): Lead[] {
-    const existing = readLeads();
+  async saveMany(newLeads: Lead[]): Promise<Lead[]> {
+    const existing = await this.getAll();
     const existingKeys = new Set(existing.map(dedupeKey));
     const unique = newLeads.filter((l) => !existingKeys.has(dedupeKey(l)));
-    const updated = [...unique, ...existing];
-    writeLeads(updated);
+
+    const db = getFirestore();
+    for (let i = 0; i < unique.length; i += 500) {
+      const chunk = unique.slice(i, i + 500);
+      const batch = db.batch();
+      for (const lead of chunk) {
+        const { id, ...data } = lead;
+        batch.set(collection().doc(id), data);
+      }
+      await batch.commit();
+    }
+
     return unique;
   },
 
-  updateStatus(id: string, status: LeadStatus): Lead | null {
-    const leads = readLeads();
-    const lead = leads.find((l) => l.id === id);
-    if (!lead) return null;
-    lead.status = status;
-    writeLeads(leads);
-    return lead;
+  async updateStatus(id: string, status: LeadStatus): Promise<Lead | null> {
+    const docRef = collection().doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) return null;
+    await docRef.update({ status });
+    const updated = await docRef.get();
+    return toLead(updated);
   },
 
-  delete(id: string): boolean {
-    const leads = readLeads();
-    const filtered = leads.filter((l) => l.id !== id);
-    if (filtered.length === leads.length) return false;
-    writeLeads(filtered);
+  async delete(id: string): Promise<boolean> {
+    const doc = await collection().doc(id).get();
+    if (!doc.exists) return false;
+    await collection().doc(id).delete();
     return true;
   },
 };

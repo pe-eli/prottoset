@@ -32,6 +32,8 @@ const BLOCKED_DOMAINS = [
   'api.whatsapp.com',
   'google.com',
   'maps.google.com',
+  'linktr.ee',
+  'nutricao.info'
 ];
 
 function isBlockedWebsite(url: string): boolean {
@@ -50,7 +52,7 @@ export const googleMapsService = {
    * Retorna TODOS os places, inclusive sem website.
    * Apenas descarta websites de redes sociais.
    */
-  async searchPlaces(query: string, city: string): Promise<MapsPlace[]> {
+  async searchPlaces(query: string, city: string, maxResults?: number): Promise<MapsPlace[]> {
     const apiKey = process.env.SERPER_API_KEY;
     if (!apiKey) throw new Error('SERPER_API_KEY não configurado no .env');
 
@@ -66,6 +68,7 @@ export const googleMapsService = {
       body: JSON.stringify({
         q: fullQuery,
         hl: 'pt-br',
+        num: maxResults ?? 20,
       }),
     });
 
@@ -92,7 +95,7 @@ export const googleMapsService = {
 
     const withSite = mapped.filter((p) => p.website).length;
     const withoutSite = mapped.length - withSite;
-    logger.info(`Google Maps: ${mapped.length} resultados (${withSite} com site, ${withoutSite} sem site)`);
+    logger.info(`Google Maps: ${mapped.length} Resultados (${withSite} Com site, ${withoutSite} Sem site)`);
     return mapped;
   },
 };

@@ -5,7 +5,7 @@ import { generateLeads } from '../../workflow/leadGenerator';
 export const leadsService = {
   async search(params: LeadSearchParams): Promise<LeadSearchResult> {
     const { leads, metrics } = await generateLeads(params);
-    const saved = leadsRepository.saveMany(leads);
+    const saved = await leadsRepository.saveMany(leads);
 
     return {
       saved,
@@ -14,19 +14,19 @@ export const leadsService = {
     };
   },
 
-  getAll(): Lead[] {
+  async getAll(): Promise<Lead[]> {
     return leadsRepository.getAll();
   },
 
-  getById(id: string): Lead | null {
+  async getById(id: string): Promise<Lead | null> {
     return leadsRepository.getById(id);
   },
 
-  updateStatus(id: string, status: LeadStatus): Lead | null {
+  async updateStatus(id: string, status: LeadStatus): Promise<Lead | null> {
     return leadsRepository.updateStatus(id, status);
   },
 
-  delete(id: string): boolean {
+  async delete(id: string): Promise<boolean> {
     return leadsRepository.delete(id);
   },
 };

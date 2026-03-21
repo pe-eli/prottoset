@@ -1,71 +1,80 @@
-import fs from 'fs';
-import path from 'path';
+import { getFirestore } from '../../services/firebase.service';
 import { Contact, ContactStatus } from '../../types/contacts.types';
-
-const DATA_DIR = path.join(__dirname, '../../../data');
-const CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
-
-function ensureFile(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(CONTACTS_FILE)) {
-    fs.writeFileSync(CONTACTS_FILE, '[]', 'utf-8');
-  }
-}
 
 const VALID_STATUSES: ContactStatus[] = ['new', 'contacted', 'negotiating', 'client', 'lost'];
 
-function readContacts(): Contact[] {
-  ensureFile();
-  const raw: Partial<Contact>[] = JSON.parse(fs.readFileSync(CONTACTS_FILE, 'utf-8'));
-  return raw.map((c) => ({
-    ...c,
-    status: VALID_STATUSES.includes(c.status as ContactStatus) ? (c.status as ContactStatus) : 'contacted',
-  })) as Contact[];
+function collection() {
+  return getFirestore().collection('contacts');
 }
 
-function writeContacts(contacts: Contact[]): void {
-  ensureFile();
-  fs.writeFileSync(CONTACTS_FILE, JSON.stringify(contacts, null, 2), 'utf-8');
+function sanitizeStatus(status: string | undefined): ContactStatus {
+  return VALID_STATUSES.includes(status as ContactStatus) ? (status as ContactStatus) : 'contacted';
+}
+
+function toContact(doc: FirebaseFirestore.DocumentSnapshot): Contact {
+  const data = doc.data() as Contact;
+  return { ...data, id: doc.id, status: sanitizeStatus(data.status) };
 }
 
 export const contactsRepository = {
-  getAll(): Contact[] {
-    return readContacts();
+  async getAll(): Promise<Contact[]> {
+    const snap = await collection().get();
+    return snap.docs.map(toContact);
   },
 
-  getById(id: string): Contact | null {
-    return readContacts().find((c) => c.id === id) || null;
+  async getById(id: string): Promise<Contact | null> {
+    const doc = await collection().doc(id).get();
+    if (!doc.exists) return null;
+    return toContact(doc);
   },
 
-  getByEmail(email: string): Contact | null {
-    return readContacts().find((c) => c.email.toLowerCase() === email.toLowerCase()) || null;
+  async getByEmail(email: string): Promise<Contact | null> {
+    const snap = await collection()
+      .where('email', '==', email.toLowerCase())
+      .limit(1)
+      .get();
+    if (snap.empty) return null;
+    return toContact(snap.docs[0]);
   },
 
-  saveMany(newContacts: Contact[]): { saved: Contact[]; duplicates: number } {
-    const existing = readContacts();
-    const existingEmails = new Set(existing.map((c) => c.email.toLowerCase()));
-    const unique = newContacts.filter((c) => !existingEmails.has(c.email.toLowerCase()));
-    const updated = [...unique, ...existing];
-    writeContacts(updated);
+  async saveMany(newContacts: Contact[]): Promise<{ saved: Contact[]; duplicates: number }> {
+    const existing = await this.getAll();
+    const existingEmails = new Set(existing.filter((c) => c.email).map((c) => c.email.toLowerCase()));
+    const existingPhones = new Set(existing.filter((c) => c.phone).map((c) => c.phone));
+    const unique = newContacts.filter((c) => {
+      if (c.email) return !existingEmails.has(c.email.toLowerCase());
+      if (c.phone) return !existingPhones.has(c.phone);
+      return true;
+    });
+
+    const db = getFirestore();
+    for (let i = 0; i < unique.length; i += 500) {
+      const chunk = unique.slice(i, i + 500);
+      const batch = db.batch();
+      for (const contact of chunk) {
+        const { id, ...data } = contact;
+        batch.set(collection().doc(id), data);
+      }
+      await batch.commit();
+    }
+
     return { saved: unique, duplicates: newContacts.length - unique.length };
   },
 
-  update(id: string, data: Partial<Pick<Contact, 'name' | 'phone' | 'company' | 'status' | 'notes'>>): Contact | null {
-    const contacts = readContacts();
-    const contact = contacts.find((c) => c.id === id);
-    if (!contact) return null;
-    Object.assign(contact, data, { updatedAt: new Date().toISOString() });
-    writeContacts(contacts);
-    return contact;
+  async update(id: string, data: Partial<Pick<Contact, 'name' | 'phone' | 'company' | 'status' | 'notes' | 'channel' | 'lastMessage' | 'lastMessageAt'>>): Promise<Contact | null> {
+    const docRef = collection().doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) return null;
+    const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+    await docRef.update({ ...clean, updatedAt: new Date().toISOString() });
+    const updated = await docRef.get();
+    return toContact(updated);
   },
 
-  delete(id: string): boolean {
-    const contacts = readContacts();
-    const filtered = contacts.filter((c) => c.id !== id);
-    if (filtered.length === contacts.length) return false;
-    writeContacts(filtered);
+  async delete(id: string): Promise<boolean> {
+    const doc = await collection().doc(id).get();
+    if (!doc.exists) return false;
+    await collection().doc(id).delete();
     return true;
   },
 };

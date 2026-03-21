@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 export type ContactStatus = 'new' | 'contacted' | 'negotiating' | 'client' | 'lost';
+export type ContactChannel = 'email' | 'whatsapp' | 'manual';
 
 export interface Contact {
   id: string;
@@ -10,6 +11,9 @@ export interface Contact {
   company: string;
   status: ContactStatus;
   notes: string;
+  channel?: ContactChannel;
+  lastMessage?: string;
+  lastMessageAt?: string;
   createdAt: string;
   updatedAt: string;
 }

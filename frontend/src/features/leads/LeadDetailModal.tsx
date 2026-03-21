@@ -201,7 +201,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
 
       {showAddToQueue && lead.phone && (
         <AddToQueueModal
-          phone={lead.phone}
+          phones={[lead.phone]}
           onClose={() => setShowAddToQueue(false)}
         />
       )}

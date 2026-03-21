@@ -1,0 +1,290 @@
+[
+  {
+    "id": "4a7b8cf6-0bce-4418-b002-a3901cf03152",
+    "phone": "5531999186286",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Estava vendo seu negócio no Google e queria te fazer uma pergunta.",
+        "timestamp": "2026-03-19T16:37:51.426Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "2a2f35e0-45fc-45e0-b7aa-1603fdc1f8b4",
+    "phone": "5531999748356",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Oi! Vi sua empresa no Google e queria tirar uma dúvida bem rápida contigo.",
+        "timestamp": "2026-03-19T16:38:20.677Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "4d29b450-5293-4fb5-bd78-961719399ebf",
+    "phone": "5531991394749",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Encontrei sua empresa enquanto pesquisava e queria te fazer uma pergunta rápida.",
+        "timestamp": "2026-03-19T16:38:47.890Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "7e255929-95cc-4715-b35b-c6f42fd60f05",
+    "phone": "5531983156754",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Oi, tudo certo? Achei seu negócio no Google e queria tirar uma dúvida.",
+        "timestamp": "2026-03-19T16:39:22.219Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "7dba7ee0-acf7-4154-8108-8ab7732fd90a",
+    "phone": "5531994489072",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Oi, tudo bem? Achei sua empresa online e queria tirar uma dúvida com você.",
+        "timestamp": "2026-03-19T16:39:47.415Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "a61dfd79-38d9-4e76-a260-e00832507cda",
+    "phone": "5531991992929",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Oi! Vi seu negócio no Google e queria entender uma coisa rapidinho.",
+        "timestamp": "2026-03-19T16:40:50.015Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "9ff3c301-7589-4e78-9004-cf957914d01a",
+    "phone": "5531984415354",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Vi seu negócio online e queria te perguntar uma coisa rápida, pode ser?",
+        "timestamp": "2026-03-19T16:41:16.167Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "356f70c1-a0bb-461f-97f7-4383f2437142",
+    "phone": "5531988896106",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Vi sua empresa online e tenho uma pergunta rápida pra você.",
+        "timestamp": "2026-03-19T16:41:41.478Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "1d488e2e-496c-43bf-b7c7-0c7e9c43795f",
+    "phone": "5531993094856",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Encontrei sua empresa enquanto pesquisava e queria te fazer uma pergunta rápida.",
+        "timestamp": "2026-03-19T16:42:15.724Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "ab3e7bbd-a146-49e4-a4d2-5c860b084f91",
+    "phone": "5531990800036",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Oi, tudo certo? Achei seu negócio no Google e queria tirar uma dúvida.",
+        "timestamp": "2026-03-19T16:42:36.843Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "52be09f3-2988-4bd8-aa6e-c2290c99925b",
+    "phone": "5531992001264",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Vi seu negócio enquanto pesquisava e queria te fazer uma pergunta rápida.",
+        "timestamp": "2026-03-19T16:42:59.005Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "ca5d7178-9de5-46fa-b715-352ef871058e",
+    "phone": "5531984189793",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Encontrei sua empresa enquanto pesquisava e queria te fazer uma pergunta rápida.",
+        "timestamp": "2026-03-19T16:43:27.183Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "b03698b6-5a80-4f3e-b45c-3900e47bd477",
+    "phone": "5531999473191",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Oi, tudo certo? Achei seu negócio no Google e queria tirar uma dúvida.",
+        "timestamp": "2026-03-19T16:43:48.391Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "2dc5051f-b926-44ce-a02e-62f891f8f481",
+    "phone": "5531982888344",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Estava vendo seu negócio no Google e queria te fazer uma pergunta.",
+        "timestamp": "2026-03-19T16:44:21.663Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "18e60d36-c7e3-43a5-bc55-00f0d25832d9",
+    "phone": "5531993484236",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Oi! Vi seu negócio no Google e queria entender uma coisa rapidinho.",
+        "timestamp": "2026-03-19T16:44:48.594Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "4e51fd9a-0e72-4af7-9f14-5c04f214ee9d",
+    "phone": "5531986713959",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Vi seu negócio online e queria te perguntar uma coisa rápida, pode ser?",
+        "timestamp": "2026-03-19T16:45:44.296Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "8ad2d78b-3312-4885-98ee-13275d2257c6",
+    "phone": "5531983647008",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Olá! Encontrei seu negócio online e fiquei com uma dúvida rápida, pode me ajudar?",
+        "timestamp": "2026-03-19T16:46:18.731Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  },
+  {
+    "id": "340e5922-8b6a-48c8-a7e9-a995ea44a4b6",
+    "phone": "5531994143329",
+    "promptBase": "Você é um assistente de prospecção especializado em vender landing pages e websites para nutricionistas.",
+    "stage": "abordagem",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Oi! Vi sua empresa no Google e queria tirar uma dúvida bem rápida contigo.",
+        "timestamp": "2026-03-19T16:46:55.253Z"
+      }
+    ],
+    "autoReply": true,
+    "createdAt": "2026-03-19T16:37:50.134Z",
+    "updatedAt": "2026-03-19T16:37:50.134Z"
+  }
+]

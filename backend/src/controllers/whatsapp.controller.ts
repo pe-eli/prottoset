@@ -6,7 +6,7 @@ import { Contact } from '../types/contacts.types';
 
 export const whatsappController = {
   /** POST /whatsapp/blast — valida, salva contatos e inicia a fila */
-  sendBlast(req: Request, res: Response) {
+  async sendBlast(req: Request, res: Response) {
     const {
       phones,
       promptBase,
@@ -47,7 +47,7 @@ export const whatsappController = {
 
     const blastId = uuid();
 
-    // Auto-save phone numbers as contacts
+    // Auto-save phone numbers as contacts (message will be updated after generation)
     const now = new Date().toISOString();
     const newContacts: Contact[] = cleanPhones.map((phone) => ({
       id: uuid(),
@@ -56,22 +56,58 @@ export const whatsappController = {
       phone,
       company: '',
       status: 'contacted' as const,
-      notes: `Mensagem WhatsApp enviada em ${new Date().toLocaleDateString('pt-BR')}`,
+      notes: '',
+      channel: 'whatsapp' as const,
       createdAt: now,
       updatedAt: now,
     }));
-    contactsRepository.saveMany(newContacts);
+    await contactsRepository.saveMany(newContacts);
 
-    waBlastQueue.create(blastId, cleanPhones, promptBase.trim(), {
+    const entry = waBlastQueue.create(blastId, cleanPhones, promptBase.trim(), {
       batchSize: safeBatchSize,
       intervalMinSeconds: safeMin,
       intervalMaxSeconds: safeMax,
     });
 
+    // After blast finishes, update contacts with the actual message sent
+    const checkDone = setInterval(async () => {
+      if (entry.phase === 'done' || entry.phase === 'cancelled') {
+        clearInterval(checkDone);
+        const contacts = await contactsRepository.getAll();
+        const sentAt = new Date().toISOString();
+        for (const job of entry.jobs) {
+          if (job.message && job.status === 'sent') {
+            const cleanPhone = job.phone.replace(/\D/g, '');
+            const contact = contacts.find((c) => c.phone === cleanPhone);
+            if (contact) {
+              await contactsRepository.update(contact.id, {
+                lastMessage: job.message,
+                lastMessageAt: sentAt,
+              });
+            }
+          }
+        }
+      }
+    }, 2000);
+
     res.json({ blastId, total: cleanPhones.length });
   },
 
-  /** GET /whatsapp/blast/:blastId/stream — SSE de progresso */
+  /** POST /whatsapp/blast/:blastId/cancel */
+  cancelBlast(req: Request, res: Response) {
+    const { blastId } = req.params;
+    const ok = waBlastQueue.cancel(blastId);
+    if (!ok) return res.status(404).json({ error: 'Blast não encontrado ou já finalizado' });
+    res.json({ cancelled: true });
+  },
+
+  /** GET /whatsapp/blast/:blastId/status */
+  statusBlast(req: Request, res: Response) {
+    const { blastId } = req.params;
+    const status = waBlastQueue.status(blastId);
+    if (!status) return res.status(404).json({ error: 'Blast não encontrado' });
+    res.json(status);
+  },
   streamBlast(req: Request, res: Response) {
     const { blastId } = req.params;
     const subscribed = waBlastQueue.subscribe(blastId, res);

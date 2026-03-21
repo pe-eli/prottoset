@@ -29,19 +29,37 @@ function titleCase(str: string): string {
 interface LeadCardProps {
   lead: Lead;
   onClick: (lead: Lead) => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggle?: (lead: Lead) => void;
 }
 
-export function LeadCard({ lead, onClick }: LeadCardProps) {
+export function LeadCard({ lead, onClick, selectable, selected, onToggle }: LeadCardProps) {
   const priority = PRIORITY_CONFIG[lead.priority] ?? PRIORITY_CONFIG['LOW'];
 
   return (
     <button
       type="button"
-      onClick={() => onClick(lead)}
-      className="w-full text-left bg-surface border border-border-light rounded-2xl p-4 shadow-sm
-        hover:shadow-lg hover:shadow-brand-100/50 hover:border-brand-200 hover:-translate-y-0.5
-        transition-all duration-200 cursor-pointer group"
+      onClick={() => selectable && onToggle ? onToggle(lead) : onClick(lead)}
+      className={`w-full text-left bg-surface border rounded-2xl p-4 shadow-sm
+        hover:shadow-lg hover:shadow-brand-100/50 hover:-translate-y-0.5
+        transition-all duration-200 cursor-pointer group relative
+        ${selected ? 'border-brand-500 ring-2 ring-brand-400/30' : 'border-border-light hover:border-brand-200'}`}
     >
+      {/* Selection checkbox */}
+      {selectable && (
+        <div className={`absolute top-3 left-3 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all
+          ${selected
+            ? 'bg-brand-600 border-brand-600'
+            : 'bg-white border-brand-200 group-hover:border-brand-400'}`}
+        >
+          {selected && (
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

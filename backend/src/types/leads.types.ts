@@ -22,6 +22,7 @@ export interface Lead {
 export interface LeadSearchParams {
   searchTerm: string;
   city: string;
+  maxResults?: number;
 }
 
 export interface LeadMetrics {

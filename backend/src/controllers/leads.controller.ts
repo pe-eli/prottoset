@@ -7,14 +7,14 @@ const VALID_STATUSES: LeadStatus[] = ['new', 'contacted', 'replied', 'converted'
 export const leadsController = {
   async search(req: Request, res: Response): Promise<void> {
     try {
-      const { searchTerm, city } = req.body as LeadSearchParams;
+      const { searchTerm, city, maxResults } = req.body as LeadSearchParams;
 
       if (!searchTerm?.trim() || !city?.trim()) {
         res.status(400).json({ error: 'searchTerm e city são obrigatórios' });
         return;
       }
 
-      const result = await leadsService.search({ searchTerm: searchTerm.trim(), city: city.trim() });
+      const result = await leadsService.search({ searchTerm: searchTerm.trim(), city: city.trim(), maxResults });
       res.json(result);
     } catch (err: any) {
       console.error('Lead search error:', err.message);
@@ -24,7 +24,7 @@ export const leadsController = {
 
   async getAll(_req: Request, res: Response): Promise<void> {
     try {
-      const leads = leadsService.getAll();
+      const leads = await leadsService.getAll();
       res.json(leads);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -34,7 +34,7 @@ export const leadsController = {
   async getById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const lead = leadsService.getById(id);
+      const lead = await leadsService.getById(id);
       if (!lead) {
         res.status(404).json({ error: 'Lead not found' });
         return;
@@ -55,7 +55,7 @@ export const leadsController = {
         return;
       }
 
-      const lead = leadsService.updateStatus(id, status);
+      const lead = await leadsService.updateStatus(id, status);
       if (!lead) {
         res.status(404).json({ error: 'Lead not found' });
         return;
@@ -70,7 +70,7 @@ export const leadsController = {
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const deleted = leadsService.delete(id);
+      const deleted = await leadsService.delete(id);
       if (!deleted) {
         res.status(404).json({ error: 'Lead not found' });
         return;

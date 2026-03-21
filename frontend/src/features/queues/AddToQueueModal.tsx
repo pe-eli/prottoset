@@ -3,11 +3,11 @@ import { queuesAPI } from './queues.api';
 import type { PhoneQueue } from './queues.types';
 
 interface AddToQueueModalProps {
-  phone: string;
+  phones: string[];
   onClose: () => void;
 }
 
-export function AddToQueueModal({ phone, onClose }: AddToQueueModalProps) {
+export function AddToQueueModal({ phones, onClose }: AddToQueueModalProps) {
   const [queues, setQueues] = useState<PhoneQueue[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
@@ -33,7 +33,7 @@ export function AddToQueueModal({ phone, onClose }: AddToQueueModalProps) {
   const handleAdd = async (queue: PhoneQueue) => {
     setAddingTo(queue.id);
     try {
-      const { data } = await queuesAPI.addPhones(queue.id, [phone]);
+      const { data } = await queuesAPI.addPhones(queue.id, phones);
       setQueues((prev) => prev.map((q) => (q.id === data.id ? data : q)));
       setSuccess(queue.name);
       setTimeout(() => setSuccess(null), 2000);
@@ -49,7 +49,7 @@ export function AddToQueueModal({ phone, onClose }: AddToQueueModalProps) {
     setCreating(true);
     try {
       const { data: created } = await queuesAPI.create(newName.trim());
-      const { data: updated } = await queuesAPI.addPhones(created.id, [phone]);
+      const { data: updated } = await queuesAPI.addPhones(created.id, phones);
       setQueues((prev) => [...prev, updated]);
       setNewName('');
       setSuccess(created.name);
@@ -68,7 +68,7 @@ export function AddToQueueModal({ phone, onClose }: AddToQueueModalProps) {
     }
   };
 
-  const phoneInQueue = (queue: PhoneQueue) => queue.phones.includes(phone);
+  const allInQueue = (queue: PhoneQueue) => phones.every((p) => queue.phones.includes(p));
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -79,7 +79,9 @@ export function AddToQueueModal({ phone, onClose }: AddToQueueModalProps) {
         <div className="flex items-center justify-between p-5 pb-0">
           <div>
             <h3 className="text-sm font-bold text-brand-950">Adicionar a Fila</h3>
-            <p className="text-xs text-brand-400 mt-0.5">{phone}</p>
+            <p className="text-xs text-brand-400 mt-0.5">
+              {phones.length} {phones.length === 1 ? 'número' : 'números'}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -132,7 +134,7 @@ export function AddToQueueModal({ phone, onClose }: AddToQueueModalProps) {
               <h4 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-2">Filas existentes</h4>
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {queues.map((q) => {
-                  const already = phoneInQueue(q);
+                  const already = allInQueue(q);
                   const isAdding = addingTo === q.id;
                   return (
                     <div

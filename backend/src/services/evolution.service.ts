@@ -1,4 +1,61 @@
 export const evolutionService = {
+  /**
+   * Validate which phone numbers have WhatsApp.
+   * Returns only the numbers that exist on WhatsApp.
+   */
+  async checkNumbers(
+    phones: string[],
+  ): Promise<{ valid: string[]; invalid: string[] }> {
+    const apiUrl = process.env.EVOLUTION_API_URL;
+    const apiKey = process.env.EVOLUTION_API_KEY;
+    const instance = process.env.EVOLUTION_INSTANCE;
+
+    if (!apiUrl || !apiKey || !instance) {
+      throw new Error('Evolution API não configurada');
+    }
+
+    const valid: string[] = [];
+    const invalid: string[] = [];
+
+    // Evolution API checks numbers in batch
+    try {
+      const response = await fetch(`${apiUrl}/chat/whatsappNumbers/${instance}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: apiKey,
+        },
+        body: JSON.stringify({ numbers: phones }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`Evolution API ${response.status}: ${body.slice(0, 200)}`);
+      }
+
+      const data = (await response.json()) as Array<{
+        exists: boolean;
+        jid: string;
+        number: string;
+      }>;
+
+      for (const entry of data) {
+        if (entry.exists) {
+          // Use the number returned by WhatsApp (canonical form)
+          valid.push(entry.number || entry.jid.replace(/@.*$/, ''));
+        } else {
+          const num = entry.number || entry.jid?.replace(/@.*$/, '') || '';
+          invalid.push(num);
+        }
+      }
+    } catch (err: any) {
+      console.error('[Evolution] checkNumbers error:', err.message);
+      throw err;
+    }
+
+    return { valid, invalid };
+  },
+
   async sendMessage(
     phone: string,
     message: string,

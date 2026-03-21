@@ -17,6 +17,12 @@ export const whatsappAPI = {
       ...config,
     }),
 
+  cancelBlast: (blastId: string) =>
+    api.post<{ cancelled: boolean }>(`/whatsapp/blast/${blastId}/cancel`),
+
+  statusBlast: (blastId: string) =>
+    api.get<{ phase: string; sent: number; total: number }>(`/whatsapp/blast/${blastId}/status`),
+
   blastStreamUrl: (blastId: string): string =>
     `${BASE_URL}/whatsapp/blast/${blastId}/stream`,
 };

@@ -1,97 +1,90 @@
-import fs from 'fs';
-import path from 'path';
+import { getFirestore } from '../../services/firebase.service';
 import { PhoneQueue } from '../../types/queues.types';
 
-const DATA_DIR = path.join(__dirname, '../../../data');
-const QUEUES_FILE = path.join(DATA_DIR, 'queues.json');
-
-function ensureFile(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(QUEUES_FILE)) {
-    fs.writeFileSync(QUEUES_FILE, '[]', 'utf-8');
-  }
+function collection() {
+  return getFirestore().collection('queues');
 }
 
-function readQueues(): PhoneQueue[] {
-  ensureFile();
-  return JSON.parse(fs.readFileSync(QUEUES_FILE, 'utf-8'));
-}
-
-function writeQueues(queues: PhoneQueue[]): void {
-  ensureFile();
-  fs.writeFileSync(QUEUES_FILE, JSON.stringify(queues, null, 2), 'utf-8');
+function toQueue(doc: FirebaseFirestore.DocumentSnapshot): PhoneQueue {
+  return { ...doc.data(), id: doc.id } as PhoneQueue;
 }
 
 export const queuesRepository = {
-  getAll(): PhoneQueue[] {
-    return readQueues();
+  async getAll(): Promise<PhoneQueue[]> {
+    const snap = await collection().get();
+    return snap.docs.map(toQueue);
   },
 
-  getById(id: string): PhoneQueue | null {
-    return readQueues().find((q) => q.id === id) || null;
+  async getById(id: string): Promise<PhoneQueue | null> {
+    const doc = await collection().doc(id).get();
+    if (!doc.exists) return null;
+    return toQueue(doc);
   },
 
-  create(queue: PhoneQueue): PhoneQueue {
-    const queues = readQueues();
-    queues.push(queue);
-    writeQueues(queues);
+  async create(queue: PhoneQueue): Promise<PhoneQueue> {
+    const { id, ...data } = queue;
+    await collection().doc(id).set(data);
     return queue;
   },
 
-  delete(id: string): boolean {
-    const queues = readQueues();
-    const filtered = queues.filter((q) => q.id !== id);
-    if (filtered.length === queues.length) return false;
-    writeQueues(filtered);
+  async delete(id: string): Promise<boolean> {
+    const doc = await collection().doc(id).get();
+    if (!doc.exists) return false;
+    await collection().doc(id).delete();
     return true;
   },
 
-  addPhones(id: string, phones: string[]): PhoneQueue | null {
-    const queues = readQueues();
-    const queue = queues.find((q) => q.id === id);
-    if (!queue) return null;
+  async addPhones(id: string, phones: string[]): Promise<PhoneQueue | null> {
+    const docRef = collection().doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) return null;
+    const queue = toQueue(doc);
     queue.phones = [...new Set([...queue.phones, ...phones])];
-    writeQueues(queues);
+    await docRef.update({ phones: queue.phones });
     return queue;
   },
 
-  removePhone(id: string, phone: string): PhoneQueue | null {
-    const queues = readQueues();
-    const queue = queues.find((q) => q.id === id);
-    if (!queue) return null;
+  async removePhone(id: string, phone: string): Promise<PhoneQueue | null> {
+    const docRef = collection().doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) return null;
+    const queue = toQueue(doc);
     queue.phones = queue.phones.filter((p) => p !== phone);
-    writeQueues(queues);
+    await docRef.update({ phones: queue.phones });
     return queue;
   },
 
-  rename(id: string, name: string): PhoneQueue | null {
-    const queues = readQueues();
-    const queue = queues.find((q) => q.id === id);
-    if (!queue) return null;
-    queue.name = name;
-    writeQueues(queues);
-    return queue;
+  async rename(id: string, name: string): Promise<PhoneQueue | null> {
+    const docRef = collection().doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) return null;
+    await docRef.update({ name });
+    return { ...toQueue(doc), name };
   },
 
-  merge(sourceIds: string[], targetName: string): PhoneQueue | null {
-    const queues = readQueues();
-    const sources = queues.filter((q) => sourceIds.includes(q.id));
-    if (sources.length < 2) return null;
+  async merge(sourceIds: string[], targetName: string): Promise<PhoneQueue | null> {
+    const db = getFirestore();
+    return db.runTransaction(async (tx) => {
+      const sources: PhoneQueue[] = [];
+      for (const sid of sourceIds) {
+        const doc = await tx.get(collection().doc(sid));
+        if (doc.exists) sources.push(toQueue(doc));
+      }
+      if (sources.length < 2) return null;
 
-    const allPhones = [...new Set(sources.flatMap((q) => q.phones))];
-    const remaining = queues.filter((q) => !sourceIds.includes(q.id));
+      const allPhones = [...new Set(sources.flatMap((q) => q.phones))];
+      for (let i = 1; i < sources.length; i++) {
+        tx.delete(collection().doc(sources[i].id));
+      }
 
-    const merged: PhoneQueue = {
-      id: sources[0].id,
-      name: targetName,
-      phones: allPhones,
-      createdAt: sources[0].createdAt,
-    };
-
-    remaining.push(merged);
-    writeQueues(remaining);
-    return merged;
+      const merged: PhoneQueue = {
+        id: sources[0].id,
+        name: targetName,
+        phones: allPhones,
+        createdAt: sources[0].createdAt,
+      };
+      tx.set(collection().doc(merged.id), { name: targetName, phones: allPhones, createdAt: merged.createdAt });
+      return merged;
+    });
   },
 };

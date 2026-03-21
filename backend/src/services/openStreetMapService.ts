@@ -15,7 +15,14 @@ interface OverpassResponse {
 }
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+
+// Mirrors tentados em ordem — se um retornar 5xx, tenta o próximo
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
+];
+
 const MAX_BAIRROS = 8;
 
 export const openStreetMapService = {
@@ -71,7 +78,7 @@ export const openStreetMapService = {
 
   async queryOverpass(cityName: string): Promise<string[]> {
     const query = `
-      [out:json][timeout:15];
+      [out:json][timeout:20];
       area["name"="${cityName}"]["boundary"="administrative"]->.searchArea;
       (
         node["place"="suburb"](area.searchArea);
@@ -80,30 +87,41 @@ export const openStreetMapService = {
       out tags;
     `.trim();
 
-    try {
-      const response = await fetch(OVERPASS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`,
-      });
+    const body = `data=${encodeURIComponent(query)}`;
 
-      if (!response.ok) {
-        const text = await response.text();
-        logger.warn(`Overpass API error (${response.status}): ${text.slice(0, 200)}`);
-        return [];
+    for (const mirrorUrl of OVERPASS_MIRRORS) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25_000);
+
+        const response = await fetch(mirrorUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body,
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeout));
+
+        if (!response.ok) {
+          const text = await response.text();
+          logger.warn(`Overpass mirror ${mirrorUrl} retornou ${response.status} — tentando próximo...`);
+          logger.warn(`Overpass API error (${response.status}): ${text.slice(0, 200)}`);
+          continue; // tenta próximo mirror
+        }
+
+        const data = (await response.json()) as OverpassResponse;
+        const names = data.elements
+          .map((el) => el.tags?.name)
+          .filter((n): n is string => !!n);
+
+        const unique = [...new Set(names)].slice(0, MAX_BAIRROS);
+        logger.info(`Overpass (${mirrorUrl}): ${unique.length} bairros encontrados — ${unique.join(', ')}`);
+        return unique;
+      } catch (err: any) {
+        logger.warn(`Overpass mirror ${mirrorUrl} falhou: ${err.message} — tentando próximo...`);
       }
-
-      const data = (await response.json()) as OverpassResponse;
-      const names = data.elements
-        .map((el) => el.tags?.name)
-        .filter((n): n is string => !!n);
-
-      const unique = [...new Set(names)].slice(0, MAX_BAIRROS);
-      logger.info(`Overpass: ${unique.length} bairros encontrados — ${unique.join(', ')}`);
-      return unique;
-    } catch (err: any) {
-      logger.warn(`Erro Overpass: ${err.message}`);
-      return [];
     }
+
+    logger.warn('Todos os mirrors Overpass falharam. Continuando sem bairros.');
+    return [];
   },
 };

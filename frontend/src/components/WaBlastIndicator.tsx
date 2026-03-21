@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWaBlast } from '../contexts/WaBlastContext';
 
 export function WaBlastIndicator() {
-  const { active, clearActive } = useWaBlast();
+  const { active } = useWaBlast();
   const navigate = useNavigate();
 
   if (!active || active.phase !== 'sending') return null;

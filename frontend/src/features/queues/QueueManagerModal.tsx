@@ -87,7 +87,7 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
     if (mergeSelection.size < 2 || !mergeName.trim()) return;
     setMerging(true);
     try {
-      const { data } = await queuesAPI.merge([...mergeSelection], mergeName.trim());
+      await queuesAPI.merge([...mergeSelection], mergeName.trim());
       // Refresh full list after merge
       const { data: refreshed } = await queuesAPI.getAll();
       setQueues(refreshed);

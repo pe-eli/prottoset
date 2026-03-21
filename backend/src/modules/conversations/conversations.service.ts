@@ -216,10 +216,8 @@ export const conversationsService = {
     const maxDelay = 25;
     const delaySec = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
     await conversationsRepository.update(conversation.id, { replyDelaySeconds: delaySec });
-    for (let remaining = delaySec; remaining > 0; remaining--) {
-      await conversationsRepository.update(conversation.id, { replyDelaySeconds: remaining });
-      await new Promise((r) => setTimeout(r, 1000));
-    }
+    // Wait without writing to Firestore every second — only update at start and end
+    await new Promise((r) => setTimeout(r, delaySec * 1000));
     await conversationsRepository.update(conversation.id, { replyDelaySeconds: 0 });
 
     try {
@@ -236,6 +234,7 @@ export const conversationsService = {
           stage: 'concluido',
           autoReply: false,
         });
+        lastReplyMap.delete(updatedConv.id);
         console.log(`[Funnel] Conversation ${updatedConv.id} concluded`);
         return;
       }

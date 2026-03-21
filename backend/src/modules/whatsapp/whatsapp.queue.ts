@@ -174,7 +174,11 @@ export const waBlastQueue = {
       startedAt: new Date().toISOString(),
     };
     blasts.set(blastId, entry);
-    processBlast(blastId); // background
+    processBlast(blastId).catch((err) => {
+      console.error(`[WA Blast] processBlast error for ${blastId}:`, err.message);
+    });
+    // Auto-cleanup after 10 minutes
+    setTimeout(() => blasts.delete(blastId), 10 * 60 * 1000);
     return entry;
   },
 

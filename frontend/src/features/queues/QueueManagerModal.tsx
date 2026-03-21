@@ -63,8 +63,8 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
   const handleRenameConfirm = async () => {
     if (!renamingId || !renameValue.trim()) return;
     try {
-      const { data } = await queuesAPI.rename(renamingId, renameValue.trim());
-      setQueues((prev) => prev.map((q) => (q.id === data.id ? data : q)));
+      const response = await queuesAPI.rename(renamingId, renameValue.trim());
+      setQueues((prev) => prev.map((q) => (q.id === response.data.id ? response.data : q)));
       notify();
     } catch {
       /* ignore */

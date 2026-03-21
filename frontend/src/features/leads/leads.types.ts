@@ -17,6 +17,10 @@ export interface Lead {
   priority: LeadPriority;
   status: LeadStatus;
   createdAt: string;
+  // Campos opcionais para compatibilidade UI
+  link?: string;
+  platform?: string;
+  snippet?: string;
 }
 
 export interface LeadSearchParams {

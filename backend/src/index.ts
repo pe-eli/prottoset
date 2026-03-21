@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import quoteRoutes from './routes/quote.routes';
@@ -28,6 +28,14 @@ app.use('/api/conversations', conversationsRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Global error handler — catches unhandled errors from async handlers
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[Server] Unhandled error:', err.message, err.stack);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
 });
 
 app.listen(PORT, () => {

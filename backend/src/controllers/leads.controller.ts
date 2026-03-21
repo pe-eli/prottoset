@@ -14,11 +14,12 @@ export const leadsController = {
         return;
       }
 
-      const result = await leadsService.search({ searchTerm: searchTerm.trim(), city: city.trim(), maxResults });
+      const safeMaxResults = Math.min(100, Math.max(1, Number(maxResults) || 50));
+      const result = await leadsService.search({ searchTerm: searchTerm.trim(), city: city.trim(), maxResults: safeMaxResults });
       res.json(result);
     } catch (err: any) {
-      console.error('Lead search error:', err.message);
-      res.status(500).json({ error: err.message });
+      console.error('[Leads] search error:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar leads' });
     }
   },
 
@@ -27,7 +28,8 @@ export const leadsController = {
       const leads = await leadsService.getAll();
       res.json(leads);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[Leads] getAll error:', err.message);
+      res.status(500).json({ error: 'Erro ao listar leads' });
     }
   },
 
@@ -41,7 +43,8 @@ export const leadsController = {
       }
       res.json(lead);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[Leads] getById error:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar lead' });
     }
   },
 
@@ -63,7 +66,8 @@ export const leadsController = {
 
       res.json(lead);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[Leads] updateStatus error:', err.message);
+      res.status(500).json({ error: 'Erro ao atualizar lead' });
     }
   },
 
@@ -77,7 +81,8 @@ export const leadsController = {
       }
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[Leads] delete error:', err.message);
+      res.status(500).json({ error: 'Erro ao excluir lead' });
     }
   },
 };

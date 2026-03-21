@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -292,7 +292,6 @@ export function WhatsAppBlastPage() {
       // readyState CLOSED = server rejected permanently (404, wrong content-type)
       // This happens when backend restarted and blastId no longer exists
       if (es.readyState === EventSource.CLOSED) {
-        console.log('[Funnel SSE] Connection permanently rejected — clearing stale state');
         setPhase('compose');
         clearActive();
         setCancelling(false);
@@ -381,22 +380,18 @@ export function WhatsAppBlastPage() {
     setCancelling(false);
   };
 
+  const cancellingRef = useRef(false);
+
   const handleCancel = async () => {
-    console.log('[Cancel] clicked', { blastId: blastIdRef.current, cancelling, mode });
-    if (!blastIdRef.current || cancelling) {
-      console.log('[Cancel] early return', { blastId: blastIdRef.current, cancelling });
-      return;
-    }
+    if (!blastIdRef.current || cancellingRef.current) return;
+    cancellingRef.current = true;
     setCancelling(true);
     try {
       if (mode === 'funnel') {
-        console.log('[Cancel] calling conversationsAPI.cancelBlast', blastIdRef.current);
         await conversationsAPI.cancelBlast(blastIdRef.current);
       } else {
-        console.log('[Cancel] calling whatsappAPI.cancelBlast', blastIdRef.current);
         await whatsappAPI.cancelBlast(blastIdRef.current);
       }
-      console.log('[Cancel] API success, finalizing');
       // Finaliza imediatamente — não espera o SSE 'cancelled' (pode sofrer buffering)
       const sent = queue.filter((j) => j.status === 'sent').length;
       const failed = queue.filter((j) => j.status === 'failed').length;
@@ -413,7 +408,6 @@ export function WhatsAppBlastPage() {
       clearActive();
       setCancelling(false);
     } catch (err: any) {
-      console.error('[Cancel] error:', err.response?.status, err.response?.data || err.message);
       // If 404 — blast no longer exists (backend restarted) — clear everything
       if (err.response?.status === 404) {
         esRef.current?.close();
@@ -423,11 +417,19 @@ export function WhatsAppBlastPage() {
         setQueue([]);
       }
       setCancelling(false);
+    } finally {
+      cancellingRef.current = false;
     }
   };
 
-  const sentCount = queue.filter((j) => j.status === 'sent').length;
-  const doneCount = queue.filter((j) => j.status === 'sent' || j.status === 'failed').length;
+  const counts = useMemo(() => {
+    const c = { pending: 0, sending: 0, sent: 0, failed: 0 };
+    queue.forEach((j) => { c[j.status]++; });
+    return c;
+  }, [queue]);
+
+  const sentCount = counts.sent;
+  const doneCount = counts.sent + counts.failed;
   const progress = queue.length > 0 ? Math.round((doneCount / queue.length) * 100) : 0;
   const countdownPct = countdown ? (countdown.remaining / countdown.total) * 100 : 0;
 
@@ -621,9 +623,7 @@ export function WhatsAppBlastPage() {
           {/* Prompt de IA */}
           <Card>
             <div className="flex items-start gap-2 mb-4">
-              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                mode === 'funnel' ? 'bg-violet-50' : 'bg-violet-50'
-              }`}>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-violet-50">
                 <SparkleIcon className="w-4 h-4 text-violet-500" />
               </div>
               <div>
@@ -843,15 +843,15 @@ export function WhatsAppBlastPage() {
                         <span className="text-red-400 ml-1">· {validationResult.invalid} sem WhatsApp</span>
                       )}
                       {' · '}{sentCount} de {queue.length} {mode === 'funnel' ? 'abordagens enviadas' : 'mensagens enviadas'}
-                      {queue.filter((j) => j.status === 'failed').length > 0 && (
-                        <span className="text-red-400 ml-1">· {queue.filter((j) => j.status === 'failed').length} falharam</span>
+                      {counts.failed > 0 && (
+                        <span className="text-red-400 ml-1">· {counts.failed} falharam</span>
                       )}
                     </>
                   ) : (
                     <>
                       {sentCount} de {queue.length} {mode === 'funnel' ? 'abordagens enviadas' : 'mensagens enviadas'}
-                      {queue.filter((j) => j.status === 'failed').length > 0 && (
-                        <span className="text-red-400 ml-1">· {queue.filter((j) => j.status === 'failed').length} falharam</span>
+                      {counts.failed > 0 && (
+                        <span className="text-red-400 ml-1">· {counts.failed} falharam</span>
                       )}
                     </>
                   )}
@@ -902,10 +902,10 @@ export function WhatsAppBlastPage() {
             </div>
 
             <div className="flex items-center gap-4 mt-3">
-              <StatusCount label="Aguardando" count={queue.filter((j) => j.status === 'pending').length} color="text-brand-400" />
-              <StatusCount label="Enviando" count={queue.filter((j) => j.status === 'sending').length} color="text-amber-500" />
-              <StatusCount label="Enviados" count={queue.filter((j) => j.status === 'sent').length} color="text-emerald-500" />
-              <StatusCount label="Falhou" count={queue.filter((j) => j.status === 'failed').length} color="text-red-400" />
+              <StatusCount label="Aguardando" count={counts.pending} color="text-brand-400" />
+              <StatusCount label="Enviando" count={counts.sending} color="text-amber-500" />
+              <StatusCount label="Enviados" count={counts.sent} color="text-emerald-500" />
+              <StatusCount label="Falhou" count={counts.failed} color="text-red-400" />
             </div>
 
             {/* Countdown entre lotes */}

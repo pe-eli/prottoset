@@ -6,6 +6,8 @@ import { contactsRepository } from '../modules/contacts/contacts.repository';
 import type { Contact } from '../types/contacts.types';
 import type { ConversationStage } from '../types/conversations.types';
 
+const VALID_STAGES: ConversationStage[] = ['abordagem', 'qualificacao', 'gancho', 'fechamento', 'concluido'];
+
 // In-memory SSE subscribers for "start conversation" blast progress
 const blastSubscribers = new Map<string, {
   subscribers: Set<Response>;
@@ -127,12 +129,16 @@ export const conversationsController = {
           }
           entry.subscribers.clear();
         }
+        // Auto-cleanup after 5 minutes
+        setTimeout(() => blastSubscribers.delete(blastId), 5 * 60 * 1000);
       }).catch((err: Error) => {
         console.error(`[Funnel] Background blast error for ${blastId}:`, err.message);
       });
     } catch (err: any) {
       console.error('[Funnel] startConversations error:', err.message);
-      res.status(500).json({ error: err.message });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Erro interno ao iniciar conversas' });
+      }
     }
   },
 
@@ -239,7 +245,7 @@ export const conversationsController = {
       );
       res.json(conversations);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: 'Erro ao listar conversas' });
     }
   },
 
@@ -250,7 +256,8 @@ export const conversationsController = {
       if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
       res.json(conv);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[Conversations] error:', err.message);
+      res.status(500).json({ error: 'Erro interno' });
     }
   },
 
@@ -265,13 +272,19 @@ export const conversationsController = {
 
       const updates: Partial<{ autoReply: boolean; stage: ConversationStage }> = {};
       if (typeof autoReply === 'boolean') updates.autoReply = autoReply;
-      if (stage) updates.stage = stage;
+      if (stage) {
+        if (!VALID_STAGES.includes(stage)) {
+          return res.status(400).json({ error: `Stage inválido. Valores: ${VALID_STAGES.join(', ')}` });
+        }
+        updates.stage = stage;
+      }
 
       const updated = await conversationsRepository.update(id, updates);
       if (!updated) return res.status(404).json({ error: 'Conversa não encontrada' });
       res.json(updated);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[Conversations] error:', err.message);
+      res.status(500).json({ error: 'Erro interno' });
     }
   },
 
@@ -282,7 +295,8 @@ export const conversationsController = {
       if (!ok) return res.status(404).json({ error: 'Conversa não encontrada' });
       res.json({ deleted: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[Conversations] error:', err.message);
+      res.status(500).json({ error: 'Erro interno' });
     }
   },
 };

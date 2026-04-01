@@ -12,7 +12,7 @@ export function SearchLoadingOverlay() {
       <div className="text-center space-y-1.5">
         <p className="text-sm font-semibold text-brand-950">Gerando leads...</p>
         <div className="space-y-0.5">
-          <p className="text-xs text-brand-400">1. Gerando bairros com IA</p>
+          <p className="text-xs text-brand-400">1. Mapeando bairros da cidade</p>
           <p className="text-xs text-brand-400">2. Buscando no Google Maps</p>
           <p className="text-xs text-brand-400">3. Extraindo emails dos sites</p>
         </div>

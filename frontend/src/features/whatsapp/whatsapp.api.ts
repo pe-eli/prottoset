@@ -10,10 +10,9 @@ export interface WaBlastConfig {
 }
 
 export const whatsappAPI = {
-  startBlast: (phones: string[], promptBase: string, config: WaBlastConfig) =>
+  startBlast: (phones: string[], config: WaBlastConfig) =>
     api.post<{ blastId: string; total: number }>('/whatsapp/blast', {
       phones,
-      promptBase,
       ...config,
     }),
 

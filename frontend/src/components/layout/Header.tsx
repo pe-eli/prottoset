@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 const NAV_ITEMS = [
   { path: '/', label: 'Orçamentos' },
   { path: '/leads', label: 'Leads' },
+  { path: '/produtividade', label: 'Produtividade' },
 ];
 
 export function Header() {

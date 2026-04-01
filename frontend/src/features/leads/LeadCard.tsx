@@ -22,8 +22,26 @@ const PRIORITY_CONFIG: Record<LeadPriority, { label: string; color: string }> = 
   LOW: { label: 'Baixa', color: 'bg-gray-50 text-gray-500 border-gray-200' },
 };
 
+const PRIORITY_SURFACE: Record<LeadPriority, string> = {
+  HIGH: 'bg-red-50/60 border-red-100 hover:border-red-200',
+  MEDIUM: 'bg-amber-50/60 border-amber-100 hover:border-amber-200',
+  LOW: 'bg-slate-50/85 border-slate-200 hover:border-slate-300',
+};
+
 function titleCase(str: string): string {
   return str.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function normalizeWebsite(url: string): string {
+  if (!url) return '';
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+function formatWebsiteLabel(url: string): string {
+  return normalizeWebsite(url)
+    .replace(/^https?:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/$/, '');
 }
 
 interface LeadCardProps {
@@ -36,15 +54,42 @@ interface LeadCardProps {
 
 export function LeadCard({ lead, onClick, selectable, selected, onToggle }: LeadCardProps) {
   const priority = PRIORITY_CONFIG[lead.priority] ?? PRIORITY_CONFIG['LOW'];
+  const prioritySurface = PRIORITY_SURFACE[lead.priority] ?? PRIORITY_SURFACE['LOW'];
+
+  const handleCardClick = () => {
+    if (selectable && onToggle) {
+      onToggle(lead);
+      return;
+    }
+    onClick(lead);
+  };
+
+  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleCardClick();
+    }
+  };
+
+  const handleCopyPhone = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(lead.phone);
+    } catch {
+      // Ignore clipboard failures to avoid blocking card interactions.
+    }
+  };
 
   return (
-    <button
-      type="button"
-      onClick={() => selectable && onToggle ? onToggle(lead) : onClick(lead)}
-      className={`w-full text-left bg-surface border rounded-2xl p-4 shadow-sm
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      className={`w-full text-left border rounded-2xl p-4 shadow-sm
         hover:shadow-lg hover:shadow-brand-100/50 hover:-translate-y-0.5
-        transition-all duration-200 cursor-pointer group relative
-        ${selected ? 'border-brand-500 ring-2 ring-brand-400/30' : 'border-border-light hover:border-brand-200'}`}
+        transition-all duration-200 cursor-pointer group relative outline-none
+        ${selected ? 'border-brand-500 ring-2 ring-brand-400/30' : prioritySurface}`}
     >
       {/* Selection checkbox */}
       {selectable && (
@@ -74,9 +119,6 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${STATUS_COLORS[lead.status] ?? STATUS_COLORS['new']}`}>
             {STATUS_LABELS[lead.status] ?? STATUS_LABELS['new']}
           </span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${priority.color}`}>
-            {priority.label}
-          </span>
         </div>
       </div>
 
@@ -96,18 +138,50 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
 
       {/* Contact row */}
       <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-        {lead.hasWebsite ? (
-          <span className="text-[11px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg font-medium">
-            Com site
-          </span>
+        {lead.hasWebsite && lead.website ? (
+          <>
+            <a
+              href={normalizeWebsite(lead.website)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex items-center gap-1.5 text-[11px] text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg font-medium max-w-[220px] hover:bg-blue-100 transition-colors"
+              title={normalizeWebsite(lead.website)}
+            >
+              <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5m12.156-1.5l-1.5 1.5a4 4 0 01-5.656-5.656l3-3a4 4 0 115.656 5.656z" />
+              </svg>
+              <span className="truncate">{formatWebsiteLabel(lead.website)}</span>
+            </a>
+
+            {lead.websiteFetchError && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg font-semibold">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.33 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Site fora do ar
+              </span>
+            )}
+          </>
         ) : (
           <span className="text-[11px] text-red-600 bg-red-50 px-2 py-0.5 rounded-lg font-medium">
-            sem site
+            Sem site
           </span>
         )}
         {lead.phone && (
-          <span className="text-[11px] text-green-600 bg-green-50 px-2 py-0.5 rounded-lg font-medium">
-            {lead.phone}
+          <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-lg font-medium text-[11px]">
+            <span>{lead.phone}</span>
+            <button
+              type="button"
+              onClick={handleCopyPhone}
+              className="w-4 h-4 rounded-md flex items-center justify-center hover:bg-green-100 transition-colors"
+              title="Copiar telefone"
+              aria-label="Copiar telefone"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V5a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2h-2m-4 4H6a2 2 0 01-2-2v-8a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2z" />
+              </svg>
+            </button>
           </span>
         )}
         {lead.email1 && (
@@ -116,7 +190,7 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
           </span>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 

@@ -63,7 +63,7 @@ export function LeadSearchForm({ onSearch, loading }: LeadSearchFormProps) {
           <div>
             <h3 className="text-sm font-bold text-brand-950">Buscar no Google Maps</h3>
             <p className="text-xs text-brand-400 mt-0.5">
-              Busca por nicho + cidade, gera bairros com IA e extrai emails dos sites
+              Busca por nicho + cidade, mapeia bairros e extrai emails dos sites
             </p>
           </div>
         </div>

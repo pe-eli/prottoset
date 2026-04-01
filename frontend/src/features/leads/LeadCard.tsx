@@ -16,12 +16,6 @@ const STATUS_COLORS: Record<LeadStatus, string> = {
   ignored: 'bg-gray-100 text-gray-500 border-gray-200',
 };
 
-const PRIORITY_CONFIG: Record<LeadPriority, { label: string; color: string }> = {
-  HIGH: { label: 'Alta', color: 'bg-red-50 text-red-600 border-red-200' },
-  MEDIUM: { label: 'Média', color: 'bg-amber-50 text-amber-600 border-amber-200' },
-  LOW: { label: 'Baixa', color: 'bg-gray-50 text-gray-500 border-gray-200' },
-};
-
 const PRIORITY_SURFACE: Record<LeadPriority, string> = {
   HIGH: 'bg-red-50/60 border-red-100 hover:border-red-200',
   MEDIUM: 'bg-amber-50/60 border-amber-100 hover:border-amber-200',
@@ -53,7 +47,6 @@ interface LeadCardProps {
 }
 
 export function LeadCard({ lead, onClick, selectable, selected, onToggle }: LeadCardProps) {
-  const _priority = PRIORITY_CONFIG[lead.priority] ?? PRIORITY_CONFIG['LOW'];
   const prioritySurface = PRIORITY_SURFACE[lead.priority] ?? PRIORITY_SURFACE['LOW'];
 
   const handleCardClick = () => {

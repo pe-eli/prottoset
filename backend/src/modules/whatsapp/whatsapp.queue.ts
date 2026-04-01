@@ -19,7 +19,6 @@ export interface WaBlastConfig {
 
 interface WaBlastEntry {
   jobs: WaJob[];
-  promptBase: string;
   config: WaBlastConfig;
   phase: 'sending' | 'done' | 'cancelled';
   cancelled: boolean;
@@ -64,16 +63,68 @@ async function processBlast(blastId: string) {
   const entry = blasts.get(blastId);
   if (!entry) return;
 
-  const total = entry.jobs.length;
   const { batchSize, intervalMinSeconds, intervalMaxSeconds } = entry.config;
-  const totalBatches = Math.ceil(total / batchSize);
   entry.phase = 'sending';
+
+  // ── Phase 0: Validate all numbers before sending ──
+  emit(entry, 'validating', { total: entry.jobs.length });
+
+  const allPhones = entry.jobs.map((j) => j.phone);
+  let validSet: Set<string>;
+  let existingChats: Set<string>;
+
+  try {
+    const [validationResult, chats] = await Promise.all([
+      evolutionService.checkNumbers(allPhones),
+      evolutionService.fetchExistingChats(),
+    ]);
+    validSet = new Set(validationResult.valid);
+    existingChats = chats;
+  } catch (err: any) {
+    emit(entry, 'validation_error', { error: err.message ?? 'Erro ao validar números' });
+    entry.phase = 'done';
+    entry.finishedAt = new Date().toISOString();
+    setTimeout(() => closeAll(entry), 500);
+    return;
+  }
+
+  // Mark each job as skipped or invalid based on validation results
+  for (const job of entry.jobs) {
+    if (!validSet.has(job.phone)) {
+      job.status = 'failed';
+      job.error = 'Número não tem WhatsApp';
+    } else if (existingChats.has(job.phone)) {
+      job.status = 'failed';
+      job.error = 'Conversa já existe';
+    }
+  }
+
+  const eligible = entry.jobs.filter((j) => j.status === 'pending');
+  const skipped = entry.jobs.length - eligible.length;
+
+  emit(entry, 'validation_done', {
+    total: entry.jobs.length,
+    eligible: eligible.length,
+    skipped,
+  });
+
+  if (eligible.length === 0) {
+    entry.phase = 'done';
+    entry.finishedAt = new Date().toISOString();
+    emit(entry, 'done', { sent: 0, failed: skipped, total: entry.jobs.length });
+    setTimeout(() => closeAll(entry), 500);
+    return;
+  }
+
+  // ── Phase 1+: Process only eligible (pending) jobs in batches ──
+  const total = eligible.length;
+  const totalBatches = Math.ceil(total / batchSize);
 
   for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
     if (entry.cancelled) break;
 
     const batchStart = batchIndex * batchSize;
-    const batchJobs = entry.jobs.slice(batchStart, batchStart + batchSize);
+    const batchJobs = eligible.slice(batchStart, batchStart + batchSize);
 
     // ── Fase de geração: cria uma mensagem nova para este lote ──
     emit(entry, 'batch_generating', {
@@ -84,12 +135,13 @@ async function processBlast(blastId: string) {
 
     let batchMessage: string;
     try {
-      batchMessage = await deepseekService.generateWhatsAppMessage(entry.promptBase);
-      if (!batchMessage || batchMessage.trim() === entry.promptBase.trim()) {
-        throw new Error('DeepSeek retornou o prompt sem transformação. Verifique a DEEPSEEK_API_KEY no .env');
+      batchMessage = await deepseekService.generateWhatsAppMessage();
+      if (!batchMessage) {
+        throw new Error('DeepSeek não retornou uma mensagem válida. Verifique a DEEPSEEK_API_KEY no .env');
       }
-    } catch (genErr: any) {
-      emit(entry, 'gen_error', { batch: batchIndex + 1, error: genErr.message ?? 'Erro na geração de mensagem' });
+    } catch (genErr: unknown) {
+      const error = genErr instanceof Error ? genErr.message : 'Erro na geração de mensagem';
+      emit(entry, 'gen_error', { batch: batchIndex + 1, error });
       // Aborta o disparo — nunca envia o prompt como mensagem
       break;
     }
@@ -151,7 +203,7 @@ async function processBlast(blastId: string) {
     const sent = finalEntry.jobs.filter((j) => j.status === 'sent').length;
     const failed = finalEntry.jobs.filter((j) => j.status === 'failed').length;
     const event = finalEntry.cancelled ? 'cancelled' : 'done';
-    emit(finalEntry, event, { sent, failed, total });
+    emit(finalEntry, event, { sent, failed, total: finalEntry.jobs.length });
     setTimeout(() => closeAll(finalEntry), 500);
   }
 }
@@ -160,13 +212,11 @@ export const waBlastQueue = {
   create(
     blastId: string,
     phones: string[],
-    promptBase: string,
     config: WaBlastConfig,
   ): WaBlastEntry {
     const jobs: WaJob[] = phones.map((phone) => ({ phone, status: 'pending' }));
     const entry: WaBlastEntry = {
       jobs,
-      promptBase,
       config,
       phase: 'sending',
       cancelled: false,

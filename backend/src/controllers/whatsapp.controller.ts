@@ -10,13 +10,11 @@ export const whatsappController = {
     try {
       const {
         phones,
-        promptBase,
         batchSize = 10,
         intervalMinSeconds = 15,
         intervalMaxSeconds = 60,
       } = req.body as {
         phones: string[];
-        promptBase: string;
         batchSize?: number;
         intervalMinSeconds?: number;
         intervalMaxSeconds?: number;
@@ -24,9 +22,6 @@ export const whatsappController = {
 
       if (!phones || phones.length === 0) {
         return res.status(400).json({ error: 'Lista de números é obrigatória' });
-      }
-      if (!promptBase?.trim()) {
-        return res.status(400).json({ error: 'Prompt da mensagem é obrigatório' });
       }
 
       // Normalize phones: digits only, must have at least 8 digits
@@ -66,7 +61,7 @@ export const whatsappController = {
         console.error('[WhatsApp] Failed to auto-save contacts:', err.message);
       });
 
-      const entry = waBlastQueue.create(blastId, cleanPhones, promptBase.trim(), {
+      const entry = waBlastQueue.create(blastId, cleanPhones, {
         batchSize: safeBatchSize,
         intervalMinSeconds: safeMin,
         intervalMaxSeconds: safeMax,
@@ -99,15 +94,17 @@ export const whatsappController = {
                 }
               }
             }
-          } catch (err: any) {
-            console.error('[WhatsApp] Failed to update contacts after blast:', err.message);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error('[WhatsApp] Failed to update contacts after blast:', message);
           }
         }
       }, 2000);
 
       res.json({ blastId, total: cleanPhones.length });
-    } catch (err: any) {
-      console.error('[WhatsApp] sendBlast error:', err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[WhatsApp] sendBlast error:', message);
       res.status(500).json({ error: 'Erro interno ao iniciar disparo' });
     }
   },

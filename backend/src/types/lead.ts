@@ -5,6 +5,7 @@ export interface Lead {
   name: string;
   phone: string;
   website: string;
+  websiteFetchError: boolean;
   email1: string;
   email2: string;
   city: string;

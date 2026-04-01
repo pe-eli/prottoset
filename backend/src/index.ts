@@ -8,7 +8,9 @@ import leadsRoutes from './routes/leads.routes';
 import contactsRoutes from './routes/contacts.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
 import queuesRoutes from './routes/queues.routes';
-import conversationsRoutes from './routes/conversations.routes';
+import leadFoldersRoutes from './routes/lead-folders.routes';
+import productivityRoutes from './routes/productivity.routes';
+import scheduleRoutes from './routes/schedule.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -24,7 +26,9 @@ app.use('/api/leads', leadsRoutes);
 app.use('/api/contacts', contactsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/queues', queuesRoutes);
-app.use('/api/conversations', conversationsRoutes);
+app.use('/api/lead-folders', leadFoldersRoutes);
+app.use('/api/productivity', productivityRoutes);
+app.use('/api/schedule', scheduleRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

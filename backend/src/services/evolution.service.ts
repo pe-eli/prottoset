@@ -56,6 +56,53 @@ export const evolutionService = {
     return { valid, invalid };
   },
 
+  /**
+   * Fetch all existing chat phone numbers from the instance.
+   * Returns a Set of phone numbers (digits only) that already have open conversations.
+   */
+  async fetchExistingChats(): Promise<Set<string>> {
+    const apiUrl = process.env.EVOLUTION_API_URL;
+    const apiKey = process.env.EVOLUTION_API_KEY;
+    const instance = process.env.EVOLUTION_INSTANCE;
+
+    if (!apiUrl || !apiKey || !instance) {
+      throw new Error('Evolution API não configurada');
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/chat/findChats/${instance}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: apiKey,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`Evolution API ${response.status}: ${body.slice(0, 200)}`);
+      }
+
+      const data = (await response.json()) as Array<{ id?: string; remoteJid?: string }>;
+      const phones = new Set<string>();
+
+      for (const chat of data) {
+        const jid = chat.id || chat.remoteJid || '';
+        // JID format: "5511999999999@s.whatsapp.net" (individual) — skip groups (@g.us)
+        const match = jid.match(/^(\d+)@s\.whatsapp\.net$/);
+        if (match) {
+          phones.add(match[1]);
+        }
+      }
+
+      return phones;
+    } catch (err: any) {
+      console.error('[Evolution] fetchExistingChats error:', err.message);
+      throw err;
+    }
+  },
+
   async sendMessage(
     phone: string,
     message: string,

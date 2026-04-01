@@ -14,7 +14,6 @@ const COLLECTIONS: MigrationConfig[] = [
   { file: 'contacts.json', collection: 'contacts' },
   { file: 'leads.json', collection: 'leads' },
   { file: 'queues.json', collection: 'queues' },
-  { file: 'conversations.json', collection: 'conversations' },
   { file: 'quotes.json', collection: 'quotes' },
 ];
 

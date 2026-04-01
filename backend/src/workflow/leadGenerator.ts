@@ -90,22 +90,23 @@ export async function generateLeads(params: LeadSearchParams): Promise<GenerateL
     allPlaces,
     async (place, i) => {
       const hasWebsite = !!place.website;
+      let websiteFetchError = false;
       let emails: string[] = [];
 
       // Enriquecimento: somente se houver website
       if (hasWebsite) {
         logger.info(`[${i + 1}/${allPlaces.length}] Scraping: ${place.website}`);
-        try {
-          const html = await scraperService.fetchHTML(place.website);
-          if (html) {
-            emails = emailExtractor.extract(html, 2);
-            if (emails.length > 0) {
-              logger.info(`Emails encontrados: ${emails.length}`);
-            }
+        const html = await scraperService.fetchHTML(place.website);
+        if (html) {
+          emails = emailExtractor.extract(html, 2);
+          if (emails.length > 0) {
+            logger.info(`Emails encontrados: ${emails.length}`);
           }
-        } catch (err: any) {
-          logger.warn(`Erro scraping ${place.website}: ${err.message}`);
+        } else {
+          websiteFetchError = true;
+          logger.warn(`Website possivelmente fora do ar ou inacessível: ${place.website}`);
         }
+
         // Delay entre scrapes
         await sleep(DELAY_BETWEEN_SCRAPES_MS);
       }
@@ -118,6 +119,7 @@ export async function generateLeads(params: LeadSearchParams): Promise<GenerateL
         name: place.name,
         phone: place.phone,
         website: place.website,
+        websiteFetchError,
         email1: emails[0] || '',
         email2: emails[1] || '',
         city,

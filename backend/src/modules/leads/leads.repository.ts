@@ -20,6 +20,7 @@ function migrateLead(raw: any): Lead {
     name: raw.name ?? '',
     phone: raw.phone ?? '',
     website: raw.website ?? '',
+    websiteFetchError: raw.websiteFetchError ?? false,
     email1: raw.email1 ?? raw.email ?? '',
     email2: raw.email2 ?? '',
     city: raw.city ?? '',

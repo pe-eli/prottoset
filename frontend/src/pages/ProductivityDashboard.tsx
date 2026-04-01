@@ -215,7 +215,7 @@ export function ProductivityDashboard() {
                       borderRadius: 12,
                       fontSize: 13,
                     }}
-                    formatter={(value: number) => `${value}h`}
+                    formatter={(value) => `${value ?? 0}h`}
                   />
                 </PieChart>
               </ResponsiveContainer>

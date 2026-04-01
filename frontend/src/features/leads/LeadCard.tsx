@@ -53,7 +53,7 @@ interface LeadCardProps {
 }
 
 export function LeadCard({ lead, onClick, selectable, selected, onToggle }: LeadCardProps) {
-  const priority = PRIORITY_CONFIG[lead.priority] ?? PRIORITY_CONFIG['LOW'];
+  const _priority = PRIORITY_CONFIG[lead.priority] ?? PRIORITY_CONFIG['LOW'];
   const prioritySurface = PRIORITY_SURFACE[lead.priority] ?? PRIORITY_SURFACE['LOW'];
 
   const handleCardClick = () => {

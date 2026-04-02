@@ -324,6 +324,7 @@ export function WhatsAppBlastPage() {
 
   const counts = useMemo(() => {
     const c = { pending: 0, sending: 0, sent: 0, failed: 0 };
+    if (!Array.isArray(queue)) return c;
     queue.forEach((j) => { c[j.status]++; });
     return c;
   }, [queue]);

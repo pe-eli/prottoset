@@ -35,7 +35,7 @@ export function groupByWeek(entries: DailyEntry[]): WeeklySummary[] {
   const summaries: WeeklySummary[] = [];
 
   for (const [week, weekEntries] of weekMap) {
-    const sorted = [...weekEntries].sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = [...weekEntries].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
 
     const totalProttocodeHours = sorted.reduce((s, e) => s + e.prottocodeHours, 0);
     const totalAluraHours = sorted.reduce((s, e) => s + e.aluraHours, 0);
@@ -73,7 +73,7 @@ export function groupByWeek(entries: DailyEntry[]): WeeklySummary[] {
     });
   }
 
-  return summaries.sort((a, b) => b.week.localeCompare(a.week));
+  return summaries.sort((a, b) => (b.week ?? '').localeCompare(a.week ?? ''));
 }
 
 export function formatWeekLabel(week: string): string {

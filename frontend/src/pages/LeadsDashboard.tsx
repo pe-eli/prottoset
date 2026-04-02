@@ -43,11 +43,12 @@ export function LeadsDashboard() {
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [showFolderAdd, setShowFolderAdd] = useState(false);
   const folderAddRef = useRef<HTMLDivElement>(null);
+  const safeLeads = useMemo(() => (Array.isArray(leads) ? leads : []), [leads]);
 
   // Nichos únicos para o select (case-insensitive)
   const niches = useMemo(() => {
     const map = new Map<string, string>();
-    leads.forEach((l) => {
+    safeLeads.forEach((l) => {
       if (l.niche) {
         const key = l.niche.toLowerCase();
         if (!map.has(key)) {
@@ -58,12 +59,12 @@ export function LeadsDashboard() {
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([value, label]) => ({ value, label }));
-  }, [leads]);
+  }, [safeLeads]);
 
   // Cidades únicas para o select (case-insensitive)
   const cities = useMemo(() => {
     const map = new Map<string, string>();
-    leads.forEach((l) => {
+    safeLeads.forEach((l) => {
       if (l.city) {
         const key = l.city.toLowerCase();
         if (!map.has(key)) {
@@ -74,7 +75,7 @@ export function LeadsDashboard() {
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([value, label]) => ({ value, label }));
-  }, [leads]);
+  }, [safeLeads]);
 
   // Close folder picker when clicking outside
   useEffect(() => {
@@ -89,17 +90,17 @@ export function LeadsDashboard() {
 
   // Leads filtrados
   const filtered = useMemo(() => {
-    return leads.filter((l) => {
-      if (filters.niche !== 'all' && l.niche.toLowerCase() !== filters.niche) return false;
+    return safeLeads.filter((l) => {
+      if (filters.niche !== 'all' && (l.niche ?? '').toLowerCase() !== filters.niche) return false;
       if (filters.priority !== 'all' && l.priority !== filters.priority) return false;
       if (filters.website === 'with' && !l.hasWebsite) return false;
       if (filters.website === 'without' && l.hasWebsite) return false;
-      if (filters.city !== 'all' && l.city.toLowerCase() !== filters.city) return false;
+      if (filters.city !== 'all' && (l.city ?? '').toLowerCase() !== filters.city) return false;
       if (filters.email === 'with' && !l.email1) return false;
       if (filters.email === 'without' && l.email1) return false;
       return true;
     });
-  }, [leads, filters]);
+  }, [safeLeads, filters]);
 
   const hasActiveFilters = filters.niche !== 'all' || filters.priority !== 'all' || filters.website !== 'all' || filters.city !== 'all' || filters.email !== 'all';
 
@@ -146,7 +147,7 @@ export function LeadsDashboard() {
     setLoading(true);
     try {
       const { data } = await leadsAPI.getAll();
-      setLeads(data);
+      setLeads(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch leads:', err);
     } finally {

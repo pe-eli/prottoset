@@ -25,7 +25,7 @@ export function ProductivityDashboard() {
   const currentWeekData = weeks.find((w) => w.week === currentWeek);
 
   const recentEntries = useMemo(
-    () => [...entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7),
+    () => [...entries].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).slice(0, 7),
     [entries]
   );
 

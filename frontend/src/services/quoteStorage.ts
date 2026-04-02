@@ -1,11 +1,17 @@
 import type { Quote } from '../types';
+import { safeArray } from '../utils/safe';
 
 const STORAGE_KEY = 'prottoset_quotes';
 
 export const quoteStorage = {
   getAll(): Quote[] {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    try {
+      return safeArray<Quote>(JSON.parse(raw));
+    } catch {
+      return [];
+    }
   },
 
   save(quote: Quote): void {

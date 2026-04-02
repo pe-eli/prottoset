@@ -14,6 +14,7 @@ interface LeadPipelineProps {
 }
 
 export function LeadPipeline({ leads, onStatusChange }: LeadPipelineProps) {
+  const safeLeads = Array.isArray(leads) ? leads : [];
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const dragOverColumn = useRef<LeadStatus | null>(null);
 
@@ -28,7 +29,7 @@ export function LeadPipeline({ leads, onStatusChange }: LeadPipelineProps) {
 
   const handleDrop = (status: LeadStatus) => {
     if (draggedId) {
-      const lead = leads.find((l) => l.id === draggedId);
+      const lead = safeLeads.find((l) => l.id === draggedId);
       if (lead && lead.status !== status) {
         onStatusChange(draggedId, status);
       }
@@ -45,7 +46,7 @@ export function LeadPipeline({ leads, onStatusChange }: LeadPipelineProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {PIPELINE_COLUMNS.map((col) => {
-        const columnLeads = leads.filter((l) => l.status === col.status);
+        const columnLeads = safeLeads.filter((l) => l.status === col.status);
 
         return (
           <div

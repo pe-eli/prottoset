@@ -12,6 +12,7 @@ import type { LeadFolder } from '../features/leads/lead-folders.api';
 import { queuesAPI } from '../features/queues/queues.api';
 import { AddToQueueModal } from '../features/queues/AddToQueueModal';
 import type { Lead, LeadSearchParams, LeadMetrics, LeadStatus, LeadPriority } from '../features/leads/leads.types';
+import { safeArray } from '../utils/safe';
 
 type ViewMode = 'cards' | 'pipeline';
 type WebsiteFilter = 'all' | 'with' | 'without';
@@ -160,7 +161,7 @@ export function LeadsDashboard() {
   const fetchFolders = useCallback(async () => {
     try {
       const { data } = await foldersAPI.getAll();
-      setFolders(data);
+      setFolders(safeArray<LeadFolder>(data));
     } catch (err) {
       console.error('Failed to fetch folders:', err);
     }
@@ -176,15 +177,22 @@ export function LeadsDashboard() {
     setLastResult(null);
     try {
       const { data } = await leadsAPI.search(params);
+      const saved = safeArray<Lead>(data?.saved);
+      const metrics: LeadMetrics = data?.metrics ?? {
+        totalLeads: 0,
+        leadsComWebsite: 0,
+        leadsSemWebsite: 0,
+        leadsAltaPrioridade: 0,
+      };
       setLastResult({
-        saved: data.saved.length,
-        duplicates: data.duplicates,
-        metrics: data.metrics,
+        saved: saved.length,
+        duplicates: Number(data?.duplicates) || 0,
+        metrics,
       });
 
       // Auto-add phones to queue
-      if (queueId && data.saved.length > 0) {
-        const phones = data.saved.map((l) => l.phone).filter(Boolean);
+      if (queueId && saved.length > 0) {
+        const phones = saved.map((l) => l.phone).filter(Boolean);
         if (phones.length > 0) {
           await queuesAPI.addPhones(queueId, phones).catch(() => {});
         }
@@ -193,8 +201,8 @@ export function LeadsDashboard() {
       await fetchLeads();
 
       // Auto-add new leads to the active folder
-      if (activeFolderId && data.saved.length > 0) {
-        const newIds = data.saved.map((l) => l.id);
+      if (activeFolderId && saved.length > 0) {
+        const newIds = saved.map((l) => l.id);
         const { data: updatedFolder } = await foldersAPI.addLeads(activeFolderId, newIds);
         setFolders((prev) => prev.map((f) => (f.id === activeFolderId ? updatedFolder : f)));
       }

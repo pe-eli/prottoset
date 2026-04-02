@@ -1,3 +1,5 @@
+import { safeArray } from '../utils/safe';
+
 const STORAGE_KEY = 'prottoset_packages_quotes';
 
 export interface StoredPackagesPlan {
@@ -29,7 +31,12 @@ export interface StoredPackagesQuote {
 export const packagesStorage = {
   getAll(): StoredPackagesQuote[] {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    try {
+      return safeArray<StoredPackagesQuote>(JSON.parse(raw));
+    } catch {
+      return [];
+    }
   },
 
   save(quote: StoredPackagesQuote): void {

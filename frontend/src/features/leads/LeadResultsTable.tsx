@@ -24,7 +24,9 @@ interface LeadResultsTableProps {
 }
 
 export function LeadResultsTable({ leads, onStatusChange, onDelete }: LeadResultsTableProps) {
-  if (leads.length === 0) {
+  const safeLeads = Array.isArray(leads) ? leads : [];
+
+  if (safeLeads.length === 0) {
     return (
       <Card className="text-center py-12">
         <div className="text-gray-400">
@@ -54,7 +56,7 @@ export function LeadResultsTable({ leads, onStatusChange, onDelete }: LeadResult
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {leads.map((lead) => (
+            {safeLeads.map((lead) => (
               <tr key={lead.id} className="hover:bg-gray-50/50 transition-colors">
                 <td className="px-4 py-3">
                   <a

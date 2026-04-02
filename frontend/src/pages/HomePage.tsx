@@ -65,8 +65,10 @@ export function HomePage() {
     navigate('/pacotes');
   };
 
-  const minPriceAVista = (quote: StoredPackagesQuote) =>
-    Math.min(...quote.plans.map((p) => p.priceAVista));
+  const minPriceAVista = (quote: StoredPackagesQuote) => {
+    const plans = Array.isArray(quote.plans) ? quote.plans : [];
+    return plans.length > 0 ? Math.min(...plans.map((p) => p.priceAVista)) : 0;
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">

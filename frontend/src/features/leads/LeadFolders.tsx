@@ -100,6 +100,7 @@ export function LeadFolders({
   onCreate,
   onDelete,
 }: Props) {
+  const safeFolders = Array.isArray(folders) ? folders : [];
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -144,7 +145,7 @@ export function LeadFolders({
           </svg>
           Pastas
           <span className="ml-1 px-1.5 py-0.5 bg-brand-100 text-brand-500 rounded-md text-[10px] font-bold">
-            {folders.length}
+            {safeFolders.length}
           </span>
         </h4>
         {!creating && (
@@ -212,7 +213,7 @@ export function LeadFolders({
         />
 
         {/* Actual folders */}
-        {folders.map((folder) => {
+        {safeFolders.map((folder) => {
           const style = PALETTE[folder.color] ?? PALETTE['blue'];
           return (
             <FolderPill
@@ -229,7 +230,7 @@ export function LeadFolders({
         })}
       </div>
 
-      {folders.length === 0 && !creating && (
+      {safeFolders.length === 0 && !creating && (
         <p className="mt-2 text-xs text-brand-300">
           Crie pastas para organizar seus leads por categoria, campanha ou nicho.
         </p>

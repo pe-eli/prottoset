@@ -108,7 +108,7 @@ export function ContactsPage() {
     setLoading(true);
     try {
       const { data } = await contactsAPI.getAll();
-      setContacts(data);
+      setContacts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch contacts:', err);
     } finally {

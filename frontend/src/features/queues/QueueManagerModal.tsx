@@ -31,7 +31,7 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
   const fetchQueues = async () => {
     try {
       const { data } = await queuesAPI.getAll();
-      setQueues(data);
+      setQueues(Array.isArray(data) ? data : []);
     } catch {
       /* ignore */
     } finally {
@@ -90,7 +90,7 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
       await queuesAPI.merge([...mergeSelection], mergeName.trim());
       // Refresh full list after merge
       const { data: refreshed } = await queuesAPI.getAll();
-      setQueues(refreshed);
+      setQueues(Array.isArray(refreshed) ? refreshed : []);
       setMergeMode(false);
       setMergeSelection(new Set());
       setMergeName('');

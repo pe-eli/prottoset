@@ -22,7 +22,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { data } = await scheduleAPI.getAll();
-      set({ items: data, loading: false });
+      set({ items: Array.isArray(data) ? data : [], loading: false });
     } catch {
       set({ error: 'Erro ao carregar agenda', loading: false });
     }

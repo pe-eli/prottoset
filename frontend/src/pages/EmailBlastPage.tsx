@@ -98,6 +98,7 @@ export function EmailBlastPage() {
   const [starting, setStarting] = useState(false);
   const [countdown, setCountdown] = useState<Countdown | null>(null);
   const [batchInfo, setBatchInfo] = useState<BatchInfo | null>(null);
+  const safeQueue = Array.isArray(queue) ? queue : [];
 
   const esRef = useRef<EventSource | null>(null);
 
@@ -142,7 +143,8 @@ export function EmailBlastPage() {
       esRef.current = es;
 
       es.addEventListener('catchup', (e) => {
-        const jobs: Array<{ email: string; status: JobStatus; error?: string }> = JSON.parse(e.data);
+        const payload = JSON.parse(e.data) as unknown;
+        const jobs: Array<{ email: string; status: JobStatus; error?: string }> = Array.isArray(payload) ? payload : [];
         setQueue(jobs.map((j) => ({ email: j.email, status: j.status, error: j.error })));
       });
 
@@ -154,7 +156,7 @@ export function EmailBlastPage() {
 
       es.addEventListener('progress', (e) => {
         const { email, status, error } = JSON.parse(e.data) as { email: string; status: JobStatus; error?: string };
-        setQueue((prev) => prev.map((j) => (j.email === email ? { ...j, status, error } : j)));
+        setQueue((prev) => (Array.isArray(prev) ? prev.map((j) => (j.email === email ? { ...j, status, error } : j)) : []));
       });
 
       es.addEventListener('tick', (e) => {
@@ -173,7 +175,7 @@ export function EmailBlastPage() {
 
       es.onerror = () => {
         setQueue((prev) =>
-          prev.map((j) =>
+          (Array.isArray(prev) ? prev : []).map((j) =>
             j.status === 'pending' || j.status === 'sending'
               ? { ...j, status: 'failed', error: 'Conexão perdida' }
               : j
@@ -199,9 +201,9 @@ export function EmailBlastPage() {
     setBatchInfo(null);
   };
 
-  const sentCount = queue.filter((j) => j.status === 'sent').length;
-  const doneCount = queue.filter((j) => j.status === 'sent' || j.status === 'failed').length;
-  const progress = queue.length > 0 ? Math.round((doneCount / queue.length) * 100) : 0;
+  const sentCount = safeQueue.filter((j) => j.status === 'sent').length;
+  const doneCount = safeQueue.filter((j) => j.status === 'sent' || j.status === 'failed').length;
+  const progress = safeQueue.length > 0 ? Math.round((doneCount / safeQueue.length) * 100) : 0;
   const countdownPct = countdown ? (countdown.remaining / countdown.total) * 100 : 0;
 
   return (
@@ -419,10 +421,10 @@ export function EmailBlastPage() {
                     : 'Iniciando disparo...'}
                 </h3>
                 <p className="text-xs text-brand-400 mt-0.5">
-                  {sentCount} de {queue.length} emails enviados
-                  {queue.filter((j) => j.status === 'failed').length > 0 && (
+                  {sentCount} de {safeQueue.length} emails enviados
+                  {safeQueue.filter((j) => j.status === 'failed').length > 0 && (
                     <span className="text-red-400 ml-1">
-                      · {queue.filter((j) => j.status === 'failed').length} falhou
+                      · {safeQueue.filter((j) => j.status === 'failed').length} falhou
                     </span>
                   )}
                 </p>
@@ -439,10 +441,10 @@ export function EmailBlastPage() {
 
             {/* Status counts */}
             <div className="flex items-center gap-4 mt-3">
-              <StatusCount label="Aguardando" count={queue.filter((j) => j.status === 'pending').length} color="text-brand-400" />
-              <StatusCount label="Enviando" count={queue.filter((j) => j.status === 'sending').length} color="text-amber-500" />
-              <StatusCount label="Enviados" count={queue.filter((j) => j.status === 'sent').length} color="text-emerald-500" />
-              <StatusCount label="Falhou" count={queue.filter((j) => j.status === 'failed').length} color="text-red-400" />
+              <StatusCount label="Aguardando" count={safeQueue.filter((j) => j.status === 'pending').length} color="text-brand-400" />
+              <StatusCount label="Enviando" count={safeQueue.filter((j) => j.status === 'sending').length} color="text-amber-500" />
+              <StatusCount label="Enviados" count={safeQueue.filter((j) => j.status === 'sent').length} color="text-emerald-500" />
+              <StatusCount label="Falhou" count={safeQueue.filter((j) => j.status === 'failed').length} color="text-red-400" />
             </div>
 
             {/* Countdown entre lotes */}
@@ -501,10 +503,10 @@ export function EmailBlastPage() {
           {/* Queue list */}
           <Card>
             <h3 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-3">
-              Fila de envio ({queue.length})
+              Fila de envio ({safeQueue.length})
             </h3>
             <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
-              {queue.map((job, idx) => {
+              {safeQueue.map((job, idx) => {
                 const s = STATUS_STYLE[job.status];
                 const batchNum = Math.floor(idx / batchSize) + 1;
                 return (

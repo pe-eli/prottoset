@@ -35,7 +35,8 @@ function buildQuery(params: SerperSearchParams): string {
       linkedin: 'linkedin.com',
       twitter: 'x.com',
     };
-    const domain = platformDomains[params.platform.toLowerCase()] || params.platform;
+    const platform = typeof params.platform === 'string' ? params.platform : String(params.platform);
+    const domain = platformDomains[platform.toLowerCase()] || platform;
     parts.push(`site:${domain}`);
   }
 

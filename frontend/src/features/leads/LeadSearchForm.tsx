@@ -25,7 +25,7 @@ export function LeadSearchForm({ onSearch, loading }: LeadSearchFormProps) {
   const [creatingQueue, setCreatingQueue] = useState(false);
 
   useEffect(() => {
-    queuesAPI.getAll().then(({ data }) => setQueues(data)).catch(() => {});
+    queuesAPI.getAll().then(({ data }) => setQueues(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
   const handleCreateQueue = async () => {

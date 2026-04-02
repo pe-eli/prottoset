@@ -49,15 +49,16 @@ export function LeadsDashboard() {
   const niches = useMemo(() => {
     const map = new Map<string, string>();
     safeLeads.forEach((l) => {
-      if (l.niche) {
-        const key = l.niche.toLowerCase();
+      const niche = typeof l.niche === 'string' ? l.niche : '';
+      if (niche) {
+        const key = niche.toLowerCase();
         if (!map.has(key)) {
-          map.set(key, l.niche.replace(/\b\w/g, (c) => c.toUpperCase()));
+          map.set(key, niche.replace(/\b\w/g, (c) => c.toUpperCase()));
         }
       }
     });
     return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => (a ?? '').localeCompare(b ?? ''))
       .map(([value, label]) => ({ value, label }));
   }, [safeLeads]);
 
@@ -65,15 +66,16 @@ export function LeadsDashboard() {
   const cities = useMemo(() => {
     const map = new Map<string, string>();
     safeLeads.forEach((l) => {
-      if (l.city) {
-        const key = l.city.toLowerCase();
+      const city = typeof l.city === 'string' ? l.city : '';
+      if (city) {
+        const key = city.toLowerCase();
         if (!map.has(key)) {
-          map.set(key, l.city.replace(/\b\w/g, (c) => c.toUpperCase()));
+          map.set(key, city.replace(/\b\w/g, (c) => c.toUpperCase()));
         }
       }
     });
     return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => (a ?? '').localeCompare(b ?? ''))
       .map(([value, label]) => ({ value, label }));
   }, [safeLeads]);
 

@@ -59,7 +59,9 @@ export async function generateLeads(params: LeadSearchParams): Promise<GenerateL
 
       for (const place of places) {
         // Deduplica por nome normalizado (evita duplicar empresas sem website)
-        const key = `${place.name.toLowerCase().trim()}|${place.address.toLowerCase().trim()}`;
+        const placeName = typeof place.name === 'string' ? place.name : '';
+        const placeAddress = typeof place.address === 'string' ? place.address : '';
+        const key = `${placeName.toLowerCase().trim()}|${placeAddress.toLowerCase().trim()}`;
         if (!seen.has(key)) {
           seen.add(key);
           allPlaces.push({ ...place, neighborhood });

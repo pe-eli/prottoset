@@ -22,7 +22,7 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { data } = await productivityAPI.getAll();
-      set({ entries: data, loading: false });
+      set({ entries: Array.isArray(data) ? data : [], loading: false });
     } catch {
       set({ error: 'Erro ao carregar entradas', loading: false });
     }

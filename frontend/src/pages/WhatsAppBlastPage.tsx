@@ -103,6 +103,7 @@ export function WhatsAppBlastPage() {
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<{ total: number; eligible: number; skipped: number } | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const safeQueue = useMemo(() => (Array.isArray(queue) ? queue : []), [queue]);
 
   const esRef = useRef<EventSource | null>(null);
   const blastIdRef = useRef<string | null>(null);
@@ -113,7 +114,7 @@ export function WhatsAppBlastPage() {
   useEffect(() => { return () => { esRef.current?.close(); }; }, []);
 
   useEffect(() => {
-    queuesAPI.getAll().then(({ data }) => setPhoneQueues(data)).catch(() => {});
+    queuesAPI.getAll().then(({ data }) => setPhoneQueues(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
   const totalBatches = Math.ceil(phones.length / batchSize);
@@ -143,7 +144,8 @@ export function WhatsAppBlastPage() {
     });
 
     es.addEventListener('catchup', (e) => {
-      const jobs: Array<{ phone: string; status: JobStatus; error?: string }> = JSON.parse(e.data);
+      const payload = JSON.parse(e.data) as unknown;
+      const jobs: Array<{ phone: string; status: JobStatus; error?: string }> = Array.isArray(payload) ? payload : [];
       const restored = jobs.map((j) => ({ phone: j.phone, status: j.status, error: j.error }));
       setQueue(restored);
       // Sync context immediately so notification shows correct values
@@ -197,7 +199,7 @@ export function WhatsAppBlastPage() {
     es.addEventListener('progress', (e) => {
       const { phone, status, error } = JSON.parse(e.data) as { phone: string; status: JobStatus; error?: string };
       // Pure updater — no side effects inside
-      setQueue((prev) => prev.map((j) => (j.phone === phone ? { ...j, status, error } : j)));
+      setQueue((prev) => (Array.isArray(prev) ? prev.map((j) => (j.phone === phone ? { ...j, status, error } : j)) : []));
     });
 
     es.addEventListener('tick', (e) => {
@@ -237,10 +239,10 @@ export function WhatsAppBlastPage() {
 
   // Sync queue changes to global context (avoids calling updateProgress inside setQueue updater)
   useEffect(() => {
-    if (phase !== 'active' || queue.length === 0) return;
-    const sent = queue.filter((j) => j.status === 'sent').length;
-    updateProgress(sent, queue.length, 'sending');
-  }, [queue, phase, updateProgress]);
+    if (phase !== 'active' || safeQueue.length === 0) return;
+    const sent = safeQueue.filter((j) => j.status === 'sent').length;
+    updateProgress(sent, safeQueue.length, 'sending');
+  }, [safeQueue, phase, updateProgress]);
 
   useEffect(() => {
     if (reconnectedRef.current || !globalActive || globalActive.phase !== 'sending' || esRef.current) return;
@@ -297,11 +299,11 @@ export function WhatsAppBlastPage() {
     try {
       await whatsappAPI.cancelBlast(blastIdRef.current);
       // Finaliza imediatamente — não espera o SSE 'cancelled' (pode sofrer buffering)
-      const sent = queue.filter((j) => j.status === 'sent').length;
-      const failed = queue.filter((j) => j.status === 'failed').length;
+      const sent = safeQueue.filter((j) => j.status === 'sent').length;
+      const failed = safeQueue.filter((j) => j.status === 'failed').length;
       esRef.current?.close();
       esRef.current = null;
-      setSummary({ sent, failed, total: queue.length });
+      setSummary({ sent, failed, total: safeQueue.length });
       setCountdown(null);
       setBatchGenerating(false);
       setPhase('done');
@@ -324,14 +326,13 @@ export function WhatsAppBlastPage() {
 
   const counts = useMemo(() => {
     const c = { pending: 0, sending: 0, sent: 0, failed: 0 };
-    if (!Array.isArray(queue)) return c;
-    queue.forEach((j) => { c[j.status]++; });
+    safeQueue.forEach((j) => { c[j.status]++; });
     return c;
-  }, [queue]);
+  }, [safeQueue]);
 
   const sentCount = counts.sent;
   const doneCount = counts.sent + counts.failed;
-  const progress = queue.length > 0 ? Math.round((doneCount / queue.length) * 100) : 0;
+  const progress = safeQueue.length > 0 ? Math.round((doneCount / safeQueue.length) * 100) : 0;
   const countdownPct = countdown ? (countdown.remaining / countdown.total) * 100 : 0;
 
   return (
@@ -648,7 +649,7 @@ export function WhatsAppBlastPage() {
                   )}
                 </h3>
                 <p className="text-xs text-brand-400 mt-0.5">
-                  {sentCount} de {queue.length} mensagens enviadas
+                  {sentCount} de {safeQueue.length} mensagens enviadas
                   {counts.failed > 0 && (
                     <span className="text-red-400 ml-1">· {counts.failed} falharam</span>
                   )}
@@ -774,10 +775,10 @@ export function WhatsAppBlastPage() {
           {/* Queue list */}
           <Card>
             <h3 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-3">
-              Fila de envio ({queue.length})
+              Fila de envio ({safeQueue.length})
             </h3>
             <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
-              {queue.map((job, idx) => {
+              {safeQueue.map((job, idx) => {
                 const s = STATUS_STYLE[job.status];
                 const batchNum = Math.floor(idx / configSnapshot.batchSize) + 1;
                 return (
@@ -802,7 +803,7 @@ export function WhatsAppBlastPage() {
         <QueueManagerModal
           onClose={() => setShowQueueManager(false)}
           onChanged={() => {
-            queuesAPI.getAll().then(({ data }) => setPhoneQueues(data)).catch(() => {});
+            queuesAPI.getAll().then(({ data }) => setPhoneQueues(Array.isArray(data) ? data : [])).catch(() => {});
           }}
         />
       )}

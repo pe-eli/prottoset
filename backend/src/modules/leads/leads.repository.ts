@@ -40,7 +40,9 @@ function toLead(doc: FirebaseFirestore.DocumentSnapshot): Lead {
 }
 
 function dedupeKey(lead: Lead): string {
-  return `${lead.name.toLowerCase().trim()}|${lead.address.toLowerCase().trim()}`;
+  const name = typeof lead.name === 'string' ? lead.name : '';
+  const address = typeof lead.address === 'string' ? lead.address : '';
+  return `${name.toLowerCase().trim()}|${address.toLowerCase().trim()}`;
 }
 
 export const leadsRepository = {

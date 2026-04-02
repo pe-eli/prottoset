@@ -18,7 +18,7 @@ export function AddToQueueModal({ phones, onClose }: AddToQueueModalProps) {
   const fetchQueues = async () => {
     try {
       const { data } = await queuesAPI.getAll();
-      setQueues(data);
+      setQueues(Array.isArray(data) ? data : []);
     } catch {
       console.error('Failed to fetch queues');
     } finally {

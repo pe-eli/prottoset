@@ -1,3 +1,20 @@
+function normalizeApiUrl(raw?: string): string | null {
+  if (!raw) return null;
+
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // Accept host-only values from env (e.g. example.up.railway.app)
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    const url = new URL(withProtocol);
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
 export const evolutionService = {
   /**
    * Validate which phone numbers have WhatsApp.
@@ -6,7 +23,7 @@ export const evolutionService = {
   async checkNumbers(
     phones: string[],
   ): Promise<{ valid: string[]; invalid: string[] }> {
-    const apiUrl = process.env.EVOLUTION_API_URL;
+    const apiUrl = normalizeApiUrl(process.env.EVOLUTION_API_URL);
     const apiKey = process.env.EVOLUTION_API_KEY;
     const instance = process.env.EVOLUTION_INSTANCE;
 
@@ -61,7 +78,7 @@ export const evolutionService = {
    * Returns a Set of phone numbers (digits only) that already have open conversations.
    */
   async fetchExistingChats(): Promise<Set<string>> {
-    const apiUrl = process.env.EVOLUTION_API_URL;
+    const apiUrl = normalizeApiUrl(process.env.EVOLUTION_API_URL);
     const apiKey = process.env.EVOLUTION_API_KEY;
     const instance = process.env.EVOLUTION_INSTANCE;
 
@@ -107,7 +124,7 @@ export const evolutionService = {
     phone: string,
     message: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const apiUrl = process.env.EVOLUTION_API_URL;
+    const apiUrl = normalizeApiUrl(process.env.EVOLUTION_API_URL);
     const apiKey = process.env.EVOLUTION_API_KEY;
     const instance = process.env.EVOLUTION_INSTANCE;
 

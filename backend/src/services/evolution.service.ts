@@ -15,6 +15,36 @@ function normalizeApiUrl(raw?: string): string | null {
   }
 }
 
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function normalizePhoneForWa(value: string): string {
+  const digits = digitsOnly(value);
+  // BR default: if user entered local format (10/11 digits), prepend country code.
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`;
+  }
+  return digits;
+}
+
+function buildEvolutionHeaders(apiKey: string): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    apikey: apiKey,
+    Authorization: `Bearer ${apiKey}`,
+    'X-API-Key': apiKey,
+  };
+}
+
+function formatEvolutionHttpError(status: number, body: string): string {
+  const excerpt = body.slice(0, 200);
+  if (status === 401) {
+    return `Evolution API 401 (unauthorized). Verifique EVOLUTION_API_KEY e permissao da instancia. Response: ${excerpt}`;
+  }
+  return `Evolution API ${status}: ${excerpt}`;
+}
+
 export const evolutionService = {
   /**
    * Validate which phone numbers have WhatsApp.
@@ -33,21 +63,19 @@ export const evolutionService = {
 
     const valid: string[] = [];
     const invalid: string[] = [];
+    const normalizedPhones = phones.map(normalizePhoneForWa).filter((p) => p.length >= 12);
 
     // Evolution API checks numbers in batch
     try {
       const response = await fetch(`${apiUrl}/chat/whatsappNumbers/${instance}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: apiKey,
-        },
-        body: JSON.stringify({ numbers: phones }),
+        headers: buildEvolutionHeaders(apiKey),
+        body: JSON.stringify({ numbers: normalizedPhones }),
       });
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');
-        throw new Error(`Evolution API ${response.status}: ${body.slice(0, 200)}`);
+        throw new Error(formatEvolutionHttpError(response.status, body));
       }
 
       const data = (await response.json()) as Array<{
@@ -59,10 +87,10 @@ export const evolutionService = {
       for (const entry of data) {
         if (entry.exists) {
           // Use the number returned by WhatsApp (canonical form)
-          valid.push(entry.number || entry.jid.replace(/@.*$/, ''));
+          valid.push(normalizePhoneForWa(entry.number || entry.jid.replace(/@.*$/, '')));
         } else {
           const num = entry.number || entry.jid?.replace(/@.*$/, '') || '';
-          invalid.push(num);
+          invalid.push(normalizePhoneForWa(num));
         }
       }
     } catch (err: any) {
@@ -89,16 +117,13 @@ export const evolutionService = {
     try {
       const response = await fetch(`${apiUrl}/chat/findChats/${instance}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: apiKey,
-        },
+        headers: buildEvolutionHeaders(apiKey),
         body: JSON.stringify({}),
       });
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');
-        throw new Error(`Evolution API ${response.status}: ${body.slice(0, 200)}`);
+        throw new Error(formatEvolutionHttpError(response.status, body));
       }
 
       const data = (await response.json()) as Array<{ id?: string; remoteJid?: string }>;
@@ -137,15 +162,12 @@ export const evolutionService = {
     }
 
     // Normalize phone: keep only digits, ensure country code
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = normalizePhoneForWa(phone);
 
     try {
       const response = await fetch(`${apiUrl}/message/sendText/${instance}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: apiKey,
-        },
+        headers: buildEvolutionHeaders(apiKey),
         body: JSON.stringify({
           number: cleanPhone,
           text: message,
@@ -154,7 +176,10 @@ export const evolutionService = {
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');
-        return { success: false, error: `API ${response.status}: ${body.slice(0, 120)}` };
+        return {
+          success: false,
+          error: formatEvolutionHttpError(response.status, body).slice(0, 260),
+        };
       }
 
       return { success: true };

@@ -29,6 +29,26 @@ interface WaBlastEntry {
 
 const blasts = new Map<string, WaBlastEntry>();
 
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function normalizePhone(value: string): string {
+  const digits = digitsOnly(value);
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  return digits;
+}
+
+function buildPhoneKeys(value: string): string[] {
+  const normalized = normalizePhone(value);
+  const keys = new Set<string>([normalized]);
+  // Also accept local BR format when canonical has country code.
+  if (normalized.startsWith('55') && normalized.length > 11) {
+    keys.add(normalized.slice(2));
+  }
+  return Array.from(keys);
+}
+
 function randomDelay(minSec: number, maxSec: number): number {
   return Math.floor(Math.random() * (maxSec - minSec + 1) + minSec);
 }
@@ -78,8 +98,8 @@ async function processBlast(blastId: string) {
       evolutionService.checkNumbers(allPhones),
       evolutionService.fetchExistingChats(),
     ]);
-    validSet = new Set(validationResult.valid);
-    existingChats = chats;
+    validSet = new Set(Array.from(validationResult.valid, normalizePhone));
+    existingChats = new Set(Array.from(chats, normalizePhone));
   } catch (err: any) {
     emit(entry, 'validation_error', { error: err.message ?? 'Erro ao validar números' });
     entry.phase = 'done';
@@ -90,10 +110,14 @@ async function processBlast(blastId: string) {
 
   // Mark each job as skipped or invalid based on validation results
   for (const job of entry.jobs) {
-    if (!validSet.has(job.phone)) {
+    const keys = buildPhoneKeys(job.phone);
+    const isValid = keys.some((k) => validSet.has(k));
+    const hasExistingChat = keys.some((k) => existingChats.has(k));
+
+    if (!isValid) {
       job.status = 'failed';
       job.error = 'Número não tem WhatsApp';
-    } else if (existingChats.has(job.phone)) {
+    } else if (hasExistingChat) {
       job.status = 'failed';
       job.error = 'Conversa já existe';
     }

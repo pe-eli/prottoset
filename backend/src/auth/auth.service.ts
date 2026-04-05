@@ -9,6 +9,13 @@ function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
+function getCookieSameSite(): 'lax' | 'none' {
+  const configured = (process.env.AUTH_COOKIE_SAMESITE || '').toLowerCase();
+  if (configured === 'none') return 'none';
+  if (configured === 'lax') return 'lax';
+  return isProduction() ? 'none' : 'lax';
+}
+
 function getJwtSecret(): string {
   const secret = process.env.AUTH_JWT_SECRET;
   if (!secret) {
@@ -59,10 +66,13 @@ export const authService = {
 
   getCookieOptions(): CookieOptions {
     const hours = getSessionHours();
+    const sameSite = getCookieSameSite();
+    const secure = sameSite === 'none' ? true : isProduction();
+
     return {
       httpOnly: true,
-      secure: isProduction(),
-      sameSite: 'lax',
+      secure,
+      sameSite,
       path: '/',
       maxAge: hours * 60 * 60 * 1000,
     };

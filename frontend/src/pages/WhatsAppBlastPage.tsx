@@ -135,7 +135,7 @@ export function WhatsAppBlastPage() {
   const connectToBlast = useCallback((blastId: string) => {
     blastIdRef.current = blastId;
     esRef.current?.close();
-    const es = new EventSource(whatsappAPI.blastStreamUrl(blastId));
+    const es = new EventSource(whatsappAPI.blastStreamUrl(blastId), { withCredentials: true });
     esRef.current = es;
 
     es.addEventListener('config', (e) => {

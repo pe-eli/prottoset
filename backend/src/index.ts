@@ -1,7 +1,10 @@
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import path from 'path';
+import authRoutes from './routes/auth.routes';
 import quoteRoutes from './routes/quote.routes';
 import packagesRoutes from './routes/packages.routes';
 import leadsRoutes from './routes/leads.routes';
@@ -11,12 +14,32 @@ import queuesRoutes from './routes/queues.routes';
 import leadFoldersRoutes from './routes/lead-folders.routes';
 import productivityRoutes from './routes/productivity.routes';
 import scheduleRoutes from './routes/schedule.routes';
+import { requireAuth } from './middleware/auth.middleware';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
 
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+app.set('trust proxy', 1);
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('CORS origin não permitida'));
+  },
+  credentials: true,
+}));
+app.use(cookieParser());
 app.use(express.json({ limit: '200kb' }));
+
+app.use('/api/auth', authRoutes);
+app.use('/api', requireAuth);
 
 app.use('/api/pdfs', express.static(path.join(__dirname, '../generated')));
 

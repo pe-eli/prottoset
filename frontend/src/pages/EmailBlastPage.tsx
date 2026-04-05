@@ -139,7 +139,7 @@ export function EmailBlastPage() {
       setEmails([]);
 
       const url = contactsAPI.blastStreamUrl(blastId);
-      const es = new EventSource(url);
+      const es = new EventSource(url, { withCredentials: true });
       esRef.current = es;
 
       es.addEventListener('catchup', (e) => {

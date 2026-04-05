@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { PhoneQueue } from './queues.types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
-const api = axios.create({ baseURL: BASE_URL });
+const api = axios.create({ baseURL: BASE_URL, withCredentials: true });
 
 export const queuesAPI = {
   getAll: () => api.get<PhoneQueue[]>('/queues'),

@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import type { CookieOptions } from 'express';
+import { timingSafeEqual } from 'crypto';
 
 const SESSION_COOKIE_NAME = 'prottoset_session';
 
@@ -38,6 +39,17 @@ function getConfiguredPasswordHash(): string {
   return hash;
 }
 
+function isBcryptHash(value: string): boolean {
+  return /^\$2[aby]\$\d{2}\$/.test(value);
+}
+
+function safeStringEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
+}
+
 export interface SessionPayload {
   username: string;
 }
@@ -58,10 +70,16 @@ export const authService = {
 
   async validateCredentials(username: string, password: string): Promise<boolean> {
     const expectedUsername = getConfiguredUsername();
-    const expectedPasswordHash = getConfiguredPasswordHash();
+    const expectedPasswordValue = getConfiguredPasswordHash();
 
     if (username !== expectedUsername) return false;
-    return bcrypt.compare(password, expectedPasswordHash);
+
+    if (isBcryptHash(expectedPasswordValue)) {
+      return bcrypt.compare(password, expectedPasswordValue);
+    }
+
+    // Backward-compatible fallback while environments migrate to bcrypt hashes.
+    return safeStringEqual(password, expectedPasswordValue);
   },
 
   signSession(payload: SessionPayload): string {

@@ -7,6 +7,7 @@ export interface WaBlastConfig {
   batchSize: number;
   intervalMinSeconds: number;
   intervalMaxSeconds: number;
+  promptBase: string;
 }
 
 export const whatsappAPI = {

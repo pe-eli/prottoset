@@ -15,6 +15,8 @@ Instruções:
 
 Responda APENAS com o texto da mensagem.`;
 
+const DEFAULT_WA_PROMPT = 'iniciar conversa';
+
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
 async function callDeepSeek(
@@ -76,15 +78,19 @@ async function callDeepSeek(
 }
 
 export const deepseekService = {
-  async generateWhatsAppMessage(): Promise<string> {
+  async generateWhatsAppMessage(promptBase?: string): Promise<string> {
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
       throw new Error('DEEPSEEK_API_KEY not configured');
     }
 
+    const prompt = typeof promptBase === 'string' && promptBase.trim().length > 0
+      ? promptBase.trim()
+      : DEFAULT_WA_PROMPT;
+
     return callDeepSeek(
       WA_SYSTEM_PROMPT,
-      'Gere agora uma nova mensagem seguindo exatamente o WA_SYSTEM_PROMPT.',
+      prompt,
     );
   },
 };

@@ -15,6 +15,7 @@ export interface WaBlastConfig {
   batchSize: number;
   intervalMinSeconds: number;
   intervalMaxSeconds: number;
+  promptBase: string;
 }
 
 interface WaBlastEntry {
@@ -83,7 +84,7 @@ async function processBlast(blastId: string) {
   const entry = blasts.get(blastId);
   if (!entry) return;
 
-  const { batchSize, intervalMinSeconds, intervalMaxSeconds } = entry.config;
+  const { batchSize, intervalMinSeconds, intervalMaxSeconds, promptBase } = entry.config;
   entry.phase = 'sending';
 
   // ── Phase 0: Validate all numbers before sending ──
@@ -159,7 +160,7 @@ async function processBlast(blastId: string) {
 
     let batchMessage: string;
     try {
-      batchMessage = await deepseekService.generateWhatsAppMessage();
+      batchMessage = await deepseekService.generateWhatsAppMessage(promptBase);
       if (!batchMessage) {
         throw new Error('DeepSeek não retornou uma mensagem válida. Verifique a DEEPSEEK_API_KEY no .env');
       }

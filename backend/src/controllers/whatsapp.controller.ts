@@ -13,11 +13,13 @@ export const whatsappController = {
         batchSize = 10,
         intervalMinSeconds = 15,
         intervalMaxSeconds = 60,
+        promptBase,
       } = req.body as {
         phones: string[];
         batchSize?: number;
         intervalMinSeconds?: number;
         intervalMaxSeconds?: number;
+        promptBase?: string;
       };
 
       if (!phones || phones.length === 0) {
@@ -40,6 +42,7 @@ export const whatsappController = {
       const safeBatchSize = Math.max(1, Math.min(50, Number(batchSize) || 10));
       const safeMin = Math.max(5, Math.min(3600, Number(intervalMinSeconds) || 15));
       const safeMax = Math.max(safeMin, Math.min(3600, Number(intervalMaxSeconds) || 60));
+      const safePromptBase = typeof promptBase === 'string' ? promptBase.trim() : '';
 
       const blastId = uuid();
 
@@ -65,6 +68,7 @@ export const whatsappController = {
         batchSize: safeBatchSize,
         intervalMinSeconds: safeMin,
         intervalMaxSeconds: safeMax,
+        promptBase: safePromptBase,
       });
 
       // After blast finishes, update contacts with the actual message sent

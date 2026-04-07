@@ -16,6 +16,21 @@ interface QueueJob { phone: string; status: JobStatus; error?: string }
 interface BlastSummary { sent: number; failed: number; total: number }
 interface Countdown { remaining: number; total: number }
 interface BatchInfo { current: number; total: number; count: number }
+interface PromptTemplate { id: string; name: string; content: string }
+
+const PROMPTS_STORAGE_KEY = 'wa_custom_prompts_v1';
+const BUILT_IN_PROMPTS: PromptTemplate[] = [
+  {
+    id: 'preset-start-conversation',
+    name: 'iniciar conversa',
+    content: 'iniciar conversa',
+  },
+  {
+    id: 'preset-followup-light',
+    name: 'follow-up leve',
+    content: 'reengajar contato com mensagem breve e cordial',
+  },
+];
 
 const STATUS_STYLE: Record<JobStatus, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
   pending: {
@@ -96,6 +111,14 @@ export function WhatsAppBlastPage() {
   const [configSnapshot, setConfigSnapshot] = useState<{ batchSize: number }>({ batchSize: 5 });
   const [batchMessages, setBatchMessages] = useState<Array<{ batch: number; message: string }>>([]);
 
+  const [promptMode, setPromptMode] = useState<'preset' | 'custom'>('preset');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(BUILT_IN_PROMPTS[0].id);
+  const [customPrompts, setCustomPrompts] = useState<PromptTemplate[]>([]);
+  const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
+  const [customPromptName, setCustomPromptName] = useState('');
+  const [customPromptContent, setCustomPromptContent] = useState('');
+  const [promptError, setPromptError] = useState<string | null>(null);
+
   const [phoneQueues, setPhoneQueues] = useState<PhoneQueue[]>([]);
   const [showQueuePicker, setShowQueuePicker] = useState(false);
   const [showQueueManager, setShowQueueManager] = useState(false);
@@ -117,7 +140,103 @@ export function WhatsAppBlastPage() {
     queuesAPI.getAll().then(({ data }) => setPhoneQueues(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PROMPTS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      const safe = parsed
+        .filter((p): p is PromptTemplate =>
+          Boolean(
+            p
+            && typeof p === 'object'
+            && 'id' in p
+            && 'name' in p
+            && 'content' in p
+            && typeof (p as PromptTemplate).id === 'string'
+            && typeof (p as PromptTemplate).name === 'string'
+            && typeof (p as PromptTemplate).content === 'string',
+          ),
+        )
+        .map((p) => ({
+          id: p.id,
+          name: p.name.trim(),
+          content: p.content.trim(),
+        }))
+        .filter((p) => p.name.length > 0 && p.content.length > 0);
+      setCustomPrompts(safe);
+    } catch {
+      setCustomPrompts([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(PROMPTS_STORAGE_KEY, JSON.stringify(customPrompts));
+  }, [customPrompts]);
+
   const totalBatches = Math.ceil(phones.length / batchSize);
+
+  const selectedPreset = useMemo(
+    () => BUILT_IN_PROMPTS.find((p) => p.id === selectedPresetId) ?? BUILT_IN_PROMPTS[0],
+    [selectedPresetId],
+  );
+
+  const activePromptText = useMemo(() => {
+    if (promptMode === 'preset') return selectedPreset.content;
+    return customPromptContent.trim();
+  }, [promptMode, selectedPreset, customPromptContent]);
+
+  const activePromptName = useMemo(() => {
+    if (promptMode === 'preset') return selectedPreset.name;
+    return customPromptName.trim() || 'prompt personalizado';
+  }, [promptMode, selectedPreset, customPromptName]);
+
+  const resetCustomEditor = () => {
+    setEditingPromptId(null);
+    setCustomPromptName('');
+    setCustomPromptContent('');
+    setPromptError(null);
+  };
+
+  const handleLoadCustomPrompt = (id: string) => {
+    const found = customPrompts.find((p) => p.id === id);
+    if (!found) return;
+    setEditingPromptId(found.id);
+    setCustomPromptName(found.name);
+    setCustomPromptContent(found.content);
+    setPromptError(null);
+  };
+
+  const handleSavePrompt = () => {
+    const name = customPromptName.trim();
+    const content = customPromptContent.trim();
+    if (!name) {
+      setPromptError('Informe um nome para o prompt.');
+      return;
+    }
+    if (!content) {
+      setPromptError('Informe o conteúdo do prompt.');
+      return;
+    }
+
+    const promptId = editingPromptId ?? `custom-${Date.now()}`;
+    setCustomPrompts((prev) => {
+      const exists = prev.some((p) => p.id === promptId);
+      if (exists) {
+        return prev.map((p) => (p.id === promptId ? { ...p, name, content } : p));
+      }
+      return [...prev, { id: promptId, name, content }];
+    });
+    setEditingPromptId(promptId);
+    setPromptError(null);
+  };
+
+  const handleDeletePrompt = () => {
+    if (!editingPromptId) return;
+    setCustomPrompts((prev) => prev.filter((p) => p.id !== editingPromptId));
+    resetCustomEditor();
+  };
 
   const addPhones = () => {
     const parsed = phoneInput.split(/[\n,;]+/).map((p) => p.trim()).filter(isValidPhone);
@@ -253,9 +372,18 @@ export function WhatsAppBlastPage() {
 
   const handleSend = async () => {
     if (phones.length === 0) return;
+    if (!activePromptText) {
+      alert('Defina um prompt antes de iniciar o disparo.');
+      return;
+    }
     setStarting(true);
     try {
-      const { data } = await whatsappAPI.startBlast(phones, { batchSize, intervalMinSeconds: intervalMin, intervalMaxSeconds: intervalMax });
+      const { data } = await whatsappAPI.startBlast(phones, {
+        batchSize,
+        intervalMinSeconds: intervalMin,
+        intervalMaxSeconds: intervalMax,
+        promptBase: activePromptText,
+      });
       const { blastId } = data;
       setQueue(phones.map((phone) => ({ phone, status: 'pending' })));
       setConfigSnapshot({ batchSize });
@@ -474,12 +602,129 @@ export function WhatsAppBlastPage() {
             </div>
 
             <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/70 px-4 py-3">
-              <p className="text-sm font-semibold text-violet-700 flex items-center gap-1.5">
-                <SparkleIcon className="w-3.5 h-3.5" />
-                Mensagem automática da IA
-              </p>
-              <p className="mt-1 text-xs text-violet-600">
-                Cada lote usa sempre a mensagem inicial padrão definida no backend pelo WA_SYSTEM_PROMPT.
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-violet-700 flex items-center gap-1.5">
+                  <SparkleIcon className="w-3.5 h-3.5" />
+                  Prompt da IA
+                </p>
+                <div className="inline-flex rounded-lg border border-violet-200 bg-white p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPromptMode('preset')}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+                      promptMode === 'preset' ? 'bg-violet-600 text-white' : 'text-violet-700 hover:bg-violet-50'
+                    }`}
+                  >
+                    Pré-definido
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPromptMode('custom')}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+                      promptMode === 'custom' ? 'bg-violet-600 text-white' : 'text-violet-700 hover:bg-violet-50'
+                    }`}
+                  >
+                    Próprio
+                  </button>
+                </div>
+              </div>
+
+              {promptMode === 'preset' ? (
+                <div className="mt-3 space-y-2">
+                  <select
+                    value={selectedPresetId}
+                    onChange={(e) => setSelectedPresetId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-violet-200 rounded-xl text-sm text-violet-900
+                      focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                  >
+                    {BUILT_IN_PROMPTS.map((prompt) => (
+                      <option key={prompt.id} value={prompt.id}>{prompt.name}</option>
+                    ))}
+                  </select>
+                  <div className="px-3 py-2 rounded-xl border border-violet-200 bg-white/80">
+                    <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-wider">Conteúdo</p>
+                    <p className="text-xs text-violet-700 mt-1">{selectedPreset.content}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {customPrompts.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={editingPromptId ?? ''}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          if (!id) {
+                            resetCustomEditor();
+                            return;
+                          }
+                          handleLoadCustomPrompt(id);
+                        }}
+                        className="flex-1 px-3 py-2 bg-white border border-violet-200 rounded-xl text-sm text-violet-900
+                          focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                      >
+                        <option value="">Selecionar prompt salvo</option>
+                        {customPrompts.map((prompt) => (
+                          <option key={prompt.id} value={prompt.id}>{prompt.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={resetCustomEditor}
+                        className="px-2.5 py-2 text-xs font-semibold rounded-lg border border-violet-200 text-violet-700 hover:bg-violet-100 transition-colors"
+                      >
+                        Novo
+                      </button>
+                    </div>
+                  )}
+
+                  <input
+                    type="text"
+                    value={customPromptName}
+                    onChange={(e) => {
+                      setCustomPromptName(e.target.value);
+                      if (promptError) setPromptError(null);
+                    }}
+                    placeholder="Nome do prompt"
+                    className="w-full px-3 py-2 bg-white border border-violet-200 rounded-xl text-sm text-violet-900
+                      placeholder:text-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                  />
+                  <textarea
+                    rows={3}
+                    value={customPromptContent}
+                    onChange={(e) => {
+                      setCustomPromptContent(e.target.value);
+                      if (promptError) setPromptError(null);
+                    }}
+                    placeholder="Escreva o conteúdo do seu prompt"
+                    className="w-full px-3 py-2 bg-white border border-violet-200 rounded-xl text-sm text-violet-900 resize-none
+                      placeholder:text-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                  />
+                  {promptError && <p className="text-xs text-red-500">{promptError}</p>}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSavePrompt}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors"
+                    >
+                      {editingPromptId ? 'Salvar edição' : 'Salvar prompt'}
+                    </button>
+                    {editingPromptId && (
+                      <button
+                        type="button"
+                        onClick={handleDeletePrompt}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <p className="mt-2 text-xs text-violet-600">
+                Prompt em uso: <strong>{activePromptName}</strong>
               </p>
             </div>
 
@@ -548,7 +793,7 @@ export function WhatsAppBlastPage() {
             )}
           </Card>
 
-          <Button onClick={handleSend} disabled={phones.length === 0 || starting} size="lg">
+          <Button onClick={handleSend} disabled={phones.length === 0 || starting || !activePromptText} size="lg">
             {starting ? (
               <>
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

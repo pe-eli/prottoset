@@ -68,7 +68,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Navigate to="/" replace />} />
             {/* Landing sem Header/Footer */}
-            <Route path="/landing" element={<LandingPage />} />
+            <Route path="/" element={<LandingPage />} />
 
             {/* App com layout completo */}
             <Route path="*" element={
@@ -76,7 +76,7 @@ function App() {
                 <Header />
                 <main className="flex-1 px-4 py-8">
                   <Routes>
-                    <Route path="/" element={<HomePage />} />
+                    <Route path="/home" element={<HomePage />} />
                     <Route path="/novo" element={<NewQuotePage />} />
                     <Route path="/pacotes" element={<PackagesQuotePage />} />
                     <Route path="/leads" element={<LeadsHub />} />

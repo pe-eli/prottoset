@@ -66,9 +66,10 @@ function App() {
       <WaBlastProvider>
         <div className="min-h-screen flex flex-col bg-background">
           <Routes>
+            <Route index element={<LandingPage />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
             {/* Landing sem Header/Footer */}
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/landing" element={<Navigate to="/" replace />} />
 
             {/* App com layout completo */}
             <Route path="*" element={

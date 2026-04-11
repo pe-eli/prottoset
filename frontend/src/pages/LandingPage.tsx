@@ -128,7 +128,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
 
           <div className="hidden md:flex items-center gap-4">
             <button
-              onClick={() => onNavigate('/')}
+              onClick={() => onNavigate('/home')}
               className="text-sm text-white/60 hover:text-white transition-colors px-4 py-2"
             >
               Entrar
@@ -165,7 +165,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
               Diferenciais
             </button>
             <div className="flex flex-col gap-2 pt-4 border-t border-white/[0.08]">
-              <button onClick={() => { setMobileMenuOpen(false); onNavigate('/'); }} className="text-sm text-white/60 hover:text-white py-2 text-left">
+              <button onClick={() => { setMobileMenuOpen(false); onNavigate('/home'); }} className="text-sm text-white/60 hover:text-white py-2 text-left">
                 Entrar
               </button>
               <button

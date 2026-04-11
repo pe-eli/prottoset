@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
-  { path: '/', label: 'Orçamentos' },
+  { path: '/home', label: 'Orçamentos' },
   { path: '/leads', label: 'Leads' },
   { path: '/produtividade', label: 'Produtividade' },
 ];
@@ -25,8 +25,8 @@ export function Header() {
           <nav className="hidden sm:flex items-center gap-1">
             {NAV_ITEMS.map((item) => {
               const isActive =
-                item.path === '/'
-                  ? location.pathname === '/' || location.pathname === '/novo' || location.pathname === '/pacotes'
+                item.path === '/home'
+                  ? location.pathname === '/home' || location.pathname === '/novo' || location.pathname === '/pacotes'
                   : location.pathname.startsWith(item.path);
               return (
                 <Link

@@ -10,22 +10,40 @@ export const api = axios.create({
   },
 });
 
-function readCookie(name: string): string | null {
-  const entry = document.cookie
-    .split('; ')
-    .find((part) => part.startsWith(`${name}=`));
-  if (!entry) return null;
-  return decodeURIComponent(entry.slice(name.length + 1));
+const csrfClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'X-Requested-With': 'XMLHttpRequest',
+  },
+});
+
+let csrfToken: string | null = null;
+let csrfRequest: Promise<string> | null = null;
+
+async function fetchCsrfToken(): Promise<string> {
+  if (csrfToken) {
+    return csrfToken;
+  }
+  if (!csrfRequest) {
+    csrfRequest = csrfClient.get<{ csrfToken: string }>('/auth/csrf')
+      .then(({ data }) => {
+        csrfToken = data.csrfToken;
+        return csrfToken;
+      })
+      .finally(() => {
+        csrfRequest = null;
+      });
+  }
+  return csrfRequest;
 }
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   const method = (config.method || 'get').toLowerCase();
   if (!['get', 'head', 'options'].includes(method)) {
-    const csrfToken = readCookie('prottoset_csrf');
-    if (csrfToken) {
-      config.headers = config.headers || {};
-      config.headers['X-CSRF-Token'] = csrfToken;
-    }
+    const token = await fetchCsrfToken();
+    config.headers = config.headers || {};
+    config.headers['X-CSRF-Token'] = token;
   }
   return config;
 });
@@ -49,6 +67,10 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
+    if (error.response?.status === 403 && typeof error.response?.data?.error === 'string' && error.response.data.error.includes('CSRF')) {
+      csrfToken = null;
+    }
+
     if (
       error.response?.status === 401 &&
       !original._retry &&
@@ -64,6 +86,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
+        csrfToken = null;
         await api.post('/auth/refresh');
         processQueue(null);
         return api(original);

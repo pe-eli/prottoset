@@ -119,10 +119,9 @@ function extractCookies(res: request.Response): string[] {
   return Array.isArray(raw) ? raw : [raw];
 }
 
-function extractCsrfToken(cookies: string[]): string | null {
-  const csrf = cookies.find((cookie) => cookie.startsWith('prottoset_csrf='));
-  if (!csrf) return null;
-  return csrf.split(';')[0].split('=')[1] || null;
+async function fetchCsrfToken(app: express.Application): Promise<string> {
+  const res = await request(app).get('/api/auth/csrf');
+  return res.body.csrfToken;
 }
 
 describe('auth routes', () => {
@@ -243,11 +242,12 @@ describe('auth routes', () => {
         .send({ email: 'user@test.com', password: 'MyPassword123!' });
 
       const cookies = extractCookies(loginRes);
+      const csrfToken = await fetchCsrfToken(app);
 
       const res = await request(app)
         .post('/api/auth/logout')
         .set('Cookie', cookies)
-        .set('X-CSRF-Token', extractCsrfToken(cookies) || '');
+        .set('X-CSRF-Token', csrfToken);
 
       expect(res.status).toBe(200);
       expect(res.body.authenticated).toBe(false);
@@ -281,11 +281,12 @@ describe('auth routes', () => {
         .send({ email: 'user@test.com', password: 'MyPassword123!' });
 
       const cookies = extractCookies(loginRes);
+      const csrfToken = await fetchCsrfToken(app);
 
       const res = await request(app)
         .post('/api/auth/refresh')
         .set('Cookie', cookies)
-        .set('X-CSRF-Token', extractCsrfToken(cookies) || '');
+        .set('X-CSRF-Token', csrfToken);
 
       expect(res.status).toBe(200);
       expect(res.body.user).toBeDefined();
@@ -310,18 +311,19 @@ describe('auth routes', () => {
         .send({ email: 'user@test.com', password: 'MyPassword123!' });
 
       const originalCookies = extractCookies(loginRes);
+      const csrfToken = await fetchCsrfToken(app);
 
       // First refresh consumes the original token
       await request(app)
         .post('/api/auth/refresh')
         .set('Cookie', originalCookies)
-        .set('X-CSRF-Token', extractCsrfToken(originalCookies) || '');
+        .set('X-CSRF-Token', csrfToken);
 
       // Second refresh with the same (now revoked) token
       const res = await request(app)
         .post('/api/auth/refresh')
         .set('Cookie', originalCookies)
-        .set('X-CSRF-Token', extractCsrfToken(originalCookies) || '');
+        .set('X-CSRF-Token', csrfToken);
 
       expect(res.status).toBe(401);
     });

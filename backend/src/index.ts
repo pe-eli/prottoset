@@ -18,7 +18,6 @@ import { setTenant } from './middleware/tenant.middleware';
 import { getAllowedOrigins, requireTrustedOrigin, sanitizeErrorMessage } from './middleware/security.middleware';
 import { asyncHandler } from './utils/asyncHandler';
 import { refreshTokensRepository } from './auth/refresh-tokens.repository';
-import { ensureCsrfCookie } from './middleware/csrf.middleware';
 import { startBackgroundWorkers } from './jobs/workers';
 
 const app = express();
@@ -57,7 +56,6 @@ app.use(cookieParser());
 app.use(express.json({ limit: '200kb' }));
 
 app.use('/api/auth', requireTrustedOrigin(allowedOrigins));
-app.use('/api/auth', ensureCsrfCookie);
 app.use('/api/auth', authRoutes);
 app.use('/api', requireTrustedOrigin(allowedOrigins));
 app.use('/api', asyncHandler(requireAuth));

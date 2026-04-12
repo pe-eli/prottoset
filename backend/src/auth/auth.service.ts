@@ -3,16 +3,9 @@ import { hashPassword, verifyPassword } from './password';
 import { signAccessToken, generateRefreshToken, hashToken } from './tokens';
 import { refreshTokensRepository } from './refresh-tokens.repository';
 import { usersRepository } from './users.repository';
-import { authConfig, ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE } from './auth.config';
+import { authConfig, ACCESS_COOKIE, REFRESH_COOKIE } from './auth.config';
 import type { Response } from 'express';
 import type { UserDoc } from './auth.types';
-import crypto from 'crypto';
-
-function issueCsrfCookie(res: Response): string {
-  const csrfToken = crypto.randomBytes(32).toString('base64url');
-  res.cookie(CSRF_COOKIE, csrfToken, authConfig.csrfCookieOptions());
-  return csrfToken;
-}
 
 export const authService = {
   hashPassword,
@@ -42,7 +35,6 @@ export const authService = {
 
     res.cookie(ACCESS_COOKIE, accessToken, authConfig.accessCookieOptions());
     res.cookie(REFRESH_COOKIE, raw, authConfig.refreshCookieOptions());
-    issueCsrfCookie(res);
 
     return accessToken;
   },
@@ -76,7 +68,6 @@ export const authService = {
 
     res.cookie(ACCESS_COOKIE, accessToken, authConfig.accessCookieOptions());
     res.cookie(REFRESH_COOKIE, raw, authConfig.refreshCookieOptions());
-    issueCsrfCookie(res);
 
     return accessToken;
   },
@@ -84,6 +75,5 @@ export const authService = {
   clearSession(res: Response): void {
     res.clearCookie(ACCESS_COOKIE, { ...authConfig.accessCookieOptions(), maxAge: 0 });
     res.clearCookie(REFRESH_COOKIE, { ...authConfig.refreshCookieOptions(), maxAge: 0 });
-    res.clearCookie(CSRF_COOKIE, { ...authConfig.csrfCookieOptions(), maxAge: 0 });
   },
 };

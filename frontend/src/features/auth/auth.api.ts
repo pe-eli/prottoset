@@ -15,7 +15,13 @@ export interface RegisterResponse {
   message: string;
 }
 
+export interface CsrfResponse {
+  csrfToken: string;
+}
+
 export const authAPI = {
+  csrf: () => api.get<CsrfResponse>('/auth/csrf'),
+
   register: (email: string, password: string, name: string, captchaToken: string) =>
     api.post<RegisterResponse>('/auth/register', { email, password, name, captchaToken }),
 

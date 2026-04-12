@@ -13,7 +13,7 @@ import { findOrLinkAccount } from '../auth/linkAccount';
 import { requireAuth } from '../middleware/auth.middleware';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
-import { requireCsrfToken } from '../middleware/csrf.middleware';
+import { requireCsrfToken, sendCsrfToken } from '../middleware/csrf.middleware';
 import { turnstileService } from '../services/turnstile.service';
 
 const router = Router();
@@ -48,6 +48,8 @@ const refreshLimiter = createSecurityRateLimit({
   ip: { limit: 20, windowMs: 15 * 60 * 1000 },
   user: { limit: 30, windowMs: 15 * 60 * 1000 },
 });
+
+router.get('/csrf', authLimiter, sendCsrfToken);
 
 // ─── POST /register ──────────────────────────────────────────────
 router.post('/register', registerLimiter, asyncHandler(async (req, res) => {

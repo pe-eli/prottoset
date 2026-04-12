@@ -5,7 +5,7 @@ const envSchema = z.object({
   AUTH_JWT_SECRET: z.string().min(32, 'AUTH_JWT_SECRET deve ter pelo menos 32 caracteres'),
   AUTH_ACCESS_TOKEN_MINUTES: z.coerce.number().int().positive().default(15),
   AUTH_REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(30),
-  AUTH_COOKIE_SAMESITE: z.enum(['lax']).optional(),
+  AUTH_COOKIE_SAMESITE: z.enum(['lax', 'none']).optional(),
   AUTH_REQUIRE_VERIFIED_ACCOUNT_FOR_EXPENSIVE_ACTIONS: z.coerce.boolean().default(true),
   NODE_ENV: z.string().default('development'),
   CLIENT_URL: z.string().default('http://localhost:5173'),
@@ -34,6 +34,10 @@ function isProduction(): boolean {
 
 function cookieSameSite(): 'lax' | 'none' {
   return env().AUTH_COOKIE_SAMESITE || 'lax';
+}
+
+function cookieSecure(): boolean {
+  return isProduction() || cookieSameSite() === 'none';
 }
 
 export const authConfig = {
@@ -80,7 +84,7 @@ export const authConfig = {
     const sameSite = cookieSameSite();
     return {
       httpOnly: true,
-      secure: isProduction(),
+      secure: cookieSecure(),
       sameSite,
       path: '/',
       maxAge: env().AUTH_ACCESS_TOKEN_MINUTES * 60 * 1000,
@@ -91,19 +95,9 @@ export const authConfig = {
     const sameSite = cookieSameSite();
     return {
       httpOnly: true,
-      secure: isProduction(),
+      secure: cookieSecure(),
       sameSite,
       path: '/api/auth',
-      maxAge: env().AUTH_REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
-    };
-  },
-
-  csrfCookieOptions(): CookieOptions {
-    return {
-      httpOnly: false,
-      secure: isProduction(),
-      sameSite: 'lax',
-      path: '/',
       maxAge: env().AUTH_REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
     };
   },
@@ -112,4 +106,3 @@ export const authConfig = {
 export const ACCESS_COOKIE = 'prottoset_session';
 export const REFRESH_COOKIE = 'prottoset_refresh';
 export const OAUTH_STATE_COOKIE = 'prottoset_oauth_state';
-export const CSRF_COOKIE = 'prottoset_csrf';

@@ -3,9 +3,9 @@ import { leadsRepository } from './leads.repository';
 import { generateLeads } from '../../workflow/leadGenerator';
 
 export const leadsService = {
-  async search(params: LeadSearchParams): Promise<LeadSearchResult> {
+  async search(tenantId: string, params: LeadSearchParams): Promise<LeadSearchResult> {
     const { leads, metrics } = await generateLeads(params);
-    const saved = await leadsRepository.saveMany(leads);
+    const saved = await leadsRepository.saveMany(tenantId, leads);
 
     return {
       saved,
@@ -14,19 +14,19 @@ export const leadsService = {
     };
   },
 
-  async getAll(): Promise<Lead[]> {
-    return leadsRepository.getAll();
+  async getAll(tenantId: string): Promise<Lead[]> {
+    return leadsRepository.getAll(tenantId);
   },
 
-  async getById(id: string): Promise<Lead | null> {
-    return leadsRepository.getById(id);
+  async getById(tenantId: string, id: string): Promise<Lead | null> {
+    return leadsRepository.getById(tenantId, id);
   },
 
-  async updateStatus(id: string, status: LeadStatus): Promise<Lead | null> {
-    return leadsRepository.updateStatus(id, status);
+  async updateStatus(tenantId: string, id: string, status: LeadStatus): Promise<Lead | null> {
+    return leadsRepository.updateStatus(tenantId, id, status);
   },
 
-  async delete(id: string): Promise<boolean> {
-    return leadsRepository.delete(id);
+  async delete(tenantId: string, id: string): Promise<boolean> {
+    return leadsRepository.delete(tenantId, id);
   },
 };

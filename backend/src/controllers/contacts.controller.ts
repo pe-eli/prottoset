@@ -1,13 +1,23 @@
 import { Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
-import { blastQueue } from '../modules/blast/blast.queue';
 import { Contact } from '../types/contacts.types';
+import { blastParamSchema, contactCreateSchema, contactUpdateSchema, emailBlastSchema, uuidParamSchema } from '../validation/request.schemas';
+import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
+import { enqueueEmailBlastJob } from '../jobs/queues';
+
+function openSse(res: Response): void {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+}
 
 export const contactsController = {
-  async getAll(_req: Request, res: Response) {
+  async getAll(req: Request, res: Response) {
     try {
-      const contacts = await contactsRepository.getAll();
+      const contacts = await contactsRepository.getAll(req.tenantId!);
       res.json(contacts);
     } catch (err: any) {
       console.error('[Contacts] getAll error:', err.message);
@@ -17,7 +27,11 @@ export const contactsController = {
 
   async getById(req: Request, res: Response) {
     try {
-      const contact = await contactsRepository.getById(req.params.id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const contact = await contactsRepository.getById(req.tenantId!, parsed.data.id);
       if (!contact) return res.status(404).json({ error: 'Contato não encontrado' });
       res.json(contact);
     } catch (err: any) {
@@ -28,10 +42,12 @@ export const contactsController = {
 
   async create(req: Request, res: Response) {
     try {
-      const { emails } = req.body as { emails: string[] };
-      if (!emails || !Array.isArray(emails) || emails.length === 0) {
-        return res.status(400).json({ error: 'Lista de emails é obrigatória' });
+      const parsed = contactCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
       }
+
+      const { emails } = parsed.data;
 
       const now = new Date().toISOString();
       const newContacts: Contact[] = emails
@@ -53,7 +69,7 @@ export const contactsController = {
         return res.status(400).json({ error: 'Nenhum email válido' });
       }
 
-      const result = await contactsRepository.saveMany(newContacts);
+      const result = await contactsRepository.saveMany(req.tenantId!, newContacts);
       res.status(201).json(result);
     } catch (err: any) {
       console.error('[Contacts] create error:', err.message);
@@ -63,8 +79,16 @@ export const contactsController = {
 
   async update(req: Request, res: Response) {
     try {
-      const { name, phone, company, status, notes } = req.body;
-      const contact = await contactsRepository.update(req.params.id, { name, phone, company, status, notes });
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+      const parsed = contactUpdateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+
+      const contact = await contactsRepository.update(req.tenantId!, paramsParsed.data.id, parsed.data);
       if (!contact) return res.status(404).json({ error: 'Contato não encontrado' });
       res.json(contact);
     } catch (err: any) {
@@ -75,7 +99,11 @@ export const contactsController = {
 
   async delete(req: Request, res: Response) {
     try {
-      const deleted = await contactsRepository.delete(req.params.id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const deleted = await contactsRepository.delete(req.tenantId!, parsed.data.id);
       if (!deleted) return res.status(404).json({ error: 'Contato não encontrado' });
       res.status(204).send();
     } catch (err: any) {
@@ -87,6 +115,12 @@ export const contactsController = {
   /** POST /blast — inicia a fila e retorna o blastId imediatamente */
   async sendBlast(req: Request, res: Response) {
     try {
+      const tenantId = req.tenantId!;
+      const parsed = emailBlastSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+
       const {
         emails,
         subject,
@@ -94,21 +128,7 @@ export const contactsController = {
         batchSize = 10,
         intervalMinSeconds = 15,
         intervalMaxSeconds = 60,
-      } = req.body as {
-        emails: string[];
-        subject: string;
-        body: string;
-        batchSize?: number;
-        intervalMinSeconds?: number;
-        intervalMaxSeconds?: number;
-      };
-
-      if (!emails || emails.length === 0) {
-        return res.status(400).json({ error: 'Lista de emails é obrigatória' });
-      }
-      if (!subject?.trim() || !body?.trim()) {
-        return res.status(400).json({ error: 'Assunto e corpo do email são obrigatórios' });
-      }
+      } = parsed.data;
 
       const cleanEmails = [...new Set(
         emails.map((e) => e.trim().toLowerCase()).filter((e) => e.includes('@'))
@@ -140,15 +160,21 @@ export const contactsController = {
         createdAt: now,
         updatedAt: now,
       }));
-      contactsRepository.saveMany(newContacts).catch((err: Error) => {
+      contactsRepository.saveMany(tenantId, newContacts).catch((err: Error) => {
         console.error('[Blast] Failed to auto-save contacts:', err.message);
       });
 
-      blastQueue.create(blastId, cleanEmails, subject, body, {
+      await outboundRunsRepository.createEmailRun(tenantId, {
+        runId: blastId,
+        targets: cleanEmails,
+        subject,
+        body,
         batchSize: safeBatchSize,
         intervalMinSeconds: safeMin,
         intervalMaxSeconds: safeMax,
       });
+
+      await enqueueEmailBlastJob({ tenantId, runId: blastId });
 
       res.json({ blastId, total: cleanEmails.length });
     } catch (err: any) {
@@ -158,11 +184,51 @@ export const contactsController = {
   },
 
   /** GET /blast/:blastId/stream — SSE stream de progresso da fila */
-  streamBlast(req: Request, res: Response) {
-    const { blastId } = req.params;
-    const subscribed = blastQueue.subscribe(blastId, res);
-    if (!subscribed) {
-      res.status(404).json({ error: 'Blast não encontrado' });
+  async streamBlast(req: Request, res: Response) {
+    const parsed = blastParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
     }
+
+    const snapshot = await outboundRunsRepository.getRunSnapshot(req.tenantId!, parsed.data.blastId);
+    if (!snapshot) {
+      res.status(404).json({ error: 'Blast não encontrado' });
+      return;
+    }
+
+    openSse(res);
+    res.write(`event: catchup\ndata: ${JSON.stringify(snapshot.items.map((item, index) => ({
+      email: item.target,
+      status: item.status === 'skipped' ? 'failed' : item.status,
+      index,
+      total: snapshot.items.length,
+      error: item.error,
+    })))}\n\n`);
+
+    const interval = setInterval(async () => {
+      const current = await outboundRunsRepository.getRunSnapshot(req.tenantId!, parsed.data.blastId);
+      if (!current) {
+        clearInterval(interval);
+        res.end();
+        return;
+      }
+
+      res.write(`event: catchup\ndata: ${JSON.stringify(current.items.map((item, index) => ({
+        email: item.target,
+        status: item.status === 'skipped' ? 'failed' : item.status,
+        index,
+        total: current.items.length,
+        error: item.error,
+      })))}\n\n`);
+
+      if (current.status === 'completed' || current.status === 'failed' || current.status === 'cancelled') {
+        res.write(`event: done\ndata: ${JSON.stringify({ sent: current.sent, failed: current.failed + current.skipped, total: current.total })}\n\n`);
+        clearInterval(interval);
+        res.end();
+      }
+    }, 2000);
+
+    res.on('close', () => clearInterval(interval));
   },
 };

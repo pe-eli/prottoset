@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import { productivityRepository } from '../modules/productivity/productivity.repository';
-import { CreateDailyEntryParams } from '../types/productivity.types';
+import { productivityCreateSchema, productivityUpdateSchema, uuidParamSchema, weekParamSchema } from '../validation/request.schemas';
 
 export const productivityController = {
-  async getAll(_req: Request, res: Response) {
+  async getAll(req: Request, res: Response) {
     try {
-      const entries = await productivityRepository.getAll();
+      const entries = await productivityRepository.getAll(req.tenantId!);
       res.json(entries);
     } catch (err) {
       console.error('[Productivity] Error fetching entries:', err);
@@ -15,7 +15,11 @@ export const productivityController = {
 
   async getById(req: Request, res: Response) {
     try {
-      const entry = await productivityRepository.getById(req.params.id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const entry = await productivityRepository.getById(req.tenantId!, parsed.data.id);
       if (!entry) return res.status(404).json({ error: 'Entrada não encontrada' });
       res.json(entry);
     } catch (err) {
@@ -26,7 +30,11 @@ export const productivityController = {
 
   async getByWeek(req: Request, res: Response) {
     try {
-      const entries = await productivityRepository.getByWeek(req.params.week);
+      const parsed = weekParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const entries = await productivityRepository.getByWeek(req.tenantId!, parsed.data.week);
       res.json(entries);
     } catch (err) {
       console.error('[Productivity] Error fetching week:', err);
@@ -36,11 +44,11 @@ export const productivityController = {
 
   async create(req: Request, res: Response) {
     try {
-      const params = req.body as CreateDailyEntryParams;
-      if (!params.date || params.prottocodeHours == null) {
-        return res.status(400).json({ error: 'Campos obrigatórios: date, prottocodeHours' });
+      const parsed = productivityCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
       }
-      const entry = await productivityRepository.create(params);
+      const entry = await productivityRepository.create(req.tenantId!, parsed.data);
       res.status(201).json(entry);
     } catch (err) {
       console.error('[Productivity] Error creating entry:', err);
@@ -50,7 +58,15 @@ export const productivityController = {
 
   async update(req: Request, res: Response) {
     try {
-      const entry = await productivityRepository.update(req.params.id, req.body);
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+      const bodyParsed = productivityUpdateSchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return res.status(400).json({ error: bodyParsed.error.issues[0].message });
+      }
+      const entry = await productivityRepository.update(req.tenantId!, paramsParsed.data.id, bodyParsed.data);
       if (!entry) return res.status(404).json({ error: 'Entrada não encontrada' });
       res.json(entry);
     } catch (err) {
@@ -61,7 +77,11 @@ export const productivityController = {
 
   async delete(req: Request, res: Response) {
     try {
-      const deleted = await productivityRepository.delete(req.params.id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const deleted = await productivityRepository.delete(req.tenantId!, parsed.data.id);
       if (!deleted) return res.status(404).json({ error: 'Entrada não encontrada' });
       res.status(204).send();
     } catch (err) {

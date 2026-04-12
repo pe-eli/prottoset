@@ -1,17 +1,17 @@
 import { Request, Response } from 'express';
 import { quoteService } from '../services/quote.service';
+import { quoteSchema, uuidParamSchema } from '../validation/request.schemas';
 
 export const quoteController = {
   async generatePdf(req: Request, res: Response): Promise<void> {
     try {
-      const quote = req.body;
-
-      if (!quote.id || !quote.client?.name || !quote.project?.name) {
-        res.status(400).json({ error: 'Dados do orçamento incompletos' });
+      const parsed = quoteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
         return;
       }
 
-      const result = await quoteService.generatePdf(quote);
+      const result = await quoteService.generatePdf(req.tenantId!, parsed.data);
       res.json({ id: result.id, pdfUrl: `/api/quotes/${result.id}/pdf` });
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
@@ -21,8 +21,20 @@ export const quoteController = {
 
   async downloadPdf(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const pdfPath = await quoteService.getPdfPath(id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+
+      const { id } = parsed.data;
+      const quote = await quoteService.getById(req.tenantId!, id);
+      if (!quote) {
+        res.status(404).json({ error: 'Orçamento não encontrado' });
+        return;
+      }
+
+      const pdfPath = await quoteService.getPdfPath(req.tenantId!, id);
 
       if (!pdfPath) {
         res.status(404).json({ error: 'PDF não encontrado' });
@@ -38,9 +50,9 @@ export const quoteController = {
     }
   },
 
-  async list(_req: Request, res: Response): Promise<void> {
+  async list(req: Request, res: Response): Promise<void> {
     try {
-      const quotes = await quoteService.getAll();
+      const quotes = await quoteService.getAll(req.tenantId!);
       res.json(quotes);
     } catch (error) {
       console.error('Erro ao listar orçamentos:', error);
@@ -50,8 +62,14 @@ export const quoteController = {
 
   async getById(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const quote = await quoteService.getById(id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+
+      const { id } = parsed.data;
+      const quote = await quoteService.getById(req.tenantId!, id);
 
       if (!quote) {
         res.status(404).json({ error: 'Orçamento não encontrado' });

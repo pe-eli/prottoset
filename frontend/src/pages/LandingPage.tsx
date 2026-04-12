@@ -128,13 +128,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
 
           <div className="hidden md:flex items-center gap-4">
             <button
-              onClick={() => onNavigate('/home')}
-              className="text-sm text-white/60 hover:text-white transition-colors px-4 py-2"
-            >
-              Entrar
-            </button>
-            <button
-              onClick={() => onNavigate('/leads')}
+              onClick={() => onNavigate('/login')}
               className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-medium rounded-md bg-gradient-to-b from-white via-white/95 to-white/60 text-black hover:scale-105 active:scale-95 transition-all"
             >
               Começar agora
@@ -165,11 +159,8 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
               Diferenciais
             </button>
             <div className="flex flex-col gap-2 pt-4 border-t border-white/[0.08]">
-              <button onClick={() => { setMobileMenuOpen(false); onNavigate('/home'); }} className="text-sm text-white/60 hover:text-white py-2 text-left">
-                Entrar
-              </button>
               <button
-                onClick={() => { setMobileMenuOpen(false); onNavigate('/leads'); }}
+                onClick={() => { setMobileMenuOpen(false); onNavigate('/login'); }}
                 className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-medium rounded-md bg-gradient-to-b from-white via-white/95 to-white/60 text-black"
               >
                 Começar agora

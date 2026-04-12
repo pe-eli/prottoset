@@ -17,8 +17,6 @@ interface BlastSummary { sent: number; failed: number; total: number }
 interface Countdown { remaining: number; total: number }
 interface BatchInfo { current: number; total: number; count: number }
 interface PromptTemplate { id: string; name: string; content: string }
-
-const PROMPTS_STORAGE_KEY = 'wa_custom_prompts_v1';
 const BUILT_IN_PROMPTS: PromptTemplate[] = [
   {
     id: 'preset-start-conversation',
@@ -139,41 +137,6 @@ export function WhatsAppBlastPage() {
   useEffect(() => {
     queuesAPI.getAll().then(({ data }) => setPhoneQueues(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(PROMPTS_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return;
-      const safe = parsed
-        .filter((p): p is PromptTemplate =>
-          Boolean(
-            p
-            && typeof p === 'object'
-            && 'id' in p
-            && 'name' in p
-            && 'content' in p
-            && typeof (p as PromptTemplate).id === 'string'
-            && typeof (p as PromptTemplate).name === 'string'
-            && typeof (p as PromptTemplate).content === 'string',
-          ),
-        )
-        .map((p) => ({
-          id: p.id,
-          name: p.name.trim(),
-          content: p.content.trim(),
-        }))
-        .filter((p) => p.name.length > 0 && p.content.length > 0);
-      setCustomPrompts(safe);
-    } catch {
-      setCustomPrompts([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(PROMPTS_STORAGE_KEY, JSON.stringify(customPrompts));
-  }, [customPrompts]);
 
   const totalBatches = Math.ceil(phones.length / batchSize);
 

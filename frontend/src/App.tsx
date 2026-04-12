@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { WaBlastProvider } from './contexts/WaBlastContext';
 import { WaBlastIndicator } from './components/WaBlastIndicator';
 import { authAPI } from './features/auth/auth.api';
+import type { AuthUser } from './features/auth/auth.api';
 import { LandingPage } from './pages/LandingPage';
 import { HomePage } from './pages/HomePage';
 import { NewQuotePage } from './pages/NewQuotePage';
@@ -20,21 +21,39 @@ import { WeeklyViewPage } from './pages/WeeklyViewPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { LoginPage } from './pages/LoginPage';
 
+interface ProtectedLayoutProps {
+  user: AuthUser;
+  onLogout: () => void;
+}
+
+function ProtectedLayout({ user, onLogout }: ProtectedLayoutProps) {
+  return (
+    <>
+      <Header user={user} onLogout={onLogout} />
+      <main className="flex-1 px-4 py-8">
+        <Outlet />
+      </main>
+      <Footer />
+      <WaBlastIndicator />
+    </>
+  );
+}
+
 function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
     let mounted = true;
     authAPI
       .me()
-      .then(() => {
+      .then(({ data }) => {
         if (!mounted) return;
-        setAuthenticated(true);
+        setUser(data.user);
       })
       .catch(() => {
         if (!mounted) return;
-        setAuthenticated(false);
+        setUser(null);
       })
       .finally(() => {
         if (!mounted) return;
@@ -57,45 +76,44 @@ function App() {
     );
   }
 
-  if (!authenticated) {
-    return <LoginPage onAuthenticated={() => setAuthenticated(true)} />;
-  }
-
   return (
     <BrowserRouter>
       <WaBlastProvider>
         <div className="min-h-screen flex flex-col bg-background">
           <Routes>
-            <Route index element={<LandingPage />} />
-            <Route path="/login" element={<Navigate to="/" replace />} />
-            {/* Landing sem Header/Footer */}
+            <Route
+              index
+              element={user ? <Navigate to="/home" replace /> : <LandingPage />}
+            />
+            <Route
+              path="/login"
+              element={user ? <Navigate to="/home" replace /> : <LoginPage onAuthenticated={(u) => setUser(u)} />}
+            />
             <Route path="/landing" element={<Navigate to="/" replace />} />
 
-            {/* App com layout completo */}
-            <Route path="*" element={
-              <>
-                <Header />
-                <main className="flex-1 px-4 py-8">
-                  <Routes>
-                    <Route path="/home" element={<HomePage />} />
-                    <Route path="/novo" element={<NewQuotePage />} />
-                    <Route path="/pacotes" element={<PackagesQuotePage />} />
-                    <Route path="/leads" element={<LeadsHub />} />
-                    <Route path="/leads/prospeccao" element={<LeadsDashboard />} />
-                    <Route path="/leads/disparos" element={<EmailBlastPage />} />
-                    <Route path="/leads/whatsapp" element={<WhatsAppBlastPage />} />
-                    <Route path="/leads/contatos" element={<ContactsPage />} />
-                    <Route path="/produtividade" element={<ProductivityDashboard />} />
-                    <Route path="/produtividade/novo" element={<DailyEntryPage />} />
-                    <Route path="/produtividade/editar/:id" element={<DailyEntryPage />} />
-                    <Route path="/produtividade/semanal" element={<WeeklyViewPage />} />
-                    <Route path="/produtividade/agenda" element={<SchedulePage />} />
-                  </Routes>
-                </main>
-                <Footer />
-                <WaBlastIndicator />
-              </>
-            } />
+            <Route
+              element={
+                user
+                  ? <ProtectedLayout user={user} onLogout={() => setUser(null)} />
+                  : <Navigate to="/" replace />
+              }
+            >
+              <Route path="/home" element={<HomePage />} />
+              <Route path="/novo" element={<NewQuotePage />} />
+              <Route path="/pacotes" element={<PackagesQuotePage />} />
+              <Route path="/leads" element={<LeadsHub />} />
+              <Route path="/leads/prospeccao" element={<LeadsDashboard />} />
+              <Route path="/leads/disparos" element={<EmailBlastPage />} />
+              <Route path="/leads/whatsapp" element={<WhatsAppBlastPage />} />
+              <Route path="/leads/contatos" element={<ContactsPage />} />
+              <Route path="/produtividade" element={<ProductivityDashboard />} />
+              <Route path="/produtividade/novo" element={<DailyEntryPage />} />
+              <Route path="/produtividade/editar/:id" element={<DailyEntryPage />} />
+              <Route path="/produtividade/semanal" element={<WeeklyViewPage />} />
+              <Route path="/produtividade/agenda" element={<SchedulePage />} />
+            </Route>
+
+            <Route path="*" element={<Navigate to={user ? '/home' : '/'} replace />} />
           </Routes>
         </div>
       </WaBlastProvider>

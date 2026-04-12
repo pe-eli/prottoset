@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { api, API_BASE_URL } from '../../lib/axios';
 
 export type ContactStatus = 'new' | 'contacted' | 'negotiating' | 'client' | 'lost';
 export type ContactChannel = 'email' | 'whatsapp' | 'manual';
@@ -17,10 +17,6 @@ export interface Contact {
   createdAt: string;
   updatedAt: string;
 }
-
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
-
-const api = axios.create({ baseURL: BASE_URL, withCredentials: true });
 
 export interface BlastConfig {
   batchSize: number;
@@ -46,5 +42,5 @@ export const contactsAPI = {
     api.post<{ blastId: string; total: number }>('/contacts/blast', { emails, subject, body, ...config }),
 
   /** URL do SSE stream de progresso */
-  blastStreamUrl: (blastId: string) => `${BASE_URL}/contacts/blast/${blastId}/stream`,
+  blastStreamUrl: (blastId: string) => `${API_BASE_URL}/contacts/blast/${blastId}/stream`,
 };

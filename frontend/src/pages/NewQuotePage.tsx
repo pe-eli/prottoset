@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { useQuoteForm } from '../hooks/useQuoteForm';
 import { useQuoteCalculation } from '../hooks/useQuoteCalculation';
 import { quoteAPI } from '../services/api';
-import { quoteStorage } from '../services/quoteStorage';
 import type { Quote } from '../types';
 import { StepIndicator } from '../components/layout/StepIndicator';
 import { QuoteSummary } from '../components/quote/QuoteSummary';
@@ -63,7 +62,6 @@ export function NewQuotePage() {
 
     try {
       const { data } = await quoteAPI.generatePdf(quote);
-      quoteStorage.save(quote);
       setGeneratedQuote(quote);
       setPdfUrl(data.pdfUrl);
       nextStep();

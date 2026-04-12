@@ -16,6 +16,7 @@ export interface BlastConfig {
 }
 
 interface BlastEntry {
+  tenantId: string;
   jobs: BlastJob[];
   subject: string;
   body: string;
@@ -123,9 +124,10 @@ async function processBlast(blastId: string) {
 }
 
 export const blastQueue = {
-  create(blastId: string, emails: string[], subject: string, body: string, config: BlastConfig): BlastEntry {
+  create(tenantId: string, blastId: string, emails: string[], subject: string, body: string, config: BlastConfig): BlastEntry {
     const jobs: BlastJob[] = emails.map((email) => ({ email, status: 'pending' }));
     const entry: BlastEntry = {
+      tenantId,
       jobs,
       subject,
       body,
@@ -142,9 +144,9 @@ export const blastQueue = {
     return entry;
   },
 
-  subscribe(blastId: string, res: Response): boolean {
+  subscribe(tenantId: string, blastId: string, res: Response): boolean {
     const entry = blasts.get(blastId);
-    if (!entry) return false;
+    if (!entry || entry.tenantId !== tenantId) return false;
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -178,7 +180,8 @@ export const blastQueue = {
     return true;
   },
 
-  get(blastId: string): BlastEntry | undefined {
-    return blasts.get(blastId);
+  get(tenantId: string, blastId: string): BlastEntry | undefined {
+    const entry = blasts.get(blastId);
+    return entry?.tenantId === tenantId ? entry : undefined;
   },
 };

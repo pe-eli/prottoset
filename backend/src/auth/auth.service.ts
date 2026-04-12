@@ -1,120 +1,89 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import type { CookieOptions } from 'express';
-import { timingSafeEqual } from 'crypto';
+import { v4 as uuid } from 'uuid';
+import { hashPassword, verifyPassword } from './password';
+import { signAccessToken, generateRefreshToken, hashToken } from './tokens';
+import { refreshTokensRepository } from './refresh-tokens.repository';
+import { usersRepository } from './users.repository';
+import { authConfig, ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE } from './auth.config';
+import type { Response } from 'express';
+import type { UserDoc } from './auth.types';
+import crypto from 'crypto';
 
-const SESSION_COOKIE_NAME = 'prottoset_session';
-
-function isProduction(): boolean {
-  return process.env.NODE_ENV === 'production';
-}
-
-function getCookieSameSite(): 'lax' | 'none' {
-  const configured = (process.env.AUTH_COOKIE_SAMESITE || '').toLowerCase();
-  if (configured === 'none') return 'none';
-  if (configured === 'lax') return 'lax';
-  return isProduction() ? 'none' : 'lax';
-}
-
-function getJwtSecret(): string {
-  const secret = process.env.AUTH_JWT_SECRET;
-  if (!secret) {
-    throw new Error('AUTH_JWT_SECRET não configurado');
-  }
-  return secret;
-}
-
-function getSessionHours(): number {
-  const parsed = Number(process.env.AUTH_SESSION_HOURS);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 12;
-  return Math.floor(parsed);
-}
-
-function getConfiguredUsername(): string {
-  const user = process.env.AUTH_USERNAME;
-  if (!user) {
-    throw new Error('AUTH_USERNAME não configurado');
-  }
-  return user;
-}
-
-function getConfiguredPasswordHash(): string {
-  const hash = process.env.AUTH_PASSWORD_HASH;
-  if (!hash) {
-    throw new Error('AUTH_PASSWORD_HASH não configurado');
-  }
-  return hash;
-}
-
-function isBcryptHash(value: string): boolean {
-  return /^\$2[aby]\$\d{2}\$/.test(value);
-}
-
-function safeStringEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
-}
-
-export interface SessionPayload {
-  username: string;
+function issueCsrfCookie(res: Response): string {
+  const csrfToken = crypto.randomBytes(32).toString('base64url');
+  res.cookie(CSRF_COOKIE, csrfToken, authConfig.csrfCookieOptions());
+  return csrfToken;
 }
 
 export const authService = {
-  sessionCookieName: SESSION_COOKIE_NAME,
+  hashPassword,
+  verifyPassword,
 
-  getCookieOptions(): CookieOptions {
-    const hours = getSessionHours();
-    const sameSite = getCookieSameSite();
-    const secure = sameSite === 'none' ? true : isProduction();
-
-    return {
-      httpOnly: true,
-      secure,
-      sameSite,
-      path: '/',
-      maxAge: hours * 60 * 60 * 1000,
-    };
-  },
-
-  async validateCredentials(username: string, password: string): Promise<boolean> {
-    const expectedUsername = getConfiguredUsername();
-    const expectedPasswordValue = getConfiguredPasswordHash();
-
-    if (username !== expectedUsername) return false;
-
-    if (isBcryptHash(expectedPasswordValue)) {
-      return bcrypt.compare(password, expectedPasswordValue);
-    }
-
-    // Backward-compatible fallback while environments migrate to bcrypt hashes.
-    return safeStringEqual(password, expectedPasswordValue);
-  },
-
-  signSession(payload: SessionPayload): string {
-    const secret = getJwtSecret();
-    const hours = getSessionHours();
-    return jwt.sign({ sub: payload.username }, secret, {
-      expiresIn: `${hours}h`,
-      issuer: 'prottoset-backend',
-      audience: 'prottoset-app',
+  async issueSession(res: Response, user: UserDoc): Promise<string> {
+    const accessToken = await signAccessToken({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.id,
+      emailVerified: user.emailVerified,
     });
+
+    const { raw, hash } = generateRefreshToken();
+    const days = authConfig.refreshTokenDays();
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+    await refreshTokensRepository.create({
+      tokenHash: hash,
+      userId: user.id,
+      family: uuid(),
+      expiresAt,
+      revoked: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    res.cookie(ACCESS_COOKIE, accessToken, authConfig.accessCookieOptions());
+    res.cookie(REFRESH_COOKIE, raw, authConfig.refreshCookieOptions());
+    issueCsrfCookie(res);
+
+    return accessToken;
   },
 
-  verifySession(token: string): SessionPayload | null {
-    try {
-      const secret = getJwtSecret();
-      const decoded = jwt.verify(token, secret, {
-        issuer: 'prottoset-backend',
-        audience: 'prottoset-app',
-      }) as jwt.JwtPayload;
+  async rotateRefresh(res: Response, oldToken: { id: string; userId: string; family: string }): Promise<string | null> {
+    const user = await usersRepository.getById(oldToken.userId);
+    if (!user) return null;
 
-      const username = typeof decoded.sub === 'string' ? decoded.sub : '';
-      if (!username) return null;
-      return { username };
-    } catch {
-      return null;
-    }
+    await refreshTokensRepository.revokeById(oldToken.id);
+
+    const accessToken = await signAccessToken({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.id,
+      emailVerified: user.emailVerified,
+    });
+
+    const { raw, hash } = generateRefreshToken();
+    const days = authConfig.refreshTokenDays();
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+    await refreshTokensRepository.create({
+      tokenHash: hash,
+      userId: user.id,
+      family: oldToken.family,
+      expiresAt,
+      revoked: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    res.cookie(ACCESS_COOKIE, accessToken, authConfig.accessCookieOptions());
+    res.cookie(REFRESH_COOKIE, raw, authConfig.refreshCookieOptions());
+    issueCsrfCookie(res);
+
+    return accessToken;
+  },
+
+  clearSession(res: Response): void {
+    res.clearCookie(ACCESS_COOKIE, { ...authConfig.accessCookieOptions(), maxAge: 0 });
+    res.clearCookie(REFRESH_COOKIE, { ...authConfig.refreshCookieOptions(), maxAge: 0 });
+    res.clearCookie(CSRF_COOKIE, { ...authConfig.csrfCookieOptions(), maxAge: 0 });
   },
 };

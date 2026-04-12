@@ -19,6 +19,7 @@ export interface WaBlastConfig {
 }
 
 interface WaBlastEntry {
+  tenantId: string;
   jobs: WaJob[];
   config: WaBlastConfig;
   phase: 'sending' | 'done' | 'cancelled';
@@ -235,12 +236,14 @@ async function processBlast(blastId: string) {
 
 export const waBlastQueue = {
   create(
+    tenantId: string,
     blastId: string,
     phones: string[],
     config: WaBlastConfig,
   ): WaBlastEntry {
     const jobs: WaJob[] = phones.map((phone) => ({ phone, status: 'pending' }));
     const entry: WaBlastEntry = {
+      tenantId,
       jobs,
       config,
       phase: 'sending',
@@ -257,9 +260,9 @@ export const waBlastQueue = {
     return entry;
   },
 
-  subscribe(blastId: string, res: Response): boolean {
+  subscribe(tenantId: string, blastId: string, res: Response): boolean {
     const entry = blasts.get(blastId);
-    if (!entry) return false;
+    if (!entry || entry.tenantId !== tenantId) return false;
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -296,19 +299,22 @@ export const waBlastQueue = {
     return true;
   },
 
-  get(blastId: string): WaBlastEntry | undefined {
-    return blasts.get(blastId);
+  get(tenantId: string, blastId: string): WaBlastEntry | undefined {
+    const entry = blasts.get(blastId);
+    return entry?.tenantId === tenantId ? entry : undefined;
   },
 
-  cancel(blastId: string): boolean {
+  cancel(tenantId: string, blastId: string): boolean {
     const entry = blasts.get(blastId);
+    if (!entry || entry.tenantId !== tenantId) return false;
     if (!entry || entry.phase !== 'sending') return false;
     entry.cancelled = true;
     return true;
   },
 
-  status(blastId: string): { phase: string; sent: number; total: number } | null {
+  status(tenantId: string, blastId: string): { phase: string; sent: number; total: number } | null {
     const entry = blasts.get(blastId);
+    if (!entry || entry.tenantId !== tenantId) return null;
     if (!entry) return null;
     return {
       phase: entry.phase,

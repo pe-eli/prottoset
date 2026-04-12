@@ -4,8 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
-import { useDraft } from '../hooks/useDraft';
-import { packagesStorage } from '../services/packagesStorage';
 
 interface PlanConfig {
   name: string;
@@ -51,12 +49,7 @@ const INITIAL_FORM: FormData = {
 
 export function PackagesQuotePage() {
   const navigate = useNavigate();
-  const {
-    state: form,
-    setState: setForm,
-    clearDraft,
-    hasDraft,
-  } = useDraft<FormData>('prottoset_draft_packages', INITIAL_FORM);
+  const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [newFeature, setNewFeature] = useState(['', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -155,7 +148,6 @@ export function PackagesQuotePage() {
 
       if (!res.ok) throw new Error('Erro do servidor');
       const data = await res.json();
-      packagesStorage.save(payload);
       window.open(data.pdfUrl, '_blank');
     } catch {
       setError('Erro ao gerar a proposta. Verifique se o backend está rodando.');
@@ -172,18 +164,6 @@ export function PackagesQuotePage() {
           <p className="text-sm text-gray-500">Básico, Profissional e Premium</p>
         </div>
         <div className="flex items-center gap-3">
-          {hasDraft && (
-            <span className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-              Rascunho restaurado
-            </span>
-          )}
-          <button
-            onClick={clearDraft}
-            className="text-xs text-red-400 hover:text-red-600 underline underline-offset-2"
-          >
-            Limpar rascunho
-          </button>
           <Button variant="outline" onClick={() => navigate('/')}>
             Voltar
           </Button>

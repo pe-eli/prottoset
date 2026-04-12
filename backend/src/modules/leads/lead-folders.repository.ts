@@ -1,83 +1,106 @@
-import { getFirestore } from '../../services/firebase.service';
+import { tenantQuery } from '../../db/pool';
 import { LeadFolder } from '../../types/lead-folders.types';
 
-const PALETTE = ['blue', 'emerald', 'amber', 'violet', 'rose', 'sky', 'teal', 'orange'];
+const PALETTE = ['blue', 'emerald', 'amber', 'violet', 'rose', 'sky', 'teal', 'orange'] as const;
 
-function collection() {
-  return getFirestore().collection('leadFolders');
+interface FolderRow {
+  id: string;
+  tenant_id: string;
+  name: string;
+  color: string;
+  created_at: Date;
+  lead_ids: string[] | null;
 }
 
-function toFolder(doc: FirebaseFirestore.DocumentSnapshot): LeadFolder {
-  const d = doc.data() as Omit<LeadFolder, 'id'>;
+function toFolder(row: FolderRow): LeadFolder {
   return {
-    id: doc.id,
-    name: d.name ?? '',
-    leadIds: d.leadIds ?? [],
-    color: d.color ?? 'blue',
-    createdAt: d.createdAt ?? new Date().toISOString(),
+    id: row.id,
+    name: row.name,
+    leadIds: row.lead_ids ?? [],
+    color: row.color,
+    createdAt: row.created_at.toISOString(),
   };
 }
 
 export const leadFoldersRepository = {
-  async getAll(): Promise<LeadFolder[]> {
-    const snap = await collection().orderBy('createdAt', 'asc').get();
-    return snap.docs.map(toFolder);
+  async getAll(tenantId: string): Promise<LeadFolder[]> {
+    const { rows } = await tenantQuery<FolderRow>(
+      tenantId,
+      `SELECT lf.*, COALESCE(array_agg(lfl.lead_id) FILTER (WHERE lfl.lead_id IS NOT NULL), '{}') AS lead_ids
+       FROM lead_folders lf
+       LEFT JOIN lead_folder_leads lfl ON lf.id = lfl.folder_id
+       GROUP BY lf.id
+       ORDER BY lf.created_at ASC`,
+    );
+    return rows.map(toFolder);
   },
 
-  async getById(id: string): Promise<LeadFolder | null> {
-    const doc = await collection().doc(id).get();
-    if (!doc.exists) return null;
-    return toFolder(doc);
+  async getById(tenantId: string, id: string): Promise<LeadFolder | null> {
+    const { rows } = await tenantQuery<FolderRow>(
+      tenantId,
+      `SELECT lf.*, COALESCE(array_agg(lfl.lead_id) FILTER (WHERE lfl.lead_id IS NOT NULL), '{}') AS lead_ids
+       FROM lead_folders lf
+       LEFT JOIN lead_folder_leads lfl ON lf.id = lfl.folder_id
+       WHERE lf.id = $1
+       GROUP BY lf.id`,
+      [id],
+    );
+    return rows[0] ? toFolder(rows[0]) : null;
   },
 
-  async create(folder: LeadFolder): Promise<LeadFolder> {
-    const { id, ...data } = folder;
-    // Auto-assign color based on how many folders exist
-    const existing = await this.getAll();
-    const color = PALETTE[existing.length % PALETTE.length];
-    await collection().doc(id).set({ ...data, color, leadIds: [] });
-    return { ...folder, color, leadIds: [] };
+  async create(tenantId: string, folder: LeadFolder): Promise<LeadFolder> {
+    const countResult = await tenantQuery<{ count: string }>(
+      tenantId,
+      'SELECT count(*) FROM lead_folders',
+    );
+    const count = parseInt(countResult.rows[0].count, 10);
+    const color = PALETTE[count % PALETTE.length];
+
+    const { rows } = await tenantQuery<FolderRow>(
+      tenantId,
+      `INSERT INTO lead_folders (id, tenant_id, name, color, created_at)
+       VALUES ($1, $2, $3, $4::folder_color, $5)
+       RETURNING *, '{}'::text[] AS lead_ids`,
+      [folder.id, tenantId, folder.name, color, folder.createdAt],
+    );
+    return toFolder(rows[0]);
   },
 
-  async delete(id: string): Promise<boolean> {
-    const doc = await collection().doc(id).get();
-    if (!doc.exists) return false;
-    await collection().doc(id).delete();
-    return true;
+  async delete(tenantId: string, id: string): Promise<boolean> {
+    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM lead_folders WHERE id = $1', [id]);
+    return (rowCount ?? 0) > 0;
   },
 
-  async addLeads(id: string, leadIds: string[]): Promise<LeadFolder | null> {
-    const docRef = collection().doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists) return null;
-    const folder = toFolder(doc);
-    folder.leadIds = [...new Set([...folder.leadIds, ...leadIds])];
-    await docRef.update({ leadIds: folder.leadIds });
-    return folder;
-  },
+  async addLeads(tenantId: string, folderId: string, leadIds: string[]): Promise<LeadFolder | null> {
+    if (leadIds.length === 0) return this.getById(tenantId, folderId);
 
-  async removeLeads(id: string, leadIds: string[]): Promise<LeadFolder | null> {
-    const docRef = collection().doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists) return null;
-    const folder = toFolder(doc);
-    const toRemove = new Set(leadIds);
-    folder.leadIds = folder.leadIds.filter((lid) => !toRemove.has(lid));
-    await docRef.update({ leadIds: folder.leadIds });
-    return folder;
-  },
-
-  /** Remove a lead from all folders (called when a lead is deleted) */
-  async removeLead(leadId: string): Promise<void> {
-    const folders = await this.getAll();
-    const db = getFirestore();
-    const batch = db.batch();
-    for (const f of folders) {
-      if (f.leadIds.includes(leadId)) {
-        const updated = f.leadIds.filter((id) => id !== leadId);
-        batch.update(collection().doc(f.id), { leadIds: updated });
-      }
+    const values: unknown[] = [];
+    const placeholders: string[] = [];
+    let idx = 1;
+    for (const leadId of leadIds) {
+      placeholders.push(`($${idx++}, $${idx++}, $${idx++})`);
+      values.push(folderId, leadId, tenantId);
     }
-    await batch.commit();
+
+    await tenantQuery(
+      tenantId,
+      `INSERT INTO lead_folder_leads (folder_id, lead_id, tenant_id) VALUES ${placeholders.join(', ')} ON CONFLICT DO NOTHING`,
+      values,
+    );
+    return this.getById(tenantId, folderId);
+  },
+
+  async removeLeads(tenantId: string, folderId: string, leadIds: string[]): Promise<LeadFolder | null> {
+    if (leadIds.length === 0) return this.getById(tenantId, folderId);
+    await tenantQuery(
+      tenantId,
+      'DELETE FROM lead_folder_leads WHERE folder_id = $1 AND lead_id = ANY($2)',
+      [folderId, leadIds],
+    );
+    return this.getById(tenantId, folderId);
+  },
+
+  async removeLead(tenantId: string, leadId: string): Promise<void> {
+    await tenantQuery(tenantId, 'DELETE FROM lead_folder_leads WHERE lead_id = $1', [leadId]);
   },
 };

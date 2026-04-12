@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { authService } from '../auth/auth.service';
+import { verifyAccessToken } from '../auth/tokens';
+import { ACCESS_COOKIE } from '../auth/auth.config';
+import '../auth/auth.types';
 
 function readToken(req: Request): string | null {
-  const fromCookie = req.cookies?.[authService.sessionCookieName];
+  const fromCookie = req.cookies?.[ACCESS_COOKIE];
   if (typeof fromCookie === 'string' && fromCookie) return fromCookie;
 
   const authHeader = req.header('authorization');
@@ -13,19 +15,25 @@ function readToken(req: Request): string | null {
   return token;
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token = readToken(req);
   if (!token) {
     res.status(401).json({ error: 'Não autenticado' });
     return;
   }
 
-  const session = authService.verifySession(token);
-  if (!session) {
+  const payload = await verifyAccessToken(token);
+  if (!payload) {
     res.status(401).json({ error: 'Sessão inválida ou expirada' });
     return;
   }
 
-  (req as Request & { authUser?: string }).authUser = session.username;
+  req.authUser = {
+    userId: payload.sub,
+    email: payload.email,
+    role: payload.role,
+    tenantId: payload.tenantId,
+    emailVerified: payload.emailVerified,
+  };
   next();
 }

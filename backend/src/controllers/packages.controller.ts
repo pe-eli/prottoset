@@ -1,23 +1,17 @@
 import { Request, Response } from 'express';
 import { packagesService } from '../services/packages.service';
-import { PackagesQuote } from '../types/packages.types';
+import { packagesQuoteSchema, uuidParamSchema } from '../validation/request.schemas';
 
 export const packagesController = {
   async generatePdf(req: Request, res: Response): Promise<void> {
     try {
-      const quote: PackagesQuote = req.body;
-
-      if (!quote.id || !quote.clientName || !quote.projectName || !Array.isArray(quote.plans)) {
-        res.status(400).json({ error: 'Dados da proposta incompletos' });
+      const parsed = packagesQuoteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
         return;
       }
 
-      if (quote.plans.length === 0) {
-        res.status(400).json({ error: 'Inclua ao menos um plano' });
-        return;
-      }
-
-      const result = await packagesService.generatePdf(quote);
+      const result = await packagesService.generatePdf(req.tenantId!, parsed.data);
       res.json({ id: result.id, pdfUrl: `/api/packages/${result.id}/pdf` });
     } catch (error) {
       console.error('Erro ao gerar proposta de pacotes:', error);
@@ -27,8 +21,14 @@ export const packagesController = {
 
   async downloadPdf(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const pdfPath = packagesService.getPdfPath(id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+
+      const { id } = parsed.data;
+      const pdfPath = packagesService.getPdfPath(req.tenantId!, id);
 
       if (!pdfPath) {
         res.status(404).json({ error: 'PDF não encontrado' });

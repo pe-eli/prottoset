@@ -3,7 +3,6 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import path from 'path';
 import authRoutes from './routes/auth.routes';
 import quoteRoutes from './routes/quote.routes';
 import packagesRoutes from './routes/packages.routes';
@@ -15,16 +14,35 @@ import leadFoldersRoutes from './routes/lead-folders.routes';
 import productivityRoutes from './routes/productivity.routes';
 import scheduleRoutes from './routes/schedule.routes';
 import { requireAuth } from './middleware/auth.middleware';
+import { setTenant } from './middleware/tenant.middleware';
+import { getAllowedOrigins, requireTrustedOrigin, sanitizeErrorMessage } from './middleware/security.middleware';
+import { asyncHandler } from './utils/asyncHandler';
+import { refreshTokensRepository } from './auth/refresh-tokens.repository';
+import { ensureCsrfCookie } from './middleware/csrf.middleware';
+import { startBackgroundWorkers } from './jobs/workers';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean);
+const allowedOrigins = getAllowedOrigins();
+const isProduction = process.env.NODE_ENV === 'production';
 
 app.set('trust proxy', 1);
-app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  hsts: isProduction,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", ...allowedOrigins],
+      frameAncestors: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+    },
+  },
+}));
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -38,10 +56,12 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: '200kb' }));
 
+app.use('/api/auth', requireTrustedOrigin(allowedOrigins));
+app.use('/api/auth', ensureCsrfCookie);
 app.use('/api/auth', authRoutes);
-app.use('/api', requireAuth);
-
-app.use('/api/pdfs', express.static(path.join(__dirname, '../generated')));
+app.use('/api', requireTrustedOrigin(allowedOrigins));
+app.use('/api', asyncHandler(requireAuth));
+app.use('/api', setTenant);
 
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/packages', packagesRoutes);
@@ -59,11 +79,25 @@ app.get('/health', (_req, res) => {
 
 // Global error handler — catches unhandled errors from async handlers
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('[Server] Unhandled error:', err.message, err.stack);
+  console.error('[Server] Unhandled error:', sanitizeErrorMessage(err, isProduction));
   if (!res.headersSent) {
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
+
+refreshTokensRepository.deleteExpired().catch((err) => {
+  console.error('[Auth] Failed to cleanup expired refresh tokens:', sanitizeErrorMessage(err, isProduction));
+});
+
+setInterval(() => {
+  refreshTokensRepository.deleteExpired().catch((err) => {
+    console.error('[Auth] Failed to cleanup expired refresh tokens:', sanitizeErrorMessage(err, isProduction));
+  });
+}, 6 * 60 * 60 * 1000);
+
+if (process.env.RUN_JOB_WORKERS_INLINE !== 'false') {
+  startBackgroundWorkers();
+}
 
 app.listen(PORT, () => {
   console.log(`ProttoSet backend running on port ${PORT}`);

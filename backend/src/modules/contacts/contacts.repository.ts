@@ -1,80 +1,124 @@
-import { getFirestore } from '../../services/firebase.service';
+import { tenantQuery } from '../../db/pool';
 import { Contact, ContactStatus } from '../../types/contacts.types';
 
 const VALID_STATUSES: ContactStatus[] = ['new', 'contacted', 'negotiating', 'client', 'lost'];
 
-function collection() {
-  return getFirestore().collection('contacts');
+interface ContactRow {
+  id: string;
+  tenant_id: string;
+  email: string;
+  name: string;
+  phone: string;
+  company: string;
+  status: string;
+  notes: string;
+  channel: string | null;
+  last_message: string | null;
+  last_message_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 function sanitizeStatus(status: string | undefined): ContactStatus {
   return VALID_STATUSES.includes(status as ContactStatus) ? (status as ContactStatus) : 'contacted';
 }
 
-function toContact(doc: FirebaseFirestore.DocumentSnapshot): Contact {
-  const data = doc.data() as Contact;
-  return { ...data, id: doc.id, status: sanitizeStatus(data.status) };
+function toContact(row: ContactRow): Contact {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    phone: row.phone,
+    company: row.company,
+    status: sanitizeStatus(row.status),
+    notes: row.notes,
+    channel: row.channel as Contact['channel'],
+    lastMessage: row.last_message ?? undefined,
+    lastMessageAt: row.last_message_at?.toISOString() ?? undefined,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  };
 }
 
 export const contactsRepository = {
-  async getAll(): Promise<Contact[]> {
-    const snap = await collection().get();
-    return snap.docs.map(toContact);
+  async getAll(tenantId: string): Promise<Contact[]> {
+    const { rows } = await tenantQuery<ContactRow>(tenantId, 'SELECT * FROM contacts ORDER BY created_at DESC');
+    return rows.map(toContact);
   },
 
-  async getById(id: string): Promise<Contact | null> {
-    const doc = await collection().doc(id).get();
-    if (!doc.exists) return null;
-    return toContact(doc);
+  async getById(tenantId: string, id: string): Promise<Contact | null> {
+    const { rows } = await tenantQuery<ContactRow>(tenantId, 'SELECT * FROM contacts WHERE id = $1', [id]);
+    return rows[0] ? toContact(rows[0]) : null;
   },
 
-  async getByEmail(email: string): Promise<Contact | null> {
-    const snap = await collection()
-      .where('email', '==', email.toLowerCase())
-      .limit(1)
-      .get();
-    if (snap.empty) return null;
-    return toContact(snap.docs[0]);
+  async getByEmail(tenantId: string, email: string): Promise<Contact | null> {
+    const { rows } = await tenantQuery<ContactRow>(
+      tenantId,
+      'SELECT * FROM contacts WHERE lower(email) = $1 LIMIT 1',
+      [email.toLowerCase()],
+    );
+    return rows[0] ? toContact(rows[0]) : null;
   },
 
-  async saveMany(newContacts: Contact[]): Promise<{ saved: Contact[]; duplicates: number }> {
-    const existing = await this.getAll();
-    const existingEmails = new Set(existing.filter((c) => c.email).map((c) => c.email.toLowerCase()));
-    const existingPhones = new Set(existing.filter((c) => c.phone).map((c) => c.phone));
-    const unique = newContacts.filter((c) => {
-      if (c.email) return !existingEmails.has(c.email.toLowerCase());
-      if (c.phone) return !existingPhones.has(c.phone);
-      return true;
-    });
+  async saveMany(tenantId: string, newContacts: Contact[]): Promise<{ saved: Contact[]; duplicates: number }> {
+    if (newContacts.length === 0) return { saved: [], duplicates: 0 };
 
-    const db = getFirestore();
-    for (let i = 0; i < unique.length; i += 500) {
-      const chunk = unique.slice(i, i + 500);
-      const batch = db.batch();
-      for (const contact of chunk) {
-        const { id, ...data } = contact;
-        batch.set(collection().doc(id), data);
-      }
-      await batch.commit();
+    const values: unknown[] = [];
+    const placeholders: string[] = [];
+    let idx = 1;
+
+    for (const c of newContacts) {
+      placeholders.push(
+        `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::contact_status, $${idx++}, $${idx++}::contact_channel, $${idx++}, $${idx++}, $${idx++}, $${idx++})`,
+      );
+      values.push(
+        c.id, tenantId, c.email, c.name, c.phone, c.company,
+        c.status, c.notes, c.channel || null, c.lastMessage || null,
+        c.lastMessageAt || null, c.createdAt, c.updatedAt,
+      );
     }
 
-    return { saved: unique, duplicates: newContacts.length - unique.length };
+    const sql = `
+      INSERT INTO contacts (id, tenant_id, email, name, phone, company, status, notes, channel, last_message, last_message_at, created_at, updated_at)
+      VALUES ${placeholders.join(', ')}
+      ON CONFLICT (tenant_id, lower(email)) WHERE email != '' DO UPDATE SET updated_at = now()
+      RETURNING *
+    `;
+
+    const { rows } = await tenantQuery<ContactRow>(tenantId, sql, values);
+    const saved = rows.map(toContact);
+    return { saved, duplicates: newContacts.length - saved.length };
   },
 
-  async update(id: string, data: Partial<Pick<Contact, 'name' | 'phone' | 'company' | 'status' | 'notes' | 'channel' | 'lastMessage' | 'lastMessageAt'>>): Promise<Contact | null> {
-    const docRef = collection().doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists) return null;
-    const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
-    await docRef.update({ ...clean, updatedAt: new Date().toISOString() });
-    const updated = await docRef.get();
-    return toContact(updated);
+  async update(tenantId: string, id: string, data: Partial<Pick<Contact, 'name' | 'phone' | 'company' | 'status' | 'notes' | 'channel' | 'lastMessage' | 'lastMessageAt'>>): Promise<Contact | null> {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+
+    if (data.name !== undefined) { sets.push(`name = $${idx++}`); params.push(data.name); }
+    if (data.phone !== undefined) { sets.push(`phone = $${idx++}`); params.push(data.phone); }
+    if (data.company !== undefined) { sets.push(`company = $${idx++}`); params.push(data.company); }
+    if (data.status !== undefined) { sets.push(`status = $${idx++}::contact_status`); params.push(data.status); }
+    if (data.notes !== undefined) { sets.push(`notes = $${idx++}`); params.push(data.notes); }
+    if (data.channel !== undefined) { sets.push(`channel = $${idx++}::contact_channel`); params.push(data.channel); }
+    if (data.lastMessage !== undefined) { sets.push(`last_message = $${idx++}`); params.push(data.lastMessage); }
+    if (data.lastMessageAt !== undefined) { sets.push(`last_message_at = $${idx++}`); params.push(data.lastMessageAt); }
+
+    if (sets.length === 0) return this.getById(tenantId, id);
+
+    sets.push(`updated_at = now()`);
+    params.push(id);
+
+    const { rows } = await tenantQuery<ContactRow>(
+      tenantId,
+      `UPDATE contacts SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      params,
+    );
+    return rows[0] ? toContact(rows[0]) : null;
   },
 
-  async delete(id: string): Promise<boolean> {
-    const doc = await collection().doc(id).get();
-    if (!doc.exists) return false;
-    await collection().doc(id).delete();
-    return true;
+  async delete(tenantId: string, id: string): Promise<boolean> {
+    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM contacts WHERE id = $1', [id]);
+    return (rowCount ?? 0) > 0;
   },
 };

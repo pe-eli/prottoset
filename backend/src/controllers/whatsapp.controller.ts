@@ -1,26 +1,37 @@
 import { Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
-import { waBlastQueue } from '../modules/whatsapp/whatsapp.queue';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { Contact } from '../types/contacts.types';
+import { blastParamSchema, whatsappBlastSchema } from '../validation/request.schemas';
+import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
+import { enqueueWhatsAppBlastJob } from '../jobs/queues';
+
+function openSse(res: Response): void {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+}
 
 export const whatsappController = {
   /** POST /whatsapp/blast — valida, salva contatos e inicia a fila */
   async sendBlast(req: Request, res: Response) {
     try {
+      const tenantId = req.tenantId!;
+      const parsed = whatsappBlastSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+
       const {
         phones,
         batchSize = 10,
         intervalMinSeconds = 15,
         intervalMaxSeconds = 60,
         promptBase,
-      } = req.body as {
-        phones: string[];
-        batchSize?: number;
-        intervalMinSeconds?: number;
-        intervalMaxSeconds?: number;
-        promptBase?: string;
-      };
+      } = parsed.data;
 
       if (!phones || phones.length === 0) {
         return res.status(400).json({ error: 'Lista de números é obrigatória' });
@@ -60,50 +71,20 @@ export const whatsappController = {
         createdAt: now,
         updatedAt: now,
       }));
-      contactsRepository.saveMany(newContacts).catch((err: Error) => {
+      contactsRepository.saveMany(tenantId, newContacts).catch((err: Error) => {
         console.error('[WhatsApp] Failed to auto-save contacts:', err.message);
       });
 
-      const entry = waBlastQueue.create(blastId, cleanPhones, {
+      await outboundRunsRepository.createWhatsAppRun(tenantId, {
+        runId: blastId,
+        targets: cleanPhones,
         batchSize: safeBatchSize,
         intervalMinSeconds: safeMin,
         intervalMaxSeconds: safeMax,
         promptBase: safePromptBase,
       });
 
-      // After blast finishes, update contacts with the actual message sent
-      let checkCount = 0;
-      const MAX_CHECKS = 1800; // 1 hour max (2s * 1800)
-      const checkDone = setInterval(async () => {
-        checkCount++;
-        if (checkCount > MAX_CHECKS) {
-          clearInterval(checkDone);
-          console.warn(`[WhatsApp] checkDone timed out for blast ${blastId}`);
-          return;
-        }
-        if (entry.phase === 'done' || entry.phase === 'cancelled') {
-          clearInterval(checkDone);
-          try {
-            const contacts = await contactsRepository.getAll();
-            const sentAt = new Date().toISOString();
-            for (const job of entry.jobs) {
-              if (job.message && job.status === 'sent') {
-                const cleanPhone = job.phone.replace(/\D/g, '');
-                const contact = contacts.find((c) => c.phone === cleanPhone);
-                if (contact) {
-                  await contactsRepository.update(contact.id, {
-                    lastMessage: job.message,
-                    lastMessageAt: sentAt,
-                  });
-                }
-              }
-            }
-          } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            console.error('[WhatsApp] Failed to update contacts after blast:', message);
-          }
-        }
-      }, 2000);
+      await enqueueWhatsAppBlastJob({ tenantId, runId: blastId });
 
       res.json({ blastId, total: cleanPhones.length });
     } catch (err: unknown) {
@@ -114,25 +95,95 @@ export const whatsappController = {
   },
 
   /** POST /whatsapp/blast/:blastId/cancel */
-  cancelBlast(req: Request, res: Response) {
-    const { blastId } = req.params;
-    const ok = waBlastQueue.cancel(blastId);
+  async cancelBlast(req: Request, res: Response) {
+    const parsed = blastParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+
+    const ok = await outboundRunsRepository.requestCancel(req.tenantId!, parsed.data.blastId);
     if (!ok) return res.status(404).json({ error: 'Blast não encontrado ou já finalizado' });
     res.json({ cancelled: true });
   },
 
   /** GET /whatsapp/blast/:blastId/status */
-  statusBlast(req: Request, res: Response) {
-    const { blastId } = req.params;
-    const status = waBlastQueue.status(blastId);
-    if (!status) return res.status(404).json({ error: 'Blast não encontrado' });
-    res.json(status);
-  },
-  streamBlast(req: Request, res: Response) {
-    const { blastId } = req.params;
-    const subscribed = waBlastQueue.subscribe(blastId, res);
-    if (!subscribed) {
-      res.status(404).json({ error: 'Blast não encontrado' });
+  async statusBlast(req: Request, res: Response) {
+    const parsed = blastParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
     }
+
+    const status = await outboundRunsRepository.getRun(req.tenantId!, parsed.data.blastId);
+    if (!status) return res.status(404).json({ error: 'Blast não encontrado' });
+    res.json({ phase: status.phase, sent: status.sent, total: status.total });
+  },
+  async streamBlast(req: Request, res: Response) {
+    const parsed = blastParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+
+    const snapshot = await outboundRunsRepository.getRunSnapshot(req.tenantId!, parsed.data.blastId);
+    if (!snapshot) {
+      res.status(404).json({ error: 'Blast não encontrado' });
+      return;
+    }
+
+    openSse(res);
+    res.write(`event: config\ndata: ${JSON.stringify({ batchSize: snapshot.batchSize, phase: snapshot.phase })}\n\n`);
+
+    const emitSnapshot = (current: Awaited<ReturnType<typeof outboundRunsRepository.getRunSnapshot>>) => {
+      if (!current) return;
+      res.write(`event: catchup\ndata: ${JSON.stringify(current.items.map((item, index) => ({
+        phone: item.target,
+        status: item.status === 'skipped' ? 'failed' : item.status,
+        index,
+        total: current.items.length,
+        error: item.error,
+      })))}\n\n`);
+
+      if (current.phase === 'validating') {
+        res.write('event: validating\ndata: {}\n\n');
+      }
+
+      if (current.validationError) {
+        res.write(`event: validation_error\ndata: ${JSON.stringify({ error: current.validationError })}\n\n`);
+      } else if (current.phase !== 'validating') {
+        res.write(`event: validation_done\ndata: ${JSON.stringify({ total: current.total, eligible: current.total - current.skipped, skipped: current.skipped })}\n\n`);
+      }
+
+      if (current.currentBatch && current.totalBatches) {
+        res.write(`event: batch_start\ndata: ${JSON.stringify({ batch: current.currentBatch, totalBatches: current.totalBatches, count: current.batchSize })}\n\n`);
+      }
+
+      if (current.currentMessage) {
+        res.write(`event: batch_message\ndata: ${JSON.stringify({ batch: current.currentBatch || 1, message: current.currentMessage })}\n\n`);
+      }
+    };
+
+    emitSnapshot(snapshot);
+
+    const interval = setInterval(async () => {
+      const current = await outboundRunsRepository.getRunSnapshot(req.tenantId!, parsed.data.blastId);
+      if (!current) {
+        clearInterval(interval);
+        res.end();
+        return;
+      }
+
+      emitSnapshot(current);
+
+      if (current.status === 'completed' || current.status === 'failed' || current.status === 'cancelled') {
+        const eventName = current.status === 'cancelled' ? 'cancelled' : 'done';
+        res.write(`event: ${eventName}\ndata: ${JSON.stringify({ sent: current.sent, failed: current.failed + current.skipped, total: current.total })}\n\n`);
+        clearInterval(interval);
+        res.end();
+      }
+    }, 2000);
+
+    res.on('close', () => clearInterval(interval));
   },
 };

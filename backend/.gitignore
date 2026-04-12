@@ -1,2 +1,2 @@
-# Ignore Firebase service account file
-/data/prottoset-firebase-adminsdk-fbsvc-31a351970f.json
+.env
+.env.*

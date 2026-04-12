@@ -1,21 +1,23 @@
 import { Request, Response } from 'express';
 import { leadsService } from '../modules/leads/leads.service';
-import { LeadSearchParams, LeadStatus } from '../types/leads.types';
-
-const VALID_STATUSES: LeadStatus[] = ['new', 'contacted', 'replied', 'converted', 'ignored'];
+import { leadSearchSchema, leadStatusUpdateSchema, uuidParamSchema } from '../validation/request.schemas';
 
 export const leadsController = {
   async search(req: Request, res: Response): Promise<void> {
     try {
-      const { searchTerm, city, maxResults } = req.body as LeadSearchParams;
-
-      if (!searchTerm?.trim() || !city?.trim()) {
-        res.status(400).json({ error: 'searchTerm e city são obrigatórios' });
+      const tenantId = req.tenantId!;
+      const parsed = leadSearchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
         return;
       }
 
-      const safeMaxResults = Math.min(100, Math.max(1, Number(maxResults) || 50));
-      const result = await leadsService.search({ searchTerm: searchTerm.trim(), city: city.trim(), maxResults: safeMaxResults });
+      const safeMaxResults = parsed.data.maxResults ?? 50;
+      const result = await leadsService.search(tenantId, {
+        searchTerm: parsed.data.searchTerm,
+        city: parsed.data.city,
+        maxResults: safeMaxResults,
+      });
       res.json(result);
     } catch (err: any) {
       console.error('[Leads] search error:', err.message);
@@ -23,9 +25,9 @@ export const leadsController = {
     }
   },
 
-  async getAll(_req: Request, res: Response): Promise<void> {
+  async getAll(req: Request, res: Response): Promise<void> {
     try {
-      const leads = await leadsService.getAll();
+      const leads = await leadsService.getAll(req.tenantId!);
       res.json(leads);
     } catch (err: any) {
       console.error('[Leads] getAll error:', err.message);
@@ -35,8 +37,12 @@ export const leadsController = {
 
   async getById(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const lead = await leadsService.getById(id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+      const lead = await leadsService.getById(req.tenantId!, parsed.data.id);
       if (!lead) {
         res.status(404).json({ error: 'Lead not found' });
         return;
@@ -50,15 +56,18 @@ export const leadsController = {
 
   async updateStatus(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const { status } = req.body;
-
-      if (!status || !VALID_STATUSES.includes(status)) {
-        res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        res.status(400).json({ error: paramsParsed.error.issues[0].message });
+        return;
+      }
+      const bodyParsed = leadStatusUpdateSchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        res.status(400).json({ error: bodyParsed.error.issues[0].message });
         return;
       }
 
-      const lead = await leadsService.updateStatus(id, status);
+      const lead = await leadsService.updateStatus(req.tenantId!, paramsParsed.data.id, bodyParsed.data.status);
       if (!lead) {
         res.status(404).json({ error: 'Lead not found' });
         return;
@@ -73,8 +82,12 @@ export const leadsController = {
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const deleted = await leadsService.delete(id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+      const deleted = await leadsService.delete(req.tenantId!, parsed.data.id);
       if (!deleted) {
         res.status(404).json({ error: 'Lead not found' });
         return;

@@ -1,10 +1,5 @@
-import axios from 'axios';
+import { api } from '../../lib/axios';
 import type { Lead, LeadSearchParams, LeadSearchResult, LeadStatus } from './leads.types';
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? '/api',
-  withCredentials: true,
-});
 
 export const leadsAPI = {
   search: (params: LeadSearchParams) =>

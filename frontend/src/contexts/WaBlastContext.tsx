@@ -1,7 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { whatsappAPI } from '../features/whatsapp/whatsapp.api';
-
-const STORAGE_KEY = 'wa_active_blast';
+import { createContext, useContext, useState, useCallback } from 'react';
 
 export interface WaBlastState {
   blastId: string;
@@ -26,32 +23,8 @@ const WaBlastContext = createContext<WaBlastContextValue>({
 
 export function WaBlastProvider({ children }: { children: React.ReactNode }) {
   const [active, setActiveState] = useState<WaBlastState | null>(null);
-  const checkedRef = useRef(false);
-
-  // On mount: restore from localStorage and validate against backend
-  useEffect(() => {
-    if (checkedRef.current) return;
-    checkedRef.current = true;
-
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
-
-    let saved: { blastId: string; total: number };
-    try { saved = JSON.parse(stored); } catch { localStorage.removeItem(STORAGE_KEY); return; }
-
-    whatsappAPI.statusBlast(saved.blastId)
-      .then(({ data }) => {
-        if (data.phase === 'sending') {
-          setActiveState({ blastId: saved.blastId, sent: data.sent, total: data.total, phase: 'sending' });
-        } else {
-          localStorage.removeItem(STORAGE_KEY);
-        }
-      })
-      .catch(() => localStorage.removeItem(STORAGE_KEY));
-  }, []);
 
   const setActive = useCallback((blastId: string, total: number) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ blastId, total }));
     setActiveState({ blastId, sent: 0, total, phase: 'sending' });
   }, []);
 
@@ -65,7 +38,6 @@ export function WaBlastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearActive = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
     setActiveState(null);
   }, []);
 

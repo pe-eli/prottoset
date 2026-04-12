@@ -1,7 +1,4 @@
-import axios from 'axios';
-
-const BASE_URL = (import.meta.env.VITE_API_URL ?? '/api') as string;
-const api = axios.create({ baseURL: BASE_URL, withCredentials: true });
+import { api, API_BASE_URL } from '../../lib/axios';
 
 export interface WaBlastConfig {
   batchSize: number;
@@ -24,5 +21,5 @@ export const whatsappAPI = {
     api.get<{ phase: string; sent: number; total: number }>(`/whatsapp/blast/${blastId}/status`),
 
   blastStreamUrl: (blastId: string): string =>
-    `${BASE_URL}/whatsapp/blast/${blastId}/stream`,
+    `${API_BASE_URL}/whatsapp/blast/${blastId}/stream`,
 };

@@ -1,10 +1,5 @@
-import axios from 'axios';
+import { api } from '../../lib/axios';
 import type { ScheduleItem, CreateScheduleItemParams } from './schedule.types';
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? '/api',
-  withCredentials: true,
-});
 
 export const scheduleAPI = {
   getAll: () => api.get<ScheduleItem[]>('/schedule'),

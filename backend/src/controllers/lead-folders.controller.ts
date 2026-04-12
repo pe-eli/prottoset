@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { leadFoldersRepository } from '../modules/leads/lead-folders.repository';
+import { leadFolderCreateSchema, leadFolderLeadsSchema, uuidParamSchema } from '../validation/request.schemas';
 
 export const leadFoldersController = {
-  async getAll(_req: Request, res: Response) {
+  async getAll(req: Request, res: Response) {
     try {
-      const folders = await leadFoldersRepository.getAll();
+      const folders = await leadFoldersRepository.getAll(req.tenantId!);
       res.json(folders);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -15,14 +16,13 @@ export const leadFoldersController = {
 
   async create(req: Request, res: Response) {
     try {
-      const { name } = req.body as { name?: string };
-      if (!name || typeof name !== 'string' || !name.trim()) {
-        res.status(400).json({ error: 'Nome da pasta é obrigatório' });
-        return;
+      const parsed = leadFolderCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
       }
-      const folder = await leadFoldersRepository.create({
+      const folder = await leadFoldersRepository.create(req.tenantId!, {
         id: uuid(),
-        name: name.trim(),
+        name: parsed.data.name,
         leadIds: [],
         color: 'blue',
         createdAt: new Date().toISOString(),
@@ -36,7 +36,11 @@ export const leadFoldersController = {
 
   async delete(req: Request, res: Response) {
     try {
-      const deleted = await leadFoldersRepository.delete(req.params.id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const deleted = await leadFoldersRepository.delete(req.tenantId!, parsed.data.id);
       if (!deleted) {
         res.status(404).json({ error: 'Pasta não encontrada' });
         return;
@@ -50,12 +54,15 @@ export const leadFoldersController = {
 
   async addLeads(req: Request, res: Response) {
     try {
-      const { leadIds } = req.body as { leadIds?: string[] };
-      if (!Array.isArray(leadIds) || leadIds.length === 0) {
-        res.status(400).json({ error: 'Lista de leads é obrigatória' });
-        return;
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
       }
-      const updated = await leadFoldersRepository.addLeads(req.params.id, leadIds);
+      const bodyParsed = leadFolderLeadsSchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return res.status(400).json({ error: bodyParsed.error.issues[0].message });
+      }
+      const updated = await leadFoldersRepository.addLeads(req.tenantId!, paramsParsed.data.id, bodyParsed.data.leadIds);
       if (!updated) {
         res.status(404).json({ error: 'Pasta não encontrada' });
         return;
@@ -69,12 +76,15 @@ export const leadFoldersController = {
 
   async removeLeads(req: Request, res: Response) {
     try {
-      const { leadIds } = req.body as { leadIds?: string[] };
-      if (!Array.isArray(leadIds) || leadIds.length === 0) {
-        res.status(400).json({ error: 'Lista de leads é obrigatória' });
-        return;
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
       }
-      const updated = await leadFoldersRepository.removeLeads(req.params.id, leadIds);
+      const bodyParsed = leadFolderLeadsSchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return res.status(400).json({ error: bodyParsed.error.issues[0].message });
+      }
+      const updated = await leadFoldersRepository.removeLeads(req.tenantId!, paramsParsed.data.id, bodyParsed.data.leadIds);
       if (!updated) {
         res.status(404).json({ error: 'Pasta não encontrada' });
         return;

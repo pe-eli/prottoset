@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import { scheduleRepository } from '../modules/schedule/schedule.repository';
-import { CreateScheduleItemParams } from '../types/schedule.types';
+import { scheduleCreateSchema, scheduleUpdateSchema, uuidParamSchema } from '../validation/request.schemas';
 
 export const scheduleController = {
-  async getAll(_req: Request, res: Response) {
+  async getAll(req: Request, res: Response) {
     try {
-      const items = await scheduleRepository.getAll();
+      const items = await scheduleRepository.getAll(req.tenantId!);
       res.json(items);
     } catch (err) {
       console.error('[Schedule] Error fetching items:', err);
@@ -15,7 +15,11 @@ export const scheduleController = {
 
   async getById(req: Request, res: Response) {
     try {
-      const item = await scheduleRepository.getById(req.params.id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const item = await scheduleRepository.getById(req.tenantId!, parsed.data.id);
       if (!item) return res.status(404).json({ error: 'Item não encontrado' });
       res.json(item);
     } catch (err) {
@@ -26,14 +30,11 @@ export const scheduleController = {
 
   async create(req: Request, res: Response) {
     try {
-      const params = req.body as CreateScheduleItemParams;
-      if (!params.title || !params.category || !params.startTime || !params.endTime) {
-        return res.status(400).json({ error: 'Campos obrigatórios: title, category, startTime, endTime' });
+      const parsed = scheduleCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
       }
-      if (!params.date && !params.recurrence) {
-        return res.status(400).json({ error: 'Informe date (evento único) ou recurrence (recorrente)' });
-      }
-      const item = await scheduleRepository.create(params);
+      const item = await scheduleRepository.create(req.tenantId!, parsed.data);
       res.status(201).json(item);
     } catch (err) {
       console.error('[Schedule] Error creating item:', err);
@@ -43,7 +44,20 @@ export const scheduleController = {
 
   async update(req: Request, res: Response) {
     try {
-      const item = await scheduleRepository.update(req.params.id, req.body);
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+      const bodyParsed = scheduleUpdateSchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return res.status(400).json({ error: bodyParsed.error.issues[0].message });
+      }
+      const updatePayload = {
+        ...bodyParsed.data,
+        date: bodyParsed.data.date ?? undefined,
+        recurrence: bodyParsed.data.recurrence ?? undefined,
+      };
+      const item = await scheduleRepository.update(req.tenantId!, paramsParsed.data.id, updatePayload);
       if (!item) return res.status(404).json({ error: 'Item não encontrado' });
       res.json(item);
     } catch (err) {
@@ -54,7 +68,11 @@ export const scheduleController = {
 
   async delete(req: Request, res: Response) {
     try {
-      const deleted = await scheduleRepository.delete(req.params.id);
+      const parsed = uuidParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const deleted = await scheduleRepository.delete(req.tenantId!, parsed.data.id);
       if (!deleted) return res.status(404).json({ error: 'Item não encontrado' });
       res.status(204).send();
     } catch (err) {

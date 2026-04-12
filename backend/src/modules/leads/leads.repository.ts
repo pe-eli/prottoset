@@ -1,94 +1,99 @@
-import { getFirestore } from '../../services/firebase.service';
-import { Lead, LeadPriority, LeadStatus } from '../../types/leads.types';
+import { tenantQuery } from '../../db/pool';
+import { Lead, LeadStatus } from '../../types/leads.types';
 
-function collection() {
-  return getFirestore().collection('leads');
+interface LeadRow {
+  id: string;
+  tenant_id: string;
+  name: string;
+  phone: string;
+  website: string;
+  website_fetch_error: boolean;
+  email1: string;
+  email2: string;
+  city: string;
+  neighborhood: string;
+  address: string;
+  has_website: boolean;
+  rating: string;
+  niche: string;
+  priority: string;
+  status: string;
+  created_at: Date;
 }
 
-function migrateLead(raw: any): Lead {
-  const hasWebsite = raw.hasWebsite ?? !!raw.website;
-  const hasPhone = !!raw.phone;
-  let priority: LeadPriority = raw.priority;
-  if (!priority || !['HIGH', 'MEDIUM', 'LOW'].includes(priority)) {
-    if (!hasPhone) priority = 'LOW';
-    else if (!hasWebsite) priority = 'HIGH';
-    else priority = 'MEDIUM';
-  }
-
+function toLead(row: LeadRow): Lead {
   return {
-    id: raw.id ?? '',
-    name: raw.name ?? '',
-    phone: raw.phone ?? '',
-    website: raw.website ?? '',
-    websiteFetchError: raw.websiteFetchError ?? false,
-    email1: raw.email1 ?? raw.email ?? '',
-    email2: raw.email2 ?? '',
-    city: raw.city ?? '',
-    neighborhood: raw.neighborhood ?? '',
-    address: raw.address ?? '',
-    hasWebsite,
-    rating: raw.rating ?? 0,
-    niche: raw.niche ?? '',
-    priority,
-    status: raw.status ?? 'new',
-    createdAt: raw.createdAt ?? new Date().toISOString(),
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    website: row.website,
+    websiteFetchError: row.website_fetch_error,
+    email1: row.email1,
+    email2: row.email2,
+    city: row.city,
+    neighborhood: row.neighborhood,
+    address: row.address,
+    hasWebsite: row.has_website,
+    rating: parseFloat(row.rating) || 0,
+    niche: row.niche,
+    priority: row.priority as Lead['priority'],
+    status: row.status as Lead['status'],
+    createdAt: row.created_at.toISOString(),
   };
 }
 
-function toLead(doc: FirebaseFirestore.DocumentSnapshot): Lead {
-  return migrateLead({ ...doc.data(), id: doc.id });
-}
-
-function dedupeKey(lead: Lead): string {
-  const name = typeof lead.name === 'string' ? lead.name : '';
-  const address = typeof lead.address === 'string' ? lead.address : '';
-  return `${name.toLowerCase().trim()}|${address.toLowerCase().trim()}`;
-}
-
 export const leadsRepository = {
-  async getAll(): Promise<Lead[]> {
-    const snap = await collection().get();
-    return snap.docs.map(toLead);
+  async getAll(tenantId: string): Promise<Lead[]> {
+    const { rows } = await tenantQuery<LeadRow>(tenantId, 'SELECT * FROM leads ORDER BY created_at DESC');
+    return rows.map(toLead);
   },
 
-  async getById(id: string): Promise<Lead | null> {
-    const doc = await collection().doc(id).get();
-    if (!doc.exists) return null;
-    return toLead(doc);
+  async getById(tenantId: string, id: string): Promise<Lead | null> {
+    const { rows } = await tenantQuery<LeadRow>(tenantId, 'SELECT * FROM leads WHERE id = $1', [id]);
+    return rows[0] ? toLead(rows[0]) : null;
   },
 
-  async saveMany(newLeads: Lead[]): Promise<Lead[]> {
-    const existing = await this.getAll();
-    const existingKeys = new Set(existing.map(dedupeKey));
-    const unique = newLeads.filter((l) => !existingKeys.has(dedupeKey(l)));
+  async saveMany(tenantId: string, newLeads: Lead[]): Promise<Lead[]> {
+    if (newLeads.length === 0) return [];
 
-    const db = getFirestore();
-    for (let i = 0; i < unique.length; i += 500) {
-      const chunk = unique.slice(i, i + 500);
-      const batch = db.batch();
-      for (const lead of chunk) {
-        const { id, ...data } = lead;
-        batch.set(collection().doc(id), data);
-      }
-      await batch.commit();
+    const values: unknown[] = [];
+    const placeholders: string[] = [];
+    let idx = 1;
+
+    for (const lead of newLeads) {
+      placeholders.push(
+        `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::lead_priority, $${idx++}::lead_status, $${idx++})`,
+      );
+      values.push(
+        lead.id, tenantId, lead.name, lead.phone, lead.website,
+        lead.websiteFetchError, lead.email1, lead.email2, lead.city,
+        lead.neighborhood, lead.address, lead.hasWebsite, lead.rating,
+        lead.niche, lead.priority, lead.status, lead.createdAt,
+      );
     }
 
-    return unique;
+    const sql = `
+      INSERT INTO leads (id, tenant_id, name, phone, website, website_fetch_error, email1, email2, city, neighborhood, address, has_website, rating, niche, priority, status, created_at)
+      VALUES ${placeholders.join(', ')}
+      ON CONFLICT (tenant_id, lower(name), lower(address)) DO NOTHING
+      RETURNING *
+    `;
+
+    const { rows } = await tenantQuery<LeadRow>(tenantId, sql, values);
+    return rows.map(toLead);
   },
 
-  async updateStatus(id: string, status: LeadStatus): Promise<Lead | null> {
-    const docRef = collection().doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists) return null;
-    await docRef.update({ status });
-    const updated = await docRef.get();
-    return toLead(updated);
+  async updateStatus(tenantId: string, id: string, status: LeadStatus): Promise<Lead | null> {
+    const { rows } = await tenantQuery<LeadRow>(
+      tenantId,
+      'UPDATE leads SET status = $1::lead_status WHERE id = $2 RETURNING *',
+      [status, id],
+    );
+    return rows[0] ? toLead(rows[0]) : null;
   },
 
-  async delete(id: string): Promise<boolean> {
-    const doc = await collection().doc(id).get();
-    if (!doc.exists) return false;
-    await collection().doc(id).delete();
-    return true;
+  async delete(tenantId: string, id: string): Promise<boolean> {
+    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM leads WHERE id = $1', [id]);
+    return (rowCount ?? 0) > 0;
   },
 };

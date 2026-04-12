@@ -5,12 +5,25 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const ssl = process.env.NODE_ENV === 'production'
-  ? {
+function resolveSslConfig() {
+  if (process.env.NODE_ENV !== 'production') {
+    return undefined;
+  }
+
+  const certificateAuthority = process.env.DATABASE_CA_CERT?.trim();
+  if (certificateAuthority) {
+    return {
       rejectUnauthorized: true,
-      ...(process.env.DATABASE_CA_CERT ? { ca: process.env.DATABASE_CA_CERT } : {}),
-    }
-  : undefined;
+      ca: certificateAuthority,
+    };
+  }
+
+  return {
+    rejectUnauthorized: false,
+  };
+}
+
+const ssl = resolveSslConfig();
 
 async function main() {
   const dbUrl = process.env.DATABASE_URL;

@@ -125,8 +125,11 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
 
 // ─── POST /verify-code ───────────────────────────────────────────
 router.post('/verify-code', verifyCodeLimiter, asyncHandler(async (req, res) => {
+  console.log('[Auth] POST /verify-code body:', JSON.stringify({ email: req.body?.email, code: req.body?.code ? `${req.body.code.length} chars` : 'missing' }));
+
   const parsed = verifyCodeSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log('[Auth] verify-code validação falhou:', parsed.error.issues[0].message);
     res.status(400).json({ error: parsed.error.issues[0].message });
     return;
   }
@@ -145,6 +148,8 @@ router.post('/verify-code', verifyCodeLimiter, asyncHandler(async (req, res) => 
   const codeMatch = await safeCompareVerificationCode(user?.verificationCodeHash ?? null, code);
   const hasValidExpiry = !!user?.verificationCodeExpiresAt && new Date(user.verificationCodeExpiresAt).getTime() > Date.now();
   const canVerify = !!user && !user.emailVerified && codeMatch && hasValidExpiry;
+
+  console.log('[Auth] verify-code resultado:', { userFound: !!user, emailVerified: user?.emailVerified, codeMatch, hasValidExpiry, canVerify });
 
   if (!canVerify) {
     // Generic message to avoid user/account enumeration.

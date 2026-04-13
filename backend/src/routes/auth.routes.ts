@@ -59,7 +59,7 @@ const verifyCodeLimiter = createSecurityRateLimit({
 const resendCodeLimiter = createSecurityRateLimit({
   name: 'auth-resend-code',
   message: 'Muitas solicitações. Aguarde antes de tentar novamente.',
-  ip: { limit: 3, windowMs: 60 * 60 * 1000 },
+  ip: { limit: 10, windowMs: 60 * 60 * 1000 },
 });
 
 router.get('/csrf', authLimiter, sendCsrfToken);
@@ -165,7 +165,7 @@ router.post('/resend-code', resendCodeLimiter, asyncHandler(async (req, res) => 
   }
 
   const { email } = parsed.data;
-  const emailRateLimit = await consumeRateLimit(`auth-resend-code:email:${email}`, 3, 60 * 60 * 1000);
+  const emailRateLimit = await consumeRateLimit(`auth-resend-code:email:${email}`, 5, 60 * 60 * 1000);
   if (!emailRateLimit.allowed) {
     res.setHeader('Retry-After', Math.ceil(emailRateLimit.retryAfterMs / 1000));
     res.status(429).json({ error: 'Muitas solicitações. Aguarde antes de tentar novamente.' });

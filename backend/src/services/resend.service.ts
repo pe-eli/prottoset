@@ -25,6 +25,12 @@ export const resendService = {
     body: string,
     options: SendEmailOptions = {},
   ): Promise<{ success: boolean; error?: string }> {
+    const from = FROM();
+    console.log(`[Resend] Iniciando envio de e-mail para=${to}, from=${from}, subject="${subject}"`);
+    console.log(`[Resend] RESEND_API_KEY presente: ${!!process.env.RESEND_API_KEY} (${(process.env.RESEND_API_KEY || '').slice(0, 8)}...)`);
+    console.log(`[Resend] EMAIL_FROM=${process.env.EMAIL_FROM || '(vazio)'}, RESEND_FROM=${process.env.RESEND_FROM || '(vazio)'}`);
+    console.log(`[Resend] Usando html customizado: ${!!options.html}, usando text customizado: ${!!options.text}`);
+
     try {
       const htmlBody = body
         .replace(/&/g, '&amp;')
@@ -44,8 +50,9 @@ export const resendService = {
           </div>
         `;
 
-      const { error } = await getClient().emails.send({
-        from: FROM(),
+      console.log(`[Resend] Chamando resend.emails.send()...`);
+      const { data, error } = await getClient().emails.send({
+        from,
         to,
         subject,
         html,
@@ -53,10 +60,13 @@ export const resendService = {
       });
 
       if (error) {
+        console.error(`[Resend] API retornou erro:`, JSON.stringify(error));
         return { success: false, error: error.message };
       }
+      console.log(`[Resend] E-mail enviado com sucesso! ID:`, data?.id);
       return { success: true };
     } catch (err: any) {
+      console.error(`[Resend] Exceção ao enviar e-mail:`, err?.message, err?.statusCode, JSON.stringify(err));
       return { success: false, error: err?.message || 'Erro desconhecido' };
     }
   },

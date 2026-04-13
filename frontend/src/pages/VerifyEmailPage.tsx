@@ -142,7 +142,6 @@ export function VerifyEmailPage() {
                 <Input
                   label="Código (6 dígitos)"
                   inputMode="numeric"
-                  pattern="\\d{6}"
                   maxLength={6}
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}

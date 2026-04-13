@@ -179,16 +179,21 @@ export async function sendVerificationCode(params: {
   verificationUrl: escapeHtml(verificationUrl.toString()),
   });
 
+  console.log(`[Auth] Preparando envio de código de verificação para ${params.to} (displayName: ${params.displayName})`);
+  console.log(`[Auth] NODE_ENV=${process.env.NODE_ENV}`);
+
   const result = await resendService.sendEmail(params.to, subject, body, { html, text: body });
+  console.log(`[Auth] Resultado do envio:`, JSON.stringify(result));
+
   if (!result.success) {
-    // Log the full error in any environment so operators can diagnose failures.
     console.error(`[Auth] Falha ao enviar código de verificação para ${params.to}:`, result.error);
 
     if (process.env.NODE_ENV !== 'production') {
-      // Helpful fallback during local development when Resend is not configured.
       console.info(`[Auth] Código de verificação para ${params.to}: ${params.code}`);
       return;
     }
     throw new Error(result.error || 'Falha ao enviar código de verificação');
+  } else {
+    console.log(`[Auth] Código de verificação enviado com sucesso para ${params.to}`);
   }
 }

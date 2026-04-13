@@ -21,11 +21,13 @@ export function VerifyEmailPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const email = useMemo(() => (params.get('email') || '').trim().toLowerCase(), [params]);
+  const initialVerificationId = useMemo(() => (params.get('verificationId') || '').trim(), [params]);
 
   const [status, setStatus] = useState<VerifyStatus>('idle');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [code, setCode] = useState('');
+  const [verificationId, setVerificationId] = useState(initialVerificationId);
 
   const [cooldown, setCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -78,6 +80,12 @@ export function VerifyEmailPage() {
     event.preventDefault();
     const normalizedCode = code.replace(/\D/g, '').slice(0, 6);
 
+    if (!verificationId) {
+      setStatus('error');
+      setErrorMessage('Solicite um novo código antes de validar.');
+      return;
+    }
+
     if (normalizedCode.length !== 6) {
       setStatus('error');
       setErrorMessage('Digite o código com 6 dígitos.');
@@ -89,7 +97,7 @@ export function VerifyEmailPage() {
     setErrorMessage('');
 
     try {
-      await authAPI.verifyCode(email, normalizedCode);
+      await authAPI.verifyCode(email, normalizedCode, verificationId);
       setStatus('success');
     } catch (err: any) {
       setStatus('error');
@@ -107,7 +115,10 @@ export function VerifyEmailPage() {
     startCooldown();
 
     try {
-      await authAPI.resendCode(email);
+      const { data } = await authAPI.resendCode(email);
+      if (data.verificationId) {
+        setVerificationId(data.verificationId);
+      }
     } catch (err: any) {
       setStatus('error');
       setErrorMessage(err?.response?.data?.error || 'Não foi possível reenviar o código agora.');

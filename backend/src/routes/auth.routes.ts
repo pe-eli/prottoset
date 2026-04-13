@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import slowDown from 'express-slow-down';
 import { consumeRateLimit } from '../security/rate-limit.store';
 import { loginSchema, registerSchema, resendVerificationSchema, verifyCodeSchema } from '../auth/schemas';
@@ -16,6 +17,7 @@ import { requireAuth } from '../middleware/auth.middleware';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
 import { requireCsrfToken, sendCsrfToken } from '../middleware/csrf.middleware';
+import { n8nVerificationService } from '../services/n8n-verification.service';
 
 const router = Router();
 
@@ -73,12 +75,10 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
   }
 
   const { email, password, name } = parsed.data;
+  let verificationId: string | null = null;
 
   const existing = await usersRepository.getByEmail(email);
   if (!existing) {
-    const code = generateVerificationCode();
-    const codeHash = await hashVerificationCode(code);
-    const expiresAt = getVerificationCodeExpiryDate();
     const passwordHash = await hashPassword(password);
     const createdUser = await usersRepository.create({
       email,
@@ -86,46 +86,80 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
       passwordHash,
       googleId: '',
       emailVerified: false,
-      verificationCodeHash: codeHash,
-      verificationCodeExpiresAt: expiresAt.toISOString(),
+      verificationCodeHash: null,
+      verificationCodeExpiresAt: null,
       role: 'member',
     });
 
-    try {
-      await sendVerificationCode({
-        to: createdUser.email,
-        displayName: createdUser.displayName,
-        code,
-      });
-    } catch (error) {
-      console.error('[Auth] Falha ao enviar código de verificação (registro):', error);
+    if (n8nVerificationService.enabled()) {
+      try {
+        const startResult = await n8nVerificationService.startVerification({
+          userId: createdUser.id,
+          email: createdUser.email,
+          displayName: createdUser.displayName,
+          requestId: randomUUID(),
+        });
+        verificationId = startResult.verificationId;
+      } catch (error) {
+        console.error('[Auth] Falha ao iniciar verificação no n8n (registro):', error);
+      }
+    } else {
+      const code = generateVerificationCode();
+      const codeHash = await hashVerificationCode(code);
+      const expiresAt = getVerificationCodeExpiryDate();
+      await usersRepository.setVerificationCode(createdUser.id, codeHash, expiresAt.toISOString());
+
+      try {
+        await sendVerificationCode({
+          to: createdUser.email,
+          displayName: createdUser.displayName,
+          code,
+        });
+      } catch (error) {
+        console.error('[Auth] Falha ao enviar código de verificação (registro):', error);
+      }
     }
   } else if (!existing.emailVerified) {
-    const code = generateVerificationCode();
-    const codeHash = await hashVerificationCode(code);
-    const expiresAt = getVerificationCodeExpiryDate();
-    await usersRepository.setVerificationCode(existing.id, codeHash, expiresAt.toISOString());
+    if (n8nVerificationService.enabled()) {
+      try {
+        const startResult = await n8nVerificationService.startVerification({
+          userId: existing.id,
+          email: existing.email,
+          displayName: existing.displayName,
+          requestId: randomUUID(),
+        });
+        verificationId = startResult.verificationId;
+      } catch (error) {
+        console.error('[Auth] Falha ao iniciar verificação no n8n (registro existente):', error);
+      }
+    } else {
+      const code = generateVerificationCode();
+      const codeHash = await hashVerificationCode(code);
+      const expiresAt = getVerificationCodeExpiryDate();
+      await usersRepository.setVerificationCode(existing.id, codeHash, expiresAt.toISOString());
 
-    try {
-      await sendVerificationCode({
-        to: existing.email,
-        displayName: existing.displayName,
-        code,
-      });
-    } catch (error) {
-      console.error('[Auth] Falha ao reenviar código de verificação (registro existente):', error);
+      try {
+        await sendVerificationCode({
+          to: existing.email,
+          displayName: existing.displayName,
+          code,
+        });
+      } catch (error) {
+        console.error('[Auth] Falha ao reenviar código de verificação (registro existente):', error);
+      }
     }
   }
 
   res.status(202).json({
     message: 'Se os dados forem válidos, você receberá um código de verificação por e-mail.',
     email: email,
+    verificationId: verificationId || randomUUID(),
   });
 }));
 
 // ─── POST /verify-code ───────────────────────────────────────────
 router.post('/verify-code', verifyCodeLimiter, asyncHandler(async (req, res) => {
-  console.log('[Auth] POST /verify-code body:', JSON.stringify({ email: req.body?.email, code: req.body?.code ? `${req.body.code.length} chars` : 'missing' }));
+  console.log('[Auth] POST /verify-code body:', JSON.stringify({ email: req.body?.email, verificationId: req.body?.verificationId, code: req.body?.code ? `${req.body.code.length} chars` : 'missing' }));
 
   const parsed = verifyCodeSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -134,12 +168,42 @@ router.post('/verify-code', verifyCodeLimiter, asyncHandler(async (req, res) => 
     return;
   }
 
-  const { email, code } = parsed.data;
+  const { email, code, verificationId } = parsed.data;
 
   const emailRateLimit = await consumeRateLimit(`auth-verify-code:email:${email}`, 10, 10 * 60 * 1000);
   if (!emailRateLimit.allowed) {
     res.setHeader('Retry-After', Math.ceil(emailRateLimit.retryAfterMs / 1000));
     res.status(429).json({ error: 'Muitas tentativas de validação. Tente novamente mais tarde.' });
+    return;
+  }
+
+  if (n8nVerificationService.enabled()) {
+    let validation: { valid: boolean; reason?: string };
+    try {
+      validation = await n8nVerificationService.validateCode({ verificationId, email, code });
+      console.log('[Auth] verify-code n8n resultado:', validation);
+    } catch (error) {
+      console.error('[Auth] Falha na validação de código via n8n:', error);
+      res.status(400).json({ error: 'Código inválido ou expirado. Solicite um novo código.' });
+      return;
+    }
+
+    if (!validation.valid) {
+      // Generic message to avoid user/account enumeration.
+      res.status(400).json({ error: 'Código inválido ou expirado. Solicite um novo código.' });
+      return;
+    }
+
+    const user = await usersRepository.getByEmail(email);
+    if (!user) {
+      res.status(400).json({ error: 'Código inválido ou expirado. Solicite um novo código.' });
+      return;
+    }
+
+    if (!user.emailVerified) {
+      await usersRepository.markEmailVerified(user.id);
+    }
+    res.json({ message: 'E-mail verificado com sucesso. Você já pode fazer login.' });
     return;
   }
 
@@ -149,7 +213,7 @@ router.post('/verify-code', verifyCodeLimiter, asyncHandler(async (req, res) => 
   const hasValidExpiry = !!user?.verificationCodeExpiresAt && new Date(user.verificationCodeExpiresAt).getTime() > Date.now();
   const canVerify = !!user && !user.emailVerified && codeMatch && hasValidExpiry;
 
-  console.log('[Auth] verify-code resultado:', { userFound: !!user, emailVerified: user?.emailVerified, codeMatch, hasValidExpiry, canVerify });
+  console.log('[Auth] verify-code resultado local:', { userFound: !!user, emailVerified: user?.emailVerified, codeMatch, hasValidExpiry, canVerify });
 
   if (!canVerify) {
     // Generic message to avoid user/account enumeration.
@@ -170,6 +234,7 @@ router.post('/resend-code', resendCodeLimiter, asyncHandler(async (req, res) => 
   }
 
   const { email } = parsed.data;
+  let verificationId: string = randomUUID();
   const emailRateLimit = await consumeRateLimit(`auth-resend-code:email:${email}`, 5, 60 * 60 * 1000);
   if (!emailRateLimit.allowed) {
     res.setHeader('Retry-After', Math.ceil(emailRateLimit.retryAfterMs / 1000));
@@ -180,24 +245,41 @@ router.post('/resend-code', resendCodeLimiter, asyncHandler(async (req, res) => 
   const user = await usersRepository.getByEmail(email);
 
   if (user && !user.emailVerified) {
-    const code = generateVerificationCode();
-    const codeHash = await hashVerificationCode(code);
-    const expiresAt = getVerificationCodeExpiryDate();
-    await usersRepository.setVerificationCode(user.id, codeHash, expiresAt.toISOString());
+    if (n8nVerificationService.enabled()) {
+      try {
+        const startResult = await n8nVerificationService.startVerification({
+          userId: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          requestId: randomUUID(),
+        });
+        verificationId = startResult.verificationId;
+      } catch (error) {
+        console.error('[Auth] Falha ao iniciar verificação no n8n (resend):', error);
+      }
+    } else {
+      const code = generateVerificationCode();
+      const codeHash = await hashVerificationCode(code);
+      const expiresAt = getVerificationCodeExpiryDate();
+      await usersRepository.setVerificationCode(user.id, codeHash, expiresAt.toISOString());
 
-    try {
-      await sendVerificationCode({
-        to: user.email,
-        displayName: user.displayName,
-        code,
-      });
-    } catch (error) {
-      console.error('[Auth] Falha ao reenviar código de verificação:', error);
+      try {
+        await sendVerificationCode({
+          to: user.email,
+          displayName: user.displayName,
+          code,
+        });
+      } catch (error) {
+        console.error('[Auth] Falha ao reenviar código de verificação:', error);
+      }
     }
   }
 
   // Generic response avoids user enumeration.
-  res.status(200).json({ message: 'Se existir uma conta pendente, um novo código será enviado.' });
+  res.status(200).json({
+    message: 'Se existir uma conta pendente, um novo código será enviado.',
+    verificationId,
+  });
 }));
 
 // ─── POST /login ─────────────────────────────────────────────────

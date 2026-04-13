@@ -50,7 +50,11 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       } else {
         const sanitizedName = name.trim().replace(/\s+/g, ' ');
         const { data } = await authAPI.register(sanitizedEmail, password, sanitizedName, acceptedTerms);
-        navigate(`/verify-email?email=${encodeURIComponent(data.email || sanitizedEmail)}`);
+        const verificationEmail = data.email || sanitizedEmail;
+        const verificationId = data.verificationId;
+        const query = new URLSearchParams({ email: verificationEmail });
+        if (verificationId) query.set('verificationId', verificationId);
+        navigate(`/verify-email?${query.toString()}`);
         return;
       }
     } catch (err: any) {

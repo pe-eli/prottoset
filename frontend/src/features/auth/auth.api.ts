@@ -15,6 +15,7 @@ export interface AuthResponse {
 export interface RegisterResponse {
   message: string;
   email?: string;
+  verificationId?: string;
 }
 
 export interface CsrfResponse {
@@ -30,8 +31,8 @@ export const authAPI = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }),
 
-  verifyCode: (email: string, code: string) =>
-    api.post<RegisterResponse>('/auth/verify-code', { email, code }),
+  verifyCode: (email: string, code: string, verificationId: string) =>
+    api.post<RegisterResponse>('/auth/verify-code', { email, code, verificationId }),
 
   resendCode: (email: string) =>
     api.post<RegisterResponse>('/auth/resend-code', { email }),

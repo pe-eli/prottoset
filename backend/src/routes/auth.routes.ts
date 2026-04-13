@@ -119,6 +119,7 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
 
   res.status(202).json({
     message: 'Se os dados forem válidos, você receberá um código de verificação por e-mail.',
+    email: email,
   });
 }));
 

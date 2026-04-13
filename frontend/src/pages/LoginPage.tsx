@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -12,6 +12,7 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onAuthenticated }: LoginPageProps) {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,11 +50,8 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       } else {
         const sanitizedName = name.trim().replace(/\s+/g, ' ');
         const { data } = await authAPI.register(sanitizedEmail, password, sanitizedName, acceptedTerms);
-        setNotice(`${data.message} Depois, acesse a tela de verificação para inserir o código recebido.`);
-        setMode('login');
-        setPassword('');
-        setConfirmPassword('');
-        setAcceptedTerms(false);
+        navigate(`/verify-email?email=${encodeURIComponent(data.email || sanitizedEmail)}`);
+        return;
       }
     } catch (err: any) {
       const msg = err?.response?.data?.error;

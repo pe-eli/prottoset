@@ -14,6 +14,7 @@ export interface AuthResponse {
 
 export interface RegisterResponse {
   message: string;
+  email?: string;
 }
 
 export interface CsrfResponse {

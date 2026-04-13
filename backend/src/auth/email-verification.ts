@@ -181,6 +181,9 @@ export async function sendVerificationCode(params: {
 
   const result = await resendService.sendEmail(params.to, subject, body, { html, text: body });
   if (!result.success) {
+    // Log the full error in any environment so operators can diagnose failures.
+    console.error(`[Auth] Falha ao enviar código de verificação para ${params.to}:`, result.error);
+
     if (process.env.NODE_ENV !== 'production') {
       // Helpful fallback during local development when Resend is not configured.
       console.info(`[Auth] Código de verificação para ${params.to}: ${params.code}`);

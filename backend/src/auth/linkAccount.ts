@@ -12,7 +12,7 @@ export async function findOrLinkAccount(profile: GoogleProfile): Promise<UserDoc
       throw new Error('Não é possível vincular conta: e-mail do Google não verificado');
     }
     await usersRepository.updateGoogleLink(byEmail.id, profile.sub);
-    return { ...byEmail, googleId: profile.sub, emailVerified: true };
+    return { ...byEmail, googleId: profile.sub };
   }
 
   return usersRepository.create({
@@ -20,7 +20,7 @@ export async function findOrLinkAccount(profile: GoogleProfile): Promise<UserDoc
     displayName: profile.name || profile.email.split('@')[0],
     passwordHash: '',
     googleId: profile.sub,
-    emailVerified: true,
+    emailVerified: false,
     role: 'member',
   });
 }

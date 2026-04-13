@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -15,10 +15,9 @@ function maskEmail(email: string): string {
   return `${maskedLocal}@${domain}`;
 }
 
-type VerifyStatus = 'idle' | 'success' | 'error';
+type VerifyStatus = 'idle' | 'error';
 
 export function VerifyEmailPage() {
-  const navigate = useNavigate();
   const [params] = useSearchParams();
   const email = useMemo(() => (params.get('email') || '').trim().toLowerCase(), [params]);
   const initialVerificationId = useMemo(() => (params.get('verificationId') || '').trim(), [params]);
@@ -98,7 +97,8 @@ export function VerifyEmailPage() {
 
     try {
       await authAPI.verifyCode(email, normalizedCode, verificationId);
-      setStatus('success');
+      window.location.href = '/home';
+      return;
     } catch (err: any) {
       setStatus('error');
       setErrorMessage(err?.response?.data?.error || 'Código inválido ou expirado. Solicite um novo código.');
@@ -131,53 +131,42 @@ export function VerifyEmailPage() {
         <Card className="text-center" gradient>
           <h1 className="text-xl font-bold text-brand-950 mb-2">Confirmar e-mail</h1>
 
-          {status === 'success' ? (
-            <>
-              <p className="text-sm text-green-600 mb-5">E-mail verificado com sucesso!</p>
-              <Button className="w-full" onClick={() => navigate('/login')}>
-                Ir para login
-              </Button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-brand-500 mb-1">
-                Um código de verificação foi enviado para o e-mail <strong>{maskEmail(email)}</strong>.
-              </p>
-              <p className="text-xs text-brand-400 mb-5">Verifique também a caixa de spam.</p>
+          <p className="text-sm text-brand-500 mb-1">
+            Um código de verificação foi enviado para o e-mail <strong>{maskEmail(email)}</strong>.
+          </p>
+          <p className="text-xs text-brand-400 mb-5">Verifique também a caixa de spam.</p>
 
-              {status === 'error' && errorMessage && (
-                <p className="text-sm text-red-600 mb-3">{errorMessage}</p>
-              )}
-
-              <form className="space-y-3 text-left" onSubmit={submitVerification}>
-                <Input
-                  label="Código (6 dígitos)"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  autoFocus
-                  required
-                />
-
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Validando...' : 'Verificar código'}
-                </Button>
-              </form>
-
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={resendCode}
-                  disabled={cooldown > 0}
-                  className="text-sm text-brand-700 hover:underline disabled:opacity-60 disabled:no-underline disabled:cursor-default"
-                >
-                  {cooldown > 0 ? `Reenviar código (${cooldown}s)` : 'Reenviar código'}
-                </button>
-              </div>
-            </>
+          {status === 'error' && errorMessage && (
+            <p className="text-sm text-red-600 mb-3">{errorMessage}</p>
           )}
+
+          <form className="space-y-3 text-left" onSubmit={submitVerification}>
+            <Input
+              label="Código (6 dígitos)"
+              inputMode="numeric"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              autoFocus
+              required
+            />
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Validando...' : 'Verificar código'}
+            </Button>
+          </form>
+
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={resendCode}
+              disabled={cooldown > 0}
+              className="text-sm text-brand-700 hover:underline disabled:opacity-60 disabled:no-underline disabled:cursor-default"
+            >
+              {cooldown > 0 ? `Reenviar código (${cooldown}s)` : 'Reenviar código'}
+            </button>
+          </div>
         </Card>
       </div>
     </div>

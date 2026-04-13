@@ -220,10 +220,6 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
                 <button type="button" onClick={switchMode} className="text-brand-600 hover:underline font-medium">
                   Criar conta
                 </button>
-                {' '}•{' '}
-                <Link to="/verify-email" className="text-brand-600 hover:underline font-medium">
-                  Verificar e-mail
-                </Link>
               </>
             ) : (
               <>

@@ -64,6 +64,29 @@ const resendCodeLimiter = createSecurityRateLimit({
   ip: { limit: 10, windowMs: 60 * 60 * 1000 },
 });
 
+async function startVerificationForUser(user: { id: string; email: string; displayName: string }): Promise<string> {
+  if (n8nVerificationService.enabled()) {
+    const startResult = await n8nVerificationService.startVerification({
+      userId: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      requestId: randomUUID(),
+    });
+    return startResult.verificationId;
+  }
+
+  const code = generateVerificationCode();
+  const codeHash = await hashVerificationCode(code);
+  const expiresAt = getVerificationCodeExpiryDate();
+  await usersRepository.setVerificationCode(user.id, codeHash, expiresAt.toISOString());
+  await sendVerificationCode({
+    to: user.email,
+    displayName: user.displayName,
+    code,
+  });
+  return randomUUID();
+}
+
 router.get('/csrf', authLimiter, sendCsrfToken);
 
 // ─── POST /register ──────────────────────────────────────────────
@@ -203,7 +226,8 @@ router.post('/verify-code', verifyCodeLimiter, asyncHandler(async (req, res) => 
     if (!user.emailVerified) {
       await usersRepository.markEmailVerified(user.id);
     }
-    res.json({ message: 'E-mail verificado com sucesso. Você já pode fazer login.' });
+    await authService.issueSession(res, user.emailVerified ? user : { ...user, emailVerified: true });
+    res.json({ message: 'E-mail verificado com sucesso.' });
     return;
   }
 
@@ -222,7 +246,8 @@ router.post('/verify-code', verifyCodeLimiter, asyncHandler(async (req, res) => 
   }
 
   await usersRepository.markEmailVerified(user.id);
-  res.json({ message: 'E-mail verificado com sucesso. Você já pode fazer login.' });
+  await authService.issueSession(res, { ...user, emailVerified: true });
+  res.json({ message: 'E-mail verificado com sucesso.' });
 }));
 
 // ─── POST /resend-code ───────────────────────────────────
@@ -460,6 +485,21 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
   const { idToken } = await exchangeCodeForTokens(code, stored.codeVerifier);
   const profile = await verifyGoogleIdToken(idToken);
   const user = await findOrLinkAccount(profile);
+
+  if (!user.emailVerified) {
+    let verificationId: string = randomUUID();
+    try {
+      verificationId = await startVerificationForUser(user);
+    } catch (error) {
+      console.error('[Auth] Falha ao iniciar verificação após login Google:', error);
+    }
+
+    const verifyUrl = new URL('/verify-email', authConfig.clientUrl());
+    verifyUrl.searchParams.set('email', user.email);
+    verifyUrl.searchParams.set('verificationId', verificationId);
+    res.redirect(verifyUrl.toString());
+    return;
+  }
 
   await authService.issueSession(res, user);
   res.redirect(authConfig.clientUrl());

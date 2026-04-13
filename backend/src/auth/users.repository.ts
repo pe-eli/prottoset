@@ -102,7 +102,7 @@ export const usersRepository = {
 
   async updateGoogleLink(id: string, googleId: string): Promise<void> {
     await query(
-      'UPDATE users SET google_id = $1, email_verified = true, updated_at = now() WHERE id = $2',
+      'UPDATE users SET google_id = $1, updated_at = now() WHERE id = $2',
       [googleId, id],
     );
   },

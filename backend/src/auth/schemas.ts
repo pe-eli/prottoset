@@ -16,7 +16,7 @@ export const resendVerificationSchema = z.object({
   email: z.string().email('E-mail inválido').max(255).transform((v) => v.toLowerCase().trim()),
 });
 
-export const verifyEmailQuerySchema = z.object({
+export const verifyCodeSchema = z.object({
   email: z.string().email('E-mail inválido').max(255).transform((v) => v.toLowerCase().trim()),
-  token: z.string().min(32).max(256),
+  code: z.string().regex(/^\d{6}$/, 'Código inválido. Informe 6 dígitos.'),
 });

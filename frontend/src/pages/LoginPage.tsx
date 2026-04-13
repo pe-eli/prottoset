@@ -49,7 +49,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       } else {
         const sanitizedName = name.trim().replace(/\s+/g, ' ');
         const { data } = await authAPI.register(sanitizedEmail, password, sanitizedName, acceptedTerms);
-        setNotice(data.message);
+        setNotice(`${data.message} Depois, acesse a tela de verificação para inserir o código recebido.`);
         setMode('login');
         setPassword('');
         setConfirmPassword('');
@@ -218,6 +218,10 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
                 <button type="button" onClick={switchMode} className="text-brand-600 hover:underline font-medium">
                   Criar conta
                 </button>
+                {' '}•{' '}
+                <Link to="/verify-email" className="text-brand-600 hover:underline font-medium">
+                  Verificar e-mail
+                </Link>
               </>
             ) : (
               <>

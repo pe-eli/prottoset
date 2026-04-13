@@ -66,15 +66,19 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL DEFAULT '',
   google_id TEXT UNIQUE,
   email_verified BOOLEAN NOT NULL DEFAULT false,
-  verification_token_hash TEXT,
-  verification_expires_at TIMESTAMPTZ,
+  verification_code_hash TEXT,
+  verification_code_expires_at TIMESTAMPTZ,
   role user_role NOT NULL DEFAULT 'member',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_hash TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_expires_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code_expires_at TIMESTAMPTZ;
+
+-- Backward compatibility for instances that still have token-based columns.
+ALTER TABLE users DROP COLUMN IF EXISTS verification_token_hash;
+ALTER TABLE users DROP COLUMN IF EXISTS verification_expires_at;
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON users (google_id) WHERE google_id IS NOT NULL;

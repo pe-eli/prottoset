@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import slowDown from 'express-slow-down';
-import { loginSchema, registerSchema, resendVerificationSchema, verifyEmailQuerySchema } from '../auth/schemas';
+import { consumeRateLimit } from '../security/rate-limit.store';
+import { loginSchema, registerSchema, resendVerificationSchema, verifyCodeSchema } from '../auth/schemas';
 import { authService } from '../auth/auth.service';
 import { hashPassword, verifyPassword } from '../auth/password';
 import { hashToken } from '../auth/tokens';
 import { usersRepository } from '../auth/users.repository';
-import { generateEmailVerificationToken, getVerificationExpiryDate, safeTokenHashEqual, sendVerificationEmail } from '../auth/email-verification';
+import { generateVerificationCode, getVerificationCodeExpiryDate, hashVerificationCode, safeCompareVerificationCode, sendVerificationCode } from '../auth/email-verification';
 import { refreshTokensRepository } from '../auth/refresh-tokens.repository';
 import { authConfig, REFRESH_COOKIE, OAUTH_STATE_COOKIE } from '../auth/auth.config';
 import { generateState, generateCodeVerifier, generateCodeChallenge, buildAuthorizationUrl } from '../auth/pkce';
@@ -49,16 +50,16 @@ const refreshLimiter = createSecurityRateLimit({
   user: { limit: 30, windowMs: 15 * 60 * 1000 },
 });
 
-const verifyEmailLimiter = createSecurityRateLimit({
-  name: 'auth-verify-email',
+const verifyCodeLimiter = createSecurityRateLimit({
+  name: 'auth-verify-code',
   message: 'Muitas tentativas de validação. Tente novamente mais tarde.',
   ip: { limit: 30, windowMs: 10 * 60 * 1000 },
 });
 
-const resendVerificationLimiter = createSecurityRateLimit({
-  name: 'auth-resend-verification',
+const resendCodeLimiter = createSecurityRateLimit({
+  name: 'auth-resend-code',
   message: 'Muitas solicitações. Aguarde antes de tentar novamente.',
-  ip: { limit: 5, windowMs: 15 * 60 * 1000 },
+  ip: { limit: 3, windowMs: 60 * 60 * 1000 },
 });
 
 router.get('/csrf', authLimiter, sendCsrfToken);
@@ -75,8 +76,9 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
 
   const existing = await usersRepository.getByEmail(email);
   if (!existing) {
-    const { rawToken, tokenHash } = generateEmailVerificationToken();
-    const expiresAt = getVerificationExpiryDate();
+    const code = generateVerificationCode();
+    const codeHash = await hashVerificationCode(code);
+    const expiresAt = getVerificationCodeExpiryDate();
     const passwordHash = await hashPassword(password);
     const createdUser = await usersRepository.create({
       email,
@@ -84,58 +86,68 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
       passwordHash,
       googleId: '',
       emailVerified: false,
-      verificationTokenHash: tokenHash,
-      verificationExpiresAt: expiresAt.toISOString(),
+      verificationCodeHash: codeHash,
+      verificationCodeExpiresAt: expiresAt.toISOString(),
       role: 'member',
     });
 
     try {
-      await sendVerificationEmail({
+      await sendVerificationCode({
         to: createdUser.email,
         displayName: createdUser.displayName,
-        rawToken,
+        code,
       });
     } catch (error) {
-      console.error('[Auth] Falha ao enviar e-mail de verificação (registro):', error);
+      console.error('[Auth] Falha ao enviar código de verificação (registro):', error);
     }
   } else if (!existing.emailVerified) {
-    const { rawToken, tokenHash } = generateEmailVerificationToken();
-    const expiresAt = getVerificationExpiryDate();
-    await usersRepository.setVerificationToken(existing.id, tokenHash, expiresAt.toISOString());
+    const code = generateVerificationCode();
+    const codeHash = await hashVerificationCode(code);
+    const expiresAt = getVerificationCodeExpiryDate();
+    await usersRepository.setVerificationCode(existing.id, codeHash, expiresAt.toISOString());
 
     try {
-      await sendVerificationEmail({
+      await sendVerificationCode({
         to: existing.email,
         displayName: existing.displayName,
-        rawToken,
+        code,
       });
     } catch (error) {
-      console.error('[Auth] Falha ao reenviar e-mail de verificação (registro existente):', error);
+      console.error('[Auth] Falha ao reenviar código de verificação (registro existente):', error);
     }
   }
 
   res.status(202).json({
-    message: 'Se os dados forem válidos, você receberá um e-mail para confirmar sua conta.',
+    message: 'Se os dados forem válidos, você receberá um código de verificação por e-mail.',
   });
 }));
 
-// ─── GET /verify-email ───────────────────────────────────────────
-router.get('/verify-email', verifyEmailLimiter, asyncHandler(async (req, res) => {
-  const parsed = verifyEmailQuerySchema.safeParse(req.query);
+// ─── POST /verify-code ───────────────────────────────────────────
+router.post('/verify-code', verifyCodeLimiter, asyncHandler(async (req, res) => {
+  const parsed = verifyCodeSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Link de verificação inválido.' });
+    res.status(400).json({ error: parsed.error.issues[0].message });
     return;
   }
 
-  const { email, token } = parsed.data;
+  const { email, code } = parsed.data;
+
+  const emailRateLimit = await consumeRateLimit(`auth-verify-code:email:${email}`, 10, 10 * 60 * 1000);
+  if (!emailRateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil(emailRateLimit.retryAfterMs / 1000));
+    res.status(429).json({ error: 'Muitas tentativas de validação. Tente novamente mais tarde.' });
+    return;
+  }
+
   const user = await usersRepository.getByEmail(email);
 
-  const tokenMatch = safeTokenHashEqual(user?.verificationTokenHash ?? null, token);
-  const hasValidExpiry = !!user?.verificationExpiresAt && new Date(user.verificationExpiresAt).getTime() > Date.now();
-  const canVerify = !!user && !user.emailVerified && tokenMatch && hasValidExpiry;
+  const codeMatch = await safeCompareVerificationCode(user?.verificationCodeHash ?? null, code);
+  const hasValidExpiry = !!user?.verificationCodeExpiresAt && new Date(user.verificationCodeExpiresAt).getTime() > Date.now();
+  const canVerify = !!user && !user.emailVerified && codeMatch && hasValidExpiry;
 
   if (!canVerify) {
-    res.status(400).json({ error: 'Link inválido ou expirado. Solicite um novo e-mail de verificação.' });
+    // Generic message to avoid user/account enumeration.
+    res.status(400).json({ error: 'Código inválido ou expirado. Solicite um novo código.' });
     return;
   }
 
@@ -143,35 +155,43 @@ router.get('/verify-email', verifyEmailLimiter, asyncHandler(async (req, res) =>
   res.json({ message: 'E-mail verificado com sucesso. Você já pode fazer login.' });
 }));
 
-// ─── POST /resend-verification ───────────────────────────────────
-router.post('/resend-verification', resendVerificationLimiter, asyncHandler(async (req, res) => {
+// ─── POST /resend-code ───────────────────────────────────
+router.post('/resend-code', resendCodeLimiter, asyncHandler(async (req, res) => {
   const parsed = resendVerificationSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(200).json({ message: 'Se existir uma conta pendente, um novo e-mail será enviado.' });
+    res.status(200).json({ message: 'Se existir uma conta pendente, um novo código será enviado.' });
     return;
   }
 
   const { email } = parsed.data;
+  const emailRateLimit = await consumeRateLimit(`auth-resend-code:email:${email}`, 3, 60 * 60 * 1000);
+  if (!emailRateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil(emailRateLimit.retryAfterMs / 1000));
+    res.status(429).json({ error: 'Muitas solicitações. Aguarde antes de tentar novamente.' });
+    return;
+  }
+
   const user = await usersRepository.getByEmail(email);
 
   if (user && !user.emailVerified) {
-    const { rawToken, tokenHash } = generateEmailVerificationToken();
-    const expiresAt = getVerificationExpiryDate();
-    await usersRepository.setVerificationToken(user.id, tokenHash, expiresAt.toISOString());
+    const code = generateVerificationCode();
+    const codeHash = await hashVerificationCode(code);
+    const expiresAt = getVerificationCodeExpiryDate();
+    await usersRepository.setVerificationCode(user.id, codeHash, expiresAt.toISOString());
 
     try {
-      await sendVerificationEmail({
+      await sendVerificationCode({
         to: user.email,
         displayName: user.displayName,
-        rawToken,
+        code,
       });
     } catch (error) {
-      console.error('[Auth] Falha ao reenviar e-mail de verificação:', error);
+      console.error('[Auth] Falha ao reenviar código de verificação:', error);
     }
   }
 
   // Generic response avoids user enumeration.
-  res.status(200).json({ message: 'Se existir uma conta pendente, um novo e-mail será enviado.' });
+  res.status(200).json({ message: 'Se existir uma conta pendente, um novo código será enviado.' });
 }));
 
 // ─── POST /login ─────────────────────────────────────────────────

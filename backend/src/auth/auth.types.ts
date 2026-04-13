@@ -5,8 +5,8 @@ export interface UserDoc {
   passwordHash: string;
   googleId: string;
   emailVerified: boolean;
-  verificationTokenHash: string | null;
-  verificationExpiresAt: string | null;
+  verificationCodeHash: string | null;
+  verificationCodeExpiresAt: string | null;
   role: 'owner' | 'member';
   createdAt: string;
   updatedAt: string;

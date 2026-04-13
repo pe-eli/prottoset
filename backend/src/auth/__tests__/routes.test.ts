@@ -45,8 +45,8 @@ vi.mock('../users.repository', () => ({
         ...data,
         id,
         emailVerified: data.emailVerified ?? false,
-        verificationTokenHash: data.verificationTokenHash ?? null,
-        verificationExpiresAt: data.verificationExpiresAt ?? null,
+        verificationCodeHash: data.verificationCodeHash ?? null,
+        verificationCodeExpiresAt: data.verificationCodeExpiresAt ?? null,
         createdAt: now,
         updatedAt: now,
       };
@@ -59,17 +59,17 @@ vi.mock('../users.repository', () => ({
         usersStore[id].emailVerified = true;
       }
     }),
-    setVerificationToken: vi.fn(async (id: string, tokenHash: string, expiresAt: string) => {
+    setVerificationCode: vi.fn(async (id: string, codeHash: string, expiresAt: string) => {
       if (usersStore[id]) {
-        usersStore[id].verificationTokenHash = tokenHash;
-        usersStore[id].verificationExpiresAt = expiresAt;
+        usersStore[id].verificationCodeHash = codeHash;
+        usersStore[id].verificationCodeExpiresAt = expiresAt;
       }
     }),
     markEmailVerified: vi.fn(async (id: string) => {
       if (usersStore[id]) {
         usersStore[id].emailVerified = true;
-        usersStore[id].verificationTokenHash = null;
-        usersStore[id].verificationExpiresAt = null;
+        usersStore[id].verificationCodeHash = null;
+        usersStore[id].verificationCodeExpiresAt = null;
       }
     }),
   },
@@ -124,11 +124,11 @@ vi.mock('../../services/turnstile.service', () => ({
 }));
 
 vi.mock('../../auth/email-verification', () => ({
-  generateEmailVerificationToken: vi.fn(() => ({ rawToken: 'raw-token-123', tokenHash: 'hash-123' })),
-  getVerificationExpiryDate: vi.fn(() => new Date(Date.now() + 24 * 60 * 60 * 1000)),
-  safeTokenHashEqual: vi.fn(() => true),
-  sendVerificationEmail: vi.fn(async () => {}),
-  hashEmailVerificationToken: vi.fn(() => 'hash-123'),
+  generateVerificationCode: vi.fn(() => '123456'),
+  getVerificationCodeExpiryDate: vi.fn(() => new Date(Date.now() + 15 * 60 * 1000)),
+  safeCompareVerificationCode: vi.fn(async () => true),
+  sendVerificationCode: vi.fn(async () => {}),
+  hashVerificationCode: vi.fn(async () => 'hash-123'),
 }));
 
 import authRoutes from '../../routes/auth.routes';
@@ -189,8 +189,8 @@ describe('auth routes', () => {
         passwordHash: hash,
         googleId: '',
         emailVerified: false,
-        verificationTokenHash: null,
-        verificationExpiresAt: null,
+        verificationCodeHash: null,
+        verificationCodeExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -215,8 +215,8 @@ describe('auth routes', () => {
         passwordHash: hash,
         googleId: '',
         emailVerified: true,
-        verificationTokenHash: null,
-        verificationExpiresAt: null,
+        verificationCodeHash: null,
+        verificationCodeExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -281,8 +281,8 @@ describe('auth routes', () => {
         passwordHash: hash,
         googleId: '',
         emailVerified: true,
-        verificationTokenHash: null,
-        verificationExpiresAt: null,
+        verificationCodeHash: null,
+        verificationCodeExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -322,8 +322,8 @@ describe('auth routes', () => {
         passwordHash: hash,
         googleId: '',
         emailVerified: true,
-        verificationTokenHash: null,
-        verificationExpiresAt: null,
+        verificationCodeHash: null,
+        verificationCodeExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -354,8 +354,8 @@ describe('auth routes', () => {
         passwordHash: hash,
         googleId: '',
         emailVerified: true,
-        verificationTokenHash: null,
-        verificationExpiresAt: null,
+        verificationCodeHash: null,
+        verificationCodeExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -399,8 +399,8 @@ describe('auth routes', () => {
         passwordHash: hash,
         googleId: '',
         emailVerified: true,
-        verificationTokenHash: null,
-        verificationExpiresAt: null,
+        verificationCodeHash: null,
+        verificationCodeExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

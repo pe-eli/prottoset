@@ -29,11 +29,11 @@ export const authAPI = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }),
 
-  verifyEmail: (email: string, token: string) =>
-    api.get<RegisterResponse>('/auth/verify-email', { params: { email, token } }),
+  verifyCode: (email: string, code: string) =>
+    api.post<RegisterResponse>('/auth/verify-code', { email, code }),
 
-  resendVerification: (email: string) =>
-    api.post<RegisterResponse>('/auth/resend-verification', { email }),
+  resendCode: (email: string) =>
+    api.post<RegisterResponse>('/auth/resend-code', { email }),
 
   logout: () => api.post('/auth/logout'),
 

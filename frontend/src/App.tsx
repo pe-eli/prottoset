@@ -8,7 +8,6 @@ import { authAPI } from './features/auth/auth.api';
 import type { AuthUser } from './features/auth/auth.api';
 import { LandingPage } from './pages/LandingPage';
 import { HomePage } from './pages/HomePage';
-import { NewQuotePage } from './pages/NewQuotePage';
 import { PackagesQuotePage } from './pages/PackagesQuotePage';
 import { LeadsHub } from './pages/LeadsHub';
 import { LeadsDashboard } from './pages/LeadsDashboard';
@@ -20,6 +19,9 @@ import { DailyEntryPage } from './pages/DailyEntryPage';
 import { WeeklyViewPage } from './pages/WeeklyViewPage';
 import { SchedulePage } from './pages/SchedulePage';
 import { LoginPage } from './pages/LoginPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
+import { TermsOfUsePage } from './pages/TermsOfUsePage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 
 interface ProtectedLayoutProps {
   user: AuthUser;
@@ -89,6 +91,9 @@ function App() {
               path="/login"
               element={user ? <Navigate to="/home" replace /> : <LoginPage onAuthenticated={(u) => setUser(u)} />}
             />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
+            <Route path="/termos-de-uso" element={<TermsOfUsePage />} />
             <Route path="/landing" element={<Navigate to="/" replace />} />
 
             <Route
@@ -99,7 +104,7 @@ function App() {
               }
             >
               <Route path="/home" element={<HomePage />} />
-              <Route path="/novo" element={<NewQuotePage />} />
+              <Route path="/novo" element={<Navigate to="/pacotes" replace />} />
               <Route path="/pacotes" element={<PackagesQuotePage />} />
               <Route path="/leads" element={<LeadsHub />} />
               <Route path="/leads/prospeccao" element={<LeadsDashboard />} />

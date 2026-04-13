@@ -15,6 +15,18 @@ const FEATURES = [
     shadowColor: 'shadow-blue-500/20',
   },
   {
+    path: '/leads/contatos',
+    title: 'Contatos',
+    description: 'Gerencie seus potenciais clientes e acompanhe o progresso',
+    icon: (
+      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    ),
+    color: 'from-slate-500 to-slate-400',
+    shadowColor: 'shadow-slate-500/20',
+  },
+  {
     path: '/leads/disparos',
     title: 'Disparo de E-mails',
     description: 'Envie e-mails em massa com templates personalizados',
@@ -38,18 +50,6 @@ const FEATURES = [
     color: 'from-emerald-500 to-green-400',
     shadowColor: 'shadow-emerald-500/20',
   },
-  {
-    path: '/leads/contatos',
-    title: 'Contatos',
-    description: 'Gerencie seus potenciais clientes e acompanhe o progresso',
-    icon: (
-      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-      </svg>
-    ),
-    color: 'from-slate-500 to-slate-400',
-    shadowColor: 'shadow-slate-500/20',
-  },
 ];
 
 export function LeadsHub() {
@@ -72,28 +72,30 @@ export function LeadsHub() {
       </div>
 
       {/* Feature cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {FEATURES.map((feature) => (
-          <Link key={feature.path} to={feature.path}>
-            <Card hover className="h-full group">
-              <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-lg ${feature.shadowColor} mb-5 group-hover:scale-105 transition-transform duration-300`}>
-                {feature.icon}
-              </div>
-              <h3 className="text-lg font-bold text-brand-950 mb-1.5 group-hover:text-brand-600 transition-colors">
-                {feature.title}
-              </h3>
-              <p className="text-sm text-brand-400 leading-relaxed">
-                {feature.description}
-              </p>
-              <div className="mt-4 flex items-center gap-1.5 text-brand-500 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <span>Acessar</span>
-                <svg className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </Card>
-          </Link>
-        ))}
+      <div className="flex justify-center">
+        <div className="grid grid-cols-1 sm:grid-cols-2 w-full max-w-2xl gap-6">
+          {FEATURES.map((feature) => (
+            <Link key={feature.path} to={feature.path}>
+              <Card hover className="h-full group">
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-lg ${feature.shadowColor} mb-5 group-hover:scale-105 transition-transform duration-300`}>
+                  {feature.icon}
+                </div>
+                <h3 className="text-lg font-bold text-brand-950 mb-1.5 group-hover:text-brand-600 transition-colors">
+                  {feature.title}
+                </h3>
+                <p className="text-sm text-brand-400 leading-relaxed">
+                  {feature.description}
+                </p>
+                <div className="mt-4 flex items-center gap-1.5 text-brand-500 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <span>Acessar</span>
+                  <svg className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import { authAPI } from '../../features/auth/auth.api';
 import type { AuthUser } from '../../features/auth/auth.api';
 
 const NAV_ITEMS = [
-  { path: '/home', label: 'Orcamentos' },
+  { path: '/home', label: 'Orçamentos' },
   { path: '/leads', label: 'Leads' },
   { path: '/produtividade', label: 'Produtividade' },
 ];
@@ -50,7 +50,7 @@ export function Header({ user, onLogout }: HeaderProps) {
             {NAV_ITEMS.map((item) => {
               const isActive =
                 item.path === '/home'
-                  ? location.pathname === '/home' || location.pathname === '/novo' || location.pathname === '/pacotes'
+                  ? location.pathname === '/home' || location.pathname === '/pacotes'
                   : location.pathname.startsWith(item.path);
               return (
                 <Link

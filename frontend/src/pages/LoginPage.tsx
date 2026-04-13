@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -11,52 +12,17 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onAuthenticated }: LoginPageProps) {
-  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || '';
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState('');
-  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
-  const captchaWidgetRef = useRef<string | number | null>(null);
-
-  useEffect(() => {
-    if (mode !== 'register' || !turnstileSiteKey || !captchaContainerRef.current) {
-      return;
-    }
-
-    let attempts = 0;
-    const timer = window.setInterval(() => {
-      attempts += 1;
-      if (!window.turnstile || !captchaContainerRef.current) {
-        if (attempts > 40) {
-          window.clearInterval(timer);
-          setError('Falha ao carregar o CAPTCHA. Recarregue a página.');
-        }
-        return;
-      }
-
-      window.clearInterval(timer);
-      captchaContainerRef.current.innerHTML = '';
-      captchaWidgetRef.current = window.turnstile.render(captchaContainerRef.current, {
-        sitekey: turnstileSiteKey,
-        callback: (token: string) => {
-          setCaptchaToken(token);
-          setError(null);
-        },
-        'expired-callback': () => setCaptchaToken(''),
-        'error-callback': () => setCaptchaToken(''),
-      });
-    }, 250);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [mode, turnstileSiteKey]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -68,32 +34,26 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       return;
     }
 
-    if (mode === 'register' && !turnstileSiteKey) {
-      setError('Cadastro indisponível: CAPTCHA não configurado.');
-      return;
-    }
-
-    if (mode === 'register' && !captchaToken) {
-      setError('Conclua o CAPTCHA antes de continuar.');
+    if (mode === 'register' && !acceptedTerms) {
+      setError('Você precisa concordar com os Termos de Uso e Política de Privacidade.');
       return;
     }
 
     setLoading(true);
 
     try {
+      const sanitizedEmail = email.trim().toLowerCase();
       if (mode === 'login') {
-        const { data } = await authAPI.login(email.trim(), password);
+        const { data } = await authAPI.login(sanitizedEmail, password);
         onAuthenticated(data.user);
       } else {
-        const { data } = await authAPI.register(email.trim(), password, name.trim(), captchaToken);
+        const sanitizedName = name.trim().replace(/\s+/g, ' ');
+        const { data } = await authAPI.register(sanitizedEmail, password, sanitizedName, acceptedTerms);
         setNotice(data.message);
         setMode('login');
         setPassword('');
         setConfirmPassword('');
-        setCaptchaToken('');
-        if (window.turnstile && captchaWidgetRef.current !== null) {
-          window.turnstile.reset(captchaWidgetRef.current);
-        }
+        setAcceptedTerms(false);
       }
     } catch (err: any) {
       const msg = err?.response?.data?.error;
@@ -107,7 +67,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     setMode(mode === 'login' ? 'register' : 'login');
     setError(null);
     setNotice(null);
-    setCaptchaToken('');
+    setAcceptedTerms(false);
   };
 
   return (
@@ -148,25 +108,61 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
             />
             <Input
               label="Senha"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               required
               minLength={mode === 'register' ? 10 : undefined}
             />
-            {mode === 'register' && (
-              <Input
-                label="Confirmar Senha"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-                required
+            <label className="flex items-center gap-2 text-xs text-brand-500 -mt-1">
+              <input
+                type="checkbox"
+                checked={showPassword}
+                onChange={(e) => setShowPassword(e.target.checked)}
               />
+              Mostrar senha
+            </label>
+            {mode === 'register' && (
+              <>
+                <Input
+                  label="Confirmar Senha"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+                <label className="flex items-center gap-2 text-xs text-brand-500 -mt-1">
+                  <input
+                    type="checkbox"
+                    checked={showConfirmPassword}
+                    onChange={(e) => setShowConfirmPassword(e.target.checked)}
+                  />
+                  Mostrar confirmação de senha
+                </label>
+                <label className="flex items-start gap-2 text-xs text-brand-500 leading-relaxed">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="mt-0.5"
+                    required
+                  />
+                  <span>
+                    Concordo com os{' '}
+                    <Link to="/termos-de-uso" className="text-brand-700 font-medium hover:underline">
+                      Termos de Uso
+                    </Link>{' '}
+                    e com a{' '}
+                    <Link to="/politica-de-privacidade" className="text-brand-700 font-medium hover:underline">
+                      Política de Privacidade
+                    </Link>
+                    .
+                  </span>
+                </label>
+              </>
             )}
-
-            {mode === 'register' ? <div ref={captchaContainerRef} className="min-h-16" /> : null}
 
             {error ? (
               <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>

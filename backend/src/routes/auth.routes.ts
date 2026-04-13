@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import slowDown from 'express-slow-down';
-import { loginSchema, registerSchema } from '../auth/schemas';
+import { loginSchema, registerSchema, resendVerificationSchema, verifyEmailQuerySchema } from '../auth/schemas';
 import { authService } from '../auth/auth.service';
 import { hashPassword, verifyPassword } from '../auth/password';
 import { hashToken } from '../auth/tokens';
 import { usersRepository } from '../auth/users.repository';
+import { generateEmailVerificationToken, getVerificationExpiryDate, safeTokenHashEqual, sendVerificationEmail } from '../auth/email-verification';
 import { refreshTokensRepository } from '../auth/refresh-tokens.repository';
 import { authConfig, REFRESH_COOKIE, OAUTH_STATE_COOKIE } from '../auth/auth.config';
 import { generateState, generateCodeVerifier, generateCodeChallenge, buildAuthorizationUrl } from '../auth/pkce';
@@ -14,7 +15,6 @@ import { requireAuth } from '../middleware/auth.middleware';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
 import { requireCsrfToken, sendCsrfToken } from '../middleware/csrf.middleware';
-import { turnstileService } from '../services/turnstile.service';
 
 const router = Router();
 
@@ -49,6 +49,18 @@ const refreshLimiter = createSecurityRateLimit({
   user: { limit: 30, windowMs: 15 * 60 * 1000 },
 });
 
+const verifyEmailLimiter = createSecurityRateLimit({
+  name: 'auth-verify-email',
+  message: 'Muitas tentativas de validação. Tente novamente mais tarde.',
+  ip: { limit: 30, windowMs: 10 * 60 * 1000 },
+});
+
+const resendVerificationLimiter = createSecurityRateLimit({
+  name: 'auth-resend-verification',
+  message: 'Muitas solicitações. Aguarde antes de tentar novamente.',
+  ip: { limit: 5, windowMs: 15 * 60 * 1000 },
+});
+
 router.get('/csrf', authLimiter, sendCsrfToken);
 
 // ─── POST /register ──────────────────────────────────────────────
@@ -59,30 +71,107 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
     return;
   }
 
-  const { email, password, name, captchaToken } = parsed.data;
-
-  const captchaValid = await turnstileService.verify(captchaToken, req.ip);
-  if (!captchaValid) {
-    res.status(400).json({ error: 'Captcha inválido' });
-    return;
-  }
+  const { email, password, name } = parsed.data;
 
   const existing = await usersRepository.getByEmail(email);
   if (!existing) {
+    const { rawToken, tokenHash } = generateEmailVerificationToken();
+    const expiresAt = getVerificationExpiryDate();
     const passwordHash = await hashPassword(password);
-    await usersRepository.create({
+    const createdUser = await usersRepository.create({
       email,
       displayName: name,
       passwordHash,
       googleId: '',
       emailVerified: false,
+      verificationTokenHash: tokenHash,
+      verificationExpiresAt: expiresAt.toISOString(),
       role: 'member',
     });
+
+    try {
+      await sendVerificationEmail({
+        to: createdUser.email,
+        displayName: createdUser.displayName,
+        rawToken,
+      });
+    } catch (error) {
+      console.error('[Auth] Falha ao enviar e-mail de verificação (registro):', error);
+    }
+  } else if (!existing.emailVerified) {
+    const { rawToken, tokenHash } = generateEmailVerificationToken();
+    const expiresAt = getVerificationExpiryDate();
+    await usersRepository.setVerificationToken(existing.id, tokenHash, expiresAt.toISOString());
+
+    try {
+      await sendVerificationEmail({
+        to: existing.email,
+        displayName: existing.displayName,
+        rawToken,
+      });
+    } catch (error) {
+      console.error('[Auth] Falha ao reenviar e-mail de verificação (registro existente):', error);
+    }
   }
 
   res.status(202).json({
-    message: 'Se o cadastro for permitido, a conta ficará disponível para login após validação.',
+    message: 'Se os dados forem válidos, você receberá um e-mail para confirmar sua conta.',
   });
+}));
+
+// ─── GET /verify-email ───────────────────────────────────────────
+router.get('/verify-email', verifyEmailLimiter, asyncHandler(async (req, res) => {
+  const parsed = verifyEmailQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Link de verificação inválido.' });
+    return;
+  }
+
+  const { email, token } = parsed.data;
+  const user = await usersRepository.getByEmail(email);
+
+  const tokenMatch = safeTokenHashEqual(user?.verificationTokenHash ?? null, token);
+  const hasValidExpiry = !!user?.verificationExpiresAt && new Date(user.verificationExpiresAt).getTime() > Date.now();
+  const canVerify = !!user && !user.emailVerified && tokenMatch && hasValidExpiry;
+
+  if (!canVerify) {
+    res.status(400).json({ error: 'Link inválido ou expirado. Solicite um novo e-mail de verificação.' });
+    return;
+  }
+
+  await usersRepository.markEmailVerified(user.id);
+  res.json({ message: 'E-mail verificado com sucesso. Você já pode fazer login.' });
+}));
+
+// ─── POST /resend-verification ───────────────────────────────────
+router.post('/resend-verification', resendVerificationLimiter, asyncHandler(async (req, res) => {
+  const parsed = resendVerificationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(200).json({ message: 'Se existir uma conta pendente, um novo e-mail será enviado.' });
+    return;
+  }
+
+  const { email } = parsed.data;
+  const user = await usersRepository.getByEmail(email);
+
+  if (user && !user.emailVerified) {
+    const { rawToken, tokenHash } = generateEmailVerificationToken();
+    const expiresAt = getVerificationExpiryDate();
+    await usersRepository.setVerificationToken(user.id, tokenHash, expiresAt.toISOString());
+
+    try {
+      await sendVerificationEmail({
+        to: user.email,
+        displayName: user.displayName,
+        rawToken,
+      });
+    } catch (error) {
+      console.error('[Auth] Falha ao reenviar e-mail de verificação:', error);
+    }
+  }
+
+  // Generic response avoids user enumeration.
+  res.status(200).json({ message: 'Se existir uma conta pendente, um novo e-mail será enviado.' });
 }));
 
 // ─── POST /login ─────────────────────────────────────────────────
@@ -102,9 +191,20 @@ router.post('/login', loginLimiter, loginSlowDown, asyncHandler(async (req, res)
     return;
   }
 
+  if (!user.emailVerified) {
+    res.status(403).json({ error: 'Confirme seu e-mail antes de entrar.' });
+    return;
+  }
+
   await authService.issueSession(res, user);
   res.json({
-    user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role },
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role,
+      emailVerified: user.emailVerified,
+    },
   });
 }));
 
@@ -166,7 +266,13 @@ router.post('/refresh', refreshLimiter, requireCsrfToken(), asyncHandler(async (
   const user = await usersRepository.getById(tokenDoc.userId);
   res.json({
     user: user
-      ? { id: user.id, email: user.email, displayName: user.displayName, role: user.role }
+      ? {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        emailVerified: user.emailVerified,
+      }
       : null,
   });
 }));
@@ -179,7 +285,13 @@ router.get('/me', asyncHandler(requireAuth), asyncHandler(async (req, res) => {
     return;
   }
   res.json({
-    user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role },
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role,
+      emailVerified: user.emailVerified,
+    },
   });
 }));
 

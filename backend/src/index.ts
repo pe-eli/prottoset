@@ -14,6 +14,7 @@ import leadFoldersRoutes from './routes/lead-folders.routes';
 import productivityRoutes from './routes/productivity.routes';
 import scheduleRoutes from './routes/schedule.routes';
 import { requireAuth } from './middleware/auth.middleware';
+import { requireVerifiedEmail } from './middleware/verified-email.middleware';
 import { setTenant } from './middleware/tenant.middleware';
 import { getAllowedOrigins, requireTrustedOrigin, sanitizeErrorMessage } from './middleware/security.middleware';
 import { asyncHandler } from './utils/asyncHandler';
@@ -59,6 +60,7 @@ app.use('/api/auth', requireTrustedOrigin(allowedOrigins));
 app.use('/api/auth', authRoutes);
 app.use('/api', requireTrustedOrigin(allowedOrigins));
 app.use('/api', asyncHandler(requireAuth));
+app.use('/api', asyncHandler(requireVerifiedEmail));
 app.use('/api', setTenant);
 
 app.use('/api/quotes', quoteRoutes);

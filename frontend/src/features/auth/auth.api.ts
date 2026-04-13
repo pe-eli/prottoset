@@ -5,6 +5,7 @@ export interface AuthUser {
   email: string;
   displayName: string;
   role: string;
+  emailVerified?: boolean;
 }
 
 export interface AuthResponse {
@@ -22,11 +23,17 @@ export interface CsrfResponse {
 export const authAPI = {
   csrf: () => api.get<CsrfResponse>('/auth/csrf'),
 
-  register: (email: string, password: string, name: string, captchaToken: string) =>
-    api.post<RegisterResponse>('/auth/register', { email, password, name, captchaToken }),
+  register: (email: string, password: string, name: string, acceptedTerms: boolean) =>
+    api.post<RegisterResponse>('/auth/register', { email, password, name, acceptedTerms }),
 
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }),
+
+  verifyEmail: (email: string, token: string) =>
+    api.get<RegisterResponse>('/auth/verify-email', { params: { email, token } }),
+
+  resendVerification: (email: string) =>
+    api.post<RegisterResponse>('/auth/resend-verification', { email }),
 
   logout: () => api.post('/auth/logout'),
 

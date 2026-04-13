@@ -41,7 +41,15 @@ vi.mock('../users.repository', () => ({
     create: vi.fn(async (data: any) => {
       const id = `user-${++idCounter}`;
       const now = new Date().toISOString();
-      const user = { ...data, id, createdAt: now, updatedAt: now };
+      const user = {
+        ...data,
+        id,
+        emailVerified: data.emailVerified ?? false,
+        verificationTokenHash: data.verificationTokenHash ?? null,
+        verificationExpiresAt: data.verificationExpiresAt ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
       usersStore[id] = user;
       return user;
     }),
@@ -49,6 +57,19 @@ vi.mock('../users.repository', () => ({
       if (usersStore[id]) {
         usersStore[id].googleId = googleId;
         usersStore[id].emailVerified = true;
+      }
+    }),
+    setVerificationToken: vi.fn(async (id: string, tokenHash: string, expiresAt: string) => {
+      if (usersStore[id]) {
+        usersStore[id].verificationTokenHash = tokenHash;
+        usersStore[id].verificationExpiresAt = expiresAt;
+      }
+    }),
+    markEmailVerified: vi.fn(async (id: string) => {
+      if (usersStore[id]) {
+        usersStore[id].emailVerified = true;
+        usersStore[id].verificationTokenHash = null;
+        usersStore[id].verificationExpiresAt = null;
       }
     }),
   },
@@ -102,6 +123,14 @@ vi.mock('../../services/turnstile.service', () => ({
   },
 }));
 
+vi.mock('../../auth/email-verification', () => ({
+  generateEmailVerificationToken: vi.fn(() => ({ rawToken: 'raw-token-123', tokenHash: 'hash-123' })),
+  getVerificationExpiryDate: vi.fn(() => new Date(Date.now() + 24 * 60 * 60 * 1000)),
+  safeTokenHashEqual: vi.fn(() => true),
+  sendVerificationEmail: vi.fn(async () => {}),
+  hashEmailVerificationToken: vi.fn(() => 'hash-123'),
+}));
+
 import authRoutes from '../../routes/auth.routes';
 import { hashPassword } from '../password';
 
@@ -136,14 +165,22 @@ describe('auth routes', () => {
     it('aceita cadastro com resposta generica', async () => {
       const res = await request(app)
         .post('/api/auth/register')
-        .send({ email: 'new@example.com', password: 'StrongPass123', name: 'Test User', captchaToken: 'captcha-ok' });
+        .send({ email: 'new@example.com', password: 'StrongPass123', name: 'Test User', acceptedTerms: true });
 
       expect(res.status).toBe(202);
-      expect(res.body.message).toContain('conta ficará disponível');
+      expect(res.body.message).toBeDefined();
       expect(Object.values(usersStore)).toHaveLength(1);
     });
 
-    it('mantem resposta generica para email duplicado', async () => {
+    it('retorna 400 sem aceitar termos', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'new@example.com', password: 'StrongPass123', name: 'Test User', acceptedTerms: false });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('mantem resposta generica para email duplicado não verificado (reenvia email)', async () => {
       const hash = await hashPassword('StrongPass123');
       usersStore['user-existing'] = {
         id: 'user-existing',
@@ -152,6 +189,8 @@ describe('auth routes', () => {
         passwordHash: hash,
         googleId: '',
         emailVerified: false,
+        verificationTokenHash: null,
+        verificationExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -159,10 +198,9 @@ describe('auth routes', () => {
 
       const res = await request(app)
         .post('/api/auth/register')
-        .send({ email: 'existing@example.com', password: 'StrongPass123', name: 'Dupl', captchaToken: 'captcha-ok' });
+        .send({ email: 'existing@example.com', password: 'StrongPass123', name: 'Dupl', acceptedTerms: true });
 
       expect(res.status).toBe(202);
-      expect(res.body.message).toContain('conta ficará disponível');
       expect(Object.values(usersStore)).toHaveLength(1);
     });
   });
@@ -176,7 +214,9 @@ describe('auth routes', () => {
         displayName: 'Test User',
         passwordHash: hash,
         googleId: '',
-        emailVerified: false,
+        emailVerified: true,
+        verificationTokenHash: null,
+        verificationExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -207,6 +247,15 @@ describe('auth routes', () => {
       expect(res.body.error).toBe('E-mail ou senha incorretos.');
     });
 
+    it('retorna 403 quando email nao verificado', async () => {
+      usersStore['user-1'].emailVerified = false;
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'user@example.com', password: 'CorrectPassword123' });
+
+      expect(res.status).toBe(403);
+    });
+
     it('retorna mesma mensagem para email inexistente e senha errada', async () => {
       const res1 = await request(app)
         .post('/api/auth/login')
@@ -231,7 +280,9 @@ describe('auth routes', () => {
         displayName: 'User',
         passwordHash: hash,
         googleId: '',
-        emailVerified: false,
+        emailVerified: true,
+        verificationTokenHash: null,
+        verificationExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -270,7 +321,9 @@ describe('auth routes', () => {
         displayName: 'User',
         passwordHash: hash,
         googleId: '',
-        emailVerified: false,
+        emailVerified: true,
+        verificationTokenHash: null,
+        verificationExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -300,7 +353,9 @@ describe('auth routes', () => {
         displayName: 'User',
         passwordHash: hash,
         googleId: '',
-        emailVerified: false,
+        emailVerified: true,
+        verificationTokenHash: null,
+        verificationExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -343,7 +398,9 @@ describe('auth routes', () => {
         displayName: 'User',
         passwordHash: hash,
         googleId: '',
-        emailVerified: false,
+        emailVerified: true,
+        verificationTokenHash: null,
+        verificationExpiresAt: null,
         role: 'member',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

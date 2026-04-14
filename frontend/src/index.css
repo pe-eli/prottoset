@@ -93,8 +93,10 @@
 
 button,
 a,
+label,
 select,
 summary,
+[role='button'],
 input[type='checkbox'],
 input[type='radio'],
 input[type='range'] {

@@ -119,13 +119,13 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
           <ClosrLogo className="text-xl text-text-primary" />
 
           <div className="hidden md:flex items-center justify-center gap-8 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <button onClick={() => scrollTo('features')} className="text-sm text-text-muted hover:text-text-primary transition-colors">
+            <button onClick={() => scrollTo('features')} className="text-sm text-text-muted hover:text-text-primary transition-colors cursor-pointer">
               Funcionalidades
             </button>
-            <button onClick={() => scrollTo('como-funciona')} className="text-sm text-text-muted hover:text-text-primary transition-colors">
+            <button onClick={() => scrollTo('como-funciona')} className="text-sm text-text-muted hover:text-text-primary transition-colors cursor-pointer">
               Como funciona
             </button>
-            <button onClick={() => scrollTo('diferenciais')} className="text-sm text-text-muted hover:text-text-primary transition-colors">
+            <button onClick={() => scrollTo('diferenciais')} className="text-sm text-text-muted hover:text-text-primary transition-colors cursor-pointer">
               Diferenciais
             </button>
           </div>
@@ -133,7 +133,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
           <div className="hidden md:flex items-center gap-4">
             <button
               onClick={() => onNavigate('/login')}
-              className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all"
+              className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all cursor-pointer"
             >
               Começar agora
             </button>
@@ -141,7 +141,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
 
           <button
             type="button"
-            className="md:hidden text-text-primary"
+            className="md:hidden text-text-primary cursor-pointer"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -153,19 +153,19 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
       {mobileMenuOpen && (
         <div className="md:hidden bg-background backdrop-blur-md border-t border-white/[0.06]">
           <div className="px-6 py-4 flex flex-col gap-4">
-            <button onClick={() => scrollTo('features')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left">
+            <button onClick={() => scrollTo('features')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left cursor-pointer">
               Funcionalidades
             </button>
-            <button onClick={() => scrollTo('como-funciona')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left">
+            <button onClick={() => scrollTo('como-funciona')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left cursor-pointer">
               Como funciona
             </button>
-            <button onClick={() => scrollTo('diferenciais')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left">
+            <button onClick={() => scrollTo('diferenciais')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left cursor-pointer">
               Diferenciais
             </button>
             <div className="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
               <button
                 onClick={() => { setMobileMenuOpen(false); onNavigate('/login'); }}
-                className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold rounded-lg bg-brand-400 text-white"
+                className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold rounded-lg bg-brand-400 text-white cursor-pointer"
               >
                 Começar agora
               </button>
@@ -223,7 +223,7 @@ const Hero = React.memo(({ onNavigate }: { onNavigate: (path: string) => void })
     <div className="relative z-10 flex items-center gap-4 mb-20">
       <button
         onClick={() => onNavigate('/login')}
-        className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-bold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all shadow-lg shadow-brand-400/20"
+        className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-bold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all shadow-lg shadow-brand-400/20 cursor-pointer"
       >
         Começar agora
       </button>
@@ -469,7 +469,7 @@ const CTA = React.memo(({ onNavigate }: { onNavigate: (path: string) => void }) 
         </p>
         <button
           onClick={() => onNavigate('/login')}
-          className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-bold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all shadow-lg shadow-brand-400/20"
+          className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-bold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all shadow-lg shadow-brand-400/20 cursor-pointer"
         >
           Acessar a Plataforma
           <ArrowRight size={18} />

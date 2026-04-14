@@ -6,10 +6,10 @@ import { Input } from '../components/ui/Input';
 import { TextArea } from '../components/ui/TextArea';
 import { contactsAPI } from '../features/contacts/contacts.api';
 
-const DEFAULT_SUBJECT = 'Transforme sua presença digital — Proposta Prottocode';
+const DEFAULT_SUBJECT = 'Transforme sua presença digital — Closr';
 const DEFAULT_BODY = `Olá!
 
-Meu nome é [Seu Nome] e sou desenvolvedor na Prottocode.
+Meu nome é [Seu Nome] e sou desenvolvedor na Closr.
 
 Notei que seu negócio tem um grande potencial para crescer no digital. Trabalhamos com criação de sites, sistemas web e landing pages de alta conversão, tudo personalizado para as necessidades do seu negócio.
 
@@ -19,7 +19,7 @@ Posso te ligar ou trocar uma ideia pelo WhatsApp?
 
 Abraço,
 [Seu Nome]
-Prottocode — Desenvolvimento de Sistemas`;
+Closr — Plataforma de Prospecção Inteligente`;
 
 type JobStatus = 'pending' | 'sending' | 'sent' | 'failed';
 

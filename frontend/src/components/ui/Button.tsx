@@ -4,7 +4,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export function Button({ variant = 'primary', size = 'md', className = '', children, ...props }: ButtonProps) {
-  const base = 'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none';
+  const base = 'inline-flex items-center justify-center font-bold rounded-xl transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none';
 
   const sizes = {
     sm: 'px-3.5 py-1.5 text-xs gap-1.5',
@@ -13,11 +13,11 @@ export function Button({ variant = 'primary', size = 'md', className = '', child
   };
 
   const variants = {
-    primary: 'bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 hover:brightness-110 active:scale-[0.98]',
-    secondary: 'bg-brand-50 text-brand-700 hover:bg-brand-100 active:scale-[0.98]',
-    outline: 'border border-border text-brand-700 hover:bg-brand-50 hover:border-brand-200 active:scale-[0.98]',
-    ghost: 'text-brand-600 hover:bg-brand-50 active:scale-[0.98]',
-    danger: 'bg-red-50 text-red-600 hover:bg-red-100 active:scale-[0.98]',
+    primary: 'bg-brand-400 text-white shadow-md shadow-brand-400/20 hover:bg-brand-500 active:scale-[0.98]',
+    secondary: 'bg-brand-400/10 text-brand-400 hover:bg-brand-400/20 active:scale-[0.98]',
+    outline: 'border border-border text-text-primary hover:bg-white/[0.04] hover:border-border-light active:scale-[0.98]',
+    ghost: 'text-brand-400 hover:bg-brand-400/10 active:scale-[0.98]',
+    danger: 'bg-red-400/10 text-red-400 hover:bg-red-400/20 active:scale-[0.98]',
   };
 
   return (

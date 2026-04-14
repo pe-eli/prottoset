@@ -34,7 +34,7 @@ export function PreviewStep({
     <Card className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="border-b-2 border-brand-600 pb-3 mb-6">
-        <h2 className="text-xl font-bold text-gray-900 tracking-tight">PROTTOCODE</h2>
+        <h2 className="text-xl font-bold text-gray-900 tracking-tight">CLOSR</h2>
         <p className="text-sm text-gray-500">Orçamento de Desenvolvimento</p>
       </div>
 
@@ -133,7 +133,7 @@ export function PreviewStep({
       {/* Footer */}
       <div className="border-t border-gray-200 pt-3 text-center text-xs text-gray-400">
         <p>Orçamento válido por 7 dias</p>
-        <p className="font-medium text-brand-600 mt-1">Prottocode - Desenvolvimento de Sistemas</p>
+        <p className="font-medium text-brand-600 mt-1">Closr - Plataforma de Prospecção Inteligente</p>
       </div>
 
       {/* Actions */}

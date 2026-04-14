@@ -57,16 +57,16 @@ export function LeadsHub() {
     <div className="max-w-5xl mx-auto animate-fade-in">
       {/* Hero section */}
       <div className="text-center mb-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 text-brand-600 text-xs font-semibold mb-4">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-400/10 text-brand-400 text-xs font-semibold mb-4">
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
           Central de Leads
         </div>
-        <h1 className="text-3xl font-bold text-brand-950 mb-2">
+        <h1 className="text-3xl font-heading font-extrabold text-text-primary mb-2">
           Gerencie seus <span className="gradient-text">leads</span> de ponta a ponta
         </h1>
-        <p className="text-brand-400 text-sm max-w-md mx-auto">
+        <p className="text-text-muted text-sm max-w-md mx-auto">
           Prospecte, entre em contato e acompanhe o progresso de cada potencial cliente.
         </p>
       </div>
@@ -80,13 +80,13 @@ export function LeadsHub() {
                 <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-lg ${feature.shadowColor} mb-5 group-hover:scale-105 transition-transform duration-300`}>
                   {feature.icon}
                 </div>
-                <h3 className="text-lg font-bold text-brand-950 mb-1.5 group-hover:text-brand-600 transition-colors">
+                <h3 className="text-lg font-heading font-bold text-text-primary mb-1.5 group-hover:text-brand-400 transition-colors">
                   {feature.title}
                 </h3>
-                <p className="text-sm text-brand-400 leading-relaxed">
+                <p className="text-sm text-text-muted leading-relaxed">
                   {feature.description}
                 </p>
-                <div className="mt-4 flex items-center gap-1.5 text-brand-500 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div className="mt-4 flex items-center gap-1.5 text-brand-400 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                   <span>Acessar</span>
                   <svg className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

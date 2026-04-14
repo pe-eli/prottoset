@@ -1,10 +1,10 @@
 export function TermsOfUsePage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 animate-fade-in">
-      <h1 className="text-3xl font-bold text-brand-950 mb-4">Termos de Uso</h1>
-      <div className="space-y-4 text-sm text-brand-700 leading-relaxed">
+      <h1 className="text-3xl font-heading font-extrabold text-text-primary mb-4">Termos de Uso</h1>
+      <div className="space-y-4 text-sm text-text-secondary leading-relaxed">
         <p>
-          Ao utilizar o Prottoset, você concorda com estes Termos de Uso e com as regras de segurança,
+          Ao utilizar o Closr, você concorda com estes Termos de Uso e com as regras de segurança,
           privacidade e uso adequado da plataforma.
         </p>
         <p>

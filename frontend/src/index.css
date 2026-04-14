@@ -1,28 +1,35 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Nunito', system-ui, sans-serif;
+  --font-sans: 'Nunito Sans', system-ui, sans-serif;
 
-  /* Deep blue palette */
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #d9e6ff;
-  --color-brand-200: #bcd4ff;
-  --color-brand-300: #8ebaff;
-  --color-brand-400: #5994ff;
-  --color-brand-500: #3370ff;
-  --color-brand-600: #1a4fff;
-  --color-brand-700: #1240eb;
-  --color-brand-800: #1535be;
-  --color-brand-900: #173195;
-  --color-brand-950: #0f1f5b;
+  /* Slate-blue accent palette */
+  --color-brand-50: #eef0fb;
+  --color-brand-100: #dde2f7;
+  --color-brand-200: #bcc5ef;
+  --color-brand-300: #9aa8e7;
+  --color-brand-400: #7b8cde;
+  --color-brand-500: #6070c8;
+  --color-brand-600: #4c59a8;
+  --color-brand-700: #3d4788;
+  --color-brand-800: #2f3768;
+  --color-brand-900: #212748;
+  --color-brand-950: #161a30;
 
-  /* Surface & background tokens */
-  --color-surface: #ffffff;
-  --color-surface-secondary: #f8faff;
-  --color-surface-elevated: #ffffff;
-  --color-background: #f0f4ff;
-  --color-border: #e2e8f4;
-  --color-border-light: #edf1fa;
+  /* Charcoal surface palette */
+  --color-surface: #1c1f25;
+  --color-surface-secondary: #22262e;
+  --color-surface-elevated: #282d36;
+  --color-background: #16181c;
+  --color-border: #2e3340;
+  --color-border-light: #363c4a;
+
+  /* Semantic */
+  --color-mint: #4ec99a;
+  --color-text-primary: #e8eaf0;
+  --color-text-secondary: #9ca3b4;
+  --color-text-muted: #6b7280;
 
   /* Animations */
   --animate-fade-in: fade-in 0.3s ease-out;
@@ -69,25 +76,30 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-brand-200);
+  background: var(--color-border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand-300);
+  background: var(--color-border-light);
 }
 
-/* Glass card utility */
+/* Glass card utility — dark variant */
 .glass {
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(28, 31, 37, 0.8);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 /* Gradient text utility */
 .gradient-text {
-  background: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-400));
+  background: linear-gradient(135deg, var(--color-brand-400), var(--color-brand-300));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Closr logo accent */
+.closr-accent {
+  color: var(--color-brand-400);
 }

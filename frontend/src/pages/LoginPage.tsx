@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
 import { authAPI } from '../features/auth/auth.api';
 import type { AuthUser } from '../features/auth/auth.api';
 
@@ -73,15 +70,22 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_15%_20%,rgba(26,79,255,0.14)_0%,transparent_40%),radial-gradient(circle_at_85%_10%,rgba(51,112,255,0.14)_0%,transparent_35%),linear-gradient(180deg,#f4f7ff_0%,#e9f0ff_100%)] flex items-center justify-center px-4 py-10">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-10 bg-background"
+      style={{
+        backgroundImage: 'radial-gradient(circle at 15% 20%, rgba(123,140,222,0.08) 0%, transparent 40%), radial-gradient(circle at 85% 10%, rgba(123,140,222,0.06) 0%, transparent 35%)',
+      }}
+    >
       <div className="w-full max-w-md animate-slide-up">
-        <Card className="border-brand-100 shadow-xl shadow-brand-200/30" gradient>
+        <div className="bg-surface-elevated rounded-2xl border border-border-light p-6 shadow-2xl shadow-black/20">
           <div className="mb-6 text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-400">
               {mode === 'login' ? 'Acesso' : 'Criar Conta'}
             </p>
-            <h1 className="mt-2 text-3xl font-bold text-brand-950">Prottoset</h1>
-            <p className="mt-2 text-sm text-brand-500">
+            <h1 className="mt-2 text-3xl font-heading font-extrabold text-text-primary">
+              Clos<span className="text-brand-400">r</span>
+            </h1>
+            <p className="mt-2 text-sm text-text-secondary">
               {mode === 'login'
                 ? 'Entre com seu e-mail e senha.'
                 : 'Preencha os dados para solicitar sua conta.'}
@@ -90,74 +94,88 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             {mode === 'register' && (
-              <Input
-                label="Nome"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-                required
-                minLength={2}
-                maxLength={100}
-              />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-text-secondary">Nome</label>
+                <input
+                  className="px-4 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  required
+                  minLength={2}
+                  maxLength={100}
+                />
+              </div>
             )}
-            <Input
-              label="E-mail"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-            <Input
-              label="Senha"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              required
-              minLength={mode === 'register' ? 10 : undefined}
-            />
-            <label className="flex items-center gap-2 text-xs text-brand-500 -mt-1">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-text-secondary">E-mail</label>
+              <input
+                className="px-4 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-text-secondary">Senha</label>
+              <input
+                className="px-4 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                required
+                minLength={mode === 'register' ? 10 : undefined}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-text-muted -mt-1">
               <input
                 type="checkbox"
                 checked={showPassword}
                 onChange={(e) => setShowPassword(e.target.checked)}
+                className="accent-brand-400"
               />
               Mostrar senha
             </label>
             {mode === 'register' && (
               <>
-                <Input
-                  label="Confirmar Senha"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  autoComplete="new-password"
-                  required
-                />
-                <label className="flex items-center gap-2 text-xs text-brand-500 -mt-1">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-text-secondary">Confirmar Senha</label>
+                  <input
+                    className="px-4 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-text-muted -mt-1">
                   <input
                     type="checkbox"
                     checked={showConfirmPassword}
                     onChange={(e) => setShowConfirmPassword(e.target.checked)}
+                    className="accent-brand-400"
                   />
                   Mostrar confirmação de senha
                 </label>
-                <label className="flex items-start gap-2 text-xs text-brand-500 leading-relaxed">
+                <label className="flex items-start gap-2 text-xs text-text-muted leading-relaxed">
                   <input
                     type="checkbox"
                     checked={acceptedTerms}
                     onChange={(e) => setAcceptedTerms(e.target.checked)}
-                    className="mt-0.5"
+                    className="mt-0.5 accent-brand-400"
                     required
                   />
                   <span>
                     Concordo com os{' '}
-                    <Link to="/termos-de-uso" className="text-brand-700 font-medium hover:underline">
+                    <Link to="/termos-de-uso" className="text-brand-400 font-medium hover:underline">
                       Termos de Uso
                     </Link>{' '}
                     e com a{' '}
-                    <Link to="/politica-de-privacidade" className="text-brand-700 font-medium hover:underline">
+                    <Link to="/politica-de-privacidade" className="text-brand-400 font-medium hover:underline">
                       Política de Privacidade
                     </Link>
                     .
@@ -167,30 +185,34 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
             )}
 
             {error ? (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>
+              <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2">{error}</p>
             ) : null}
 
             {notice ? (
-              <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">{notice}</p>
+              <p className="text-sm text-mint bg-mint/10 border border-mint/20 rounded-xl px-3 py-2">{notice}</p>
             ) : null}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full inline-flex items-center justify-center font-bold rounded-xl transition-all duration-200 px-5 py-2.5 text-sm bg-brand-400 text-white hover:bg-brand-500 active:scale-[0.98] shadow-md shadow-brand-400/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               {loading
                 ? (mode === 'login' ? 'Entrando...' : 'Criando conta...')
                 : (mode === 'login' ? 'Entrar' : 'Criar Conta')}
-            </Button>
+            </button>
           </form>
 
           <div className="my-5 flex items-center gap-3">
-            <div className="flex-1 h-px bg-brand-100" />
-            <span className="text-xs text-brand-400 font-medium">ou</span>
-            <div className="flex-1 h-px bg-brand-100" />
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-text-muted font-medium">ou</span>
+            <div className="flex-1 h-px bg-border" />
           </div>
 
           <button
             type="button"
             onClick={() => authAPI.googleLogin()}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-brand-200 text-sm font-medium text-brand-700 hover:bg-brand-50 transition-colors"
+            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-border text-sm font-medium text-text-primary hover:bg-surface-secondary transition-colors"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -213,24 +235,24 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
             Entrar com Google
           </button>
 
-          <p className="mt-5 text-xs text-brand-400 text-center">
+          <p className="mt-5 text-xs text-text-muted text-center">
             {mode === 'login' ? (
               <>
                 Não tem conta?{' '}
-                <button type="button" onClick={switchMode} className="text-brand-600 hover:underline font-medium">
+                <button type="button" onClick={switchMode} className="text-brand-400 hover:underline font-medium">
                   Criar conta
                 </button>
               </>
             ) : (
               <>
                 Já tem conta?{' '}
-                <button type="button" onClick={switchMode} className="text-brand-600 hover:underline font-medium">
+                <button type="button" onClick={switchMode} className="text-brand-400 hover:underline font-medium">
                   Entrar
                 </button>
               </>
             )}
           </p>
-        </Card>
+        </div>
       </div>
     </div>
   );

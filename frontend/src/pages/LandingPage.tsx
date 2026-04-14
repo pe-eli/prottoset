@@ -24,6 +24,13 @@ const XIcon = ({ size = 24 }: { size?: number }) => (
   </svg>
 );
 
+/* ─── Brand Logo ─── */
+const ClosrLogo = ({ className = '' }: { className?: string }) => (
+  <span className={`font-heading font-extrabold tracking-tight ${className}`}>
+    Clos<span className="text-brand-400">r</span>
+  </span>
+);
+
 /* ─── Data ─── */
 const FEATURES = [
   {
@@ -106,22 +113,19 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
   };
 
   return (
-    <header className="fixed top-0 w-full z-50 border-b border-white/[0.08] bg-[#060918]/80 backdrop-blur-md">
+    <header className="fixed top-0 w-full z-50 border-b border-white/[0.06] bg-background/80 backdrop-blur-md">
       <nav className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Prottocode" className="w-8 h-8 rounded-lg object-cover" />
-            <span className="text-lg font-semibold text-white tracking-tight">PROTTOCODE</span>
-          </div>
+          <ClosrLogo className="text-xl text-text-primary" />
 
           <div className="hidden md:flex items-center justify-center gap-8 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <button onClick={() => scrollTo('features')} className="text-sm text-white/50 hover:text-white transition-colors">
+            <button onClick={() => scrollTo('features')} className="text-sm text-text-muted hover:text-text-primary transition-colors">
               Funcionalidades
             </button>
-            <button onClick={() => scrollTo('como-funciona')} className="text-sm text-white/50 hover:text-white transition-colors">
+            <button onClick={() => scrollTo('como-funciona')} className="text-sm text-text-muted hover:text-text-primary transition-colors">
               Como funciona
             </button>
-            <button onClick={() => scrollTo('diferenciais')} className="text-sm text-white/50 hover:text-white transition-colors">
+            <button onClick={() => scrollTo('diferenciais')} className="text-sm text-text-muted hover:text-text-primary transition-colors">
               Diferenciais
             </button>
           </div>
@@ -129,7 +133,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
           <div className="hidden md:flex items-center gap-4">
             <button
               onClick={() => onNavigate('/login')}
-              className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-medium rounded-md bg-gradient-to-b from-white via-white/95 to-white/60 text-black hover:scale-105 active:scale-95 transition-all"
+              className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all"
             >
               Começar agora
             </button>
@@ -137,7 +141,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
 
           <button
             type="button"
-            className="md:hidden text-white"
+            className="md:hidden text-text-primary"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -147,21 +151,21 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
       </nav>
 
       {mobileMenuOpen && (
-        <div className="md:hidden bg-[#060918]/95 backdrop-blur-md border-t border-white/[0.08]">
+        <div className="md:hidden bg-background/95 backdrop-blur-md border-t border-white/[0.06]">
           <div className="px-6 py-4 flex flex-col gap-4">
-            <button onClick={() => scrollTo('features')} className="text-sm text-white/50 hover:text-white transition-colors py-2 text-left">
+            <button onClick={() => scrollTo('features')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left">
               Funcionalidades
             </button>
-            <button onClick={() => scrollTo('como-funciona')} className="text-sm text-white/50 hover:text-white transition-colors py-2 text-left">
+            <button onClick={() => scrollTo('como-funciona')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left">
               Como funciona
             </button>
-            <button onClick={() => scrollTo('diferenciais')} className="text-sm text-white/50 hover:text-white transition-colors py-2 text-left">
+            <button onClick={() => scrollTo('diferenciais')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left">
               Diferenciais
             </button>
-            <div className="flex flex-col gap-2 pt-4 border-t border-white/[0.08]">
+            <div className="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
               <button
                 onClick={() => { setMobileMenuOpen(false); onNavigate('/login'); }}
-                className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-medium rounded-md bg-gradient-to-b from-white via-white/95 to-white/60 text-black"
+                className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold rounded-lg bg-brand-400 text-white"
               >
                 Começar agora
               </button>
@@ -181,24 +185,24 @@ const Hero = React.memo(({ onNavigate }: { onNavigate: (path: string) => void })
     <div
       className="absolute left-1/2 top-0 -translate-x-1/2 w-[800px] h-[500px] pointer-events-none"
       style={{
-        background: 'radial-gradient(ellipse at center, rgba(51,112,255,0.15) 0%, transparent 70%)',
+        background: 'radial-gradient(ellipse at center, rgba(123,140,222,0.12) 0%, transparent 70%)',
       }}
     />
 
-    <aside className="relative z-10 mb-8 inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 rounded-full border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm">
-      <span className="text-xs text-white/50">
+    <aside className="relative z-10 mb-8 inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 rounded-full border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm">
+      <span className="text-xs text-text-muted">
         Prospecção + Automação + Inteligência Artificial
       </span>
-      <span className="flex items-center gap-1 text-xs text-blue-400">
+      <span className="flex items-center gap-1 text-xs text-brand-400">
         Saiba mais
         <ArrowRight size={12} />
       </span>
     </aside>
 
     <h1
-      className="relative z-10 text-4xl md:text-5xl lg:text-6xl font-medium text-center max-w-4xl leading-tight mb-6"
+      className="relative z-10 text-4xl md:text-5xl lg:text-6xl font-heading font-extrabold text-center max-w-4xl leading-tight mb-6"
       style={{
-        background: 'linear-gradient(to bottom, #ffffff 0%, #ffffff 40%, rgba(255,255,255,0.5) 100%)',
+        background: 'linear-gradient(to bottom, #e8eaf0 0%, #e8eaf0 40%, rgba(232,234,240,0.5) 100%)',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text',
@@ -210,7 +214,7 @@ const Hero = React.memo(({ onNavigate }: { onNavigate: (path: string) => void })
       Feche negócios.
     </h1>
 
-    <p className="relative z-10 text-sm md:text-base text-center max-w-2xl px-4 mb-10 text-white/40 leading-relaxed">
+    <p className="relative z-10 text-sm md:text-base text-center max-w-2xl px-4 mb-10 text-text-muted leading-relaxed">
       Plataforma completa de prospecção e gerenciamento de clientes. <br className="hidden sm:block" />
       Busca automática de leads, disparo inteligente por e-mail e WhatsApp, <br className="hidden sm:block" />
       funil de vendas com IA e CRM — tudo em um só lugar.
@@ -219,7 +223,7 @@ const Hero = React.memo(({ onNavigate }: { onNavigate: (path: string) => void })
     <div className="relative z-10 flex items-center gap-4 mb-20">
       <button
         onClick={() => onNavigate('/leads')}
-        className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-medium rounded-lg bg-gradient-to-b from-white via-white/95 to-white/60 text-black hover:scale-105 active:scale-95 transition-all"
+        className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-bold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all shadow-lg shadow-brand-400/20"
       >
         Começar agora
       </button>
@@ -229,19 +233,11 @@ const Hero = React.memo(({ onNavigate }: { onNavigate: (path: string) => void })
     <div className="relative z-10 w-full max-w-4xl">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {STATS.map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm p-5 text-center">
-            <p
-              className="text-2xl sm:text-3xl font-bold mb-1"
-              style={{
-                background: 'linear-gradient(135deg, #3370ff, #5994ff)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}
-            >
+          <div key={stat.label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-5 text-center">
+            <p className="text-2xl sm:text-3xl font-heading font-extrabold mb-1 text-brand-400">
               {stat.value}
             </p>
-            <p className="text-xs text-white/40 font-medium">{stat.label}</p>
+            <p className="text-xs text-text-muted font-medium">{stat.label}</p>
           </div>
         ))}
       </div>
@@ -256,9 +252,9 @@ const Features = React.memo(() => (
     <div className="max-w-6xl mx-auto">
       <div className="text-center mb-16">
         <h2
-          className="text-3xl md:text-4xl font-medium mb-4"
+          className="text-3xl md:text-4xl font-heading font-extrabold mb-4"
           style={{
-            background: 'linear-gradient(to bottom, #ffffff, rgba(255,255,255,0.6))',
+            background: 'linear-gradient(to bottom, #e8eaf0, rgba(232,234,240,0.6))',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
@@ -267,7 +263,7 @@ const Features = React.memo(() => (
         >
           Tudo para converter leads
         </h2>
-        <p className="text-white/40 max-w-lg mx-auto">
+        <p className="text-text-muted max-w-lg mx-auto">
           Da prospecção ao fechamento, cada etapa do seu processo comercial coberta por uma ferramenta dedicada.
         </p>
       </div>
@@ -276,13 +272,13 @@ const Features = React.memo(() => (
         {FEATURES.map((f) => (
           <div
             key={f.title}
-            className="group rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 hover:bg-white/[0.05] hover:border-white/[0.15] transition-all duration-300"
+            className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 hover:bg-white/[0.05] hover:border-brand-400/20 transition-all duration-300"
           >
-            <div className="w-12 h-12 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-blue-400 mb-5 group-hover:bg-blue-500/10 group-hover:border-blue-500/20 transition-all duration-300">
+            <div className="w-12 h-12 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-brand-400 mb-5 group-hover:bg-brand-400/10 group-hover:border-brand-400/20 transition-all duration-300">
               {f.icon}
             </div>
-            <h3 className="text-base font-medium text-white mb-2 group-hover:text-blue-300 transition-colors">{f.title}</h3>
-            <p className="text-sm text-white/35 leading-relaxed">{f.description}</p>
+            <h3 className="text-base font-heading font-bold text-text-primary mb-2 group-hover:text-brand-300 transition-colors">{f.title}</h3>
+            <p className="text-sm text-text-muted leading-relaxed">{f.description}</p>
           </div>
         ))}
       </div>
@@ -298,16 +294,16 @@ const HowItWorks = React.memo(() => (
     <div
       className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] pointer-events-none"
       style={{
-        background: 'radial-gradient(ellipse at center, rgba(51,112,255,0.08) 0%, transparent 70%)',
+        background: 'radial-gradient(ellipse at center, rgba(123,140,222,0.06) 0%, transparent 70%)',
       }}
     />
 
     <div className="max-w-5xl mx-auto relative z-10">
       <div className="text-center mb-16">
         <h2
-          className="text-3xl md:text-4xl font-medium mb-4"
+          className="text-3xl md:text-4xl font-heading font-extrabold mb-4"
           style={{
-            background: 'linear-gradient(to bottom, #ffffff, rgba(255,255,255,0.6))',
+            background: 'linear-gradient(to bottom, #e8eaf0, rgba(232,234,240,0.6))',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
@@ -316,7 +312,7 @@ const HowItWorks = React.memo(() => (
         >
           Como funciona
         </h2>
-        <p className="text-white/40 max-w-lg mx-auto">
+        <p className="text-text-muted max-w-lg mx-auto">
           Em 4 etapas simples, transforme buscas em clientes reais.
         </p>
       </div>
@@ -325,24 +321,16 @@ const HowItWorks = React.memo(() => (
         {STEPS.map((step, i) => (
           <div key={step.number} className="relative">
             {i < STEPS.length - 1 && (
-              <div className="hidden lg:block absolute top-7 left-full w-full h-px border-t border-dashed border-white/[0.1] -translate-x-4 z-0" />
+              <div className="hidden lg:block absolute top-7 left-full w-full h-px border-t border-dashed border-white/[0.08] -translate-x-4 z-0" />
             )}
             <div className="relative z-10">
-              <div className="w-14 h-14 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-5">
-                <span
-                  className="text-lg font-bold"
-                  style={{
-                    background: 'linear-gradient(135deg, #3370ff, #5994ff)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}
-                >
+              <div className="w-14 h-14 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-5">
+                <span className="text-lg font-heading font-extrabold text-brand-400">
                   {step.number}
                 </span>
               </div>
-              <h3 className="text-base font-medium text-white mb-2">{step.title}</h3>
-              <p className="text-sm text-white/35 leading-relaxed">{step.description}</p>
+              <h3 className="text-base font-heading font-bold text-text-primary mb-2">{step.title}</h3>
+              <p className="text-sm text-text-muted leading-relaxed">{step.description}</p>
             </div>
           </div>
         ))}
@@ -378,33 +366,33 @@ const Differentials = React.memo(() => (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
         <div>
           <h2
-            className="text-3xl md:text-4xl font-medium mb-4"
+            className="text-3xl md:text-4xl font-heading font-extrabold mb-4"
             style={{
-              background: 'linear-gradient(to bottom, #ffffff, rgba(255,255,255,0.6))',
+              background: 'linear-gradient(to bottom, #e8eaf0, rgba(232,234,240,0.6))',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
               letterSpacing: '-0.03em',
             }}
           >
-            Por que Prottoset?
+            Por que Closr?
           </h2>
-          <p className="text-white/40 mb-10 leading-relaxed">
-            Enquanto outros CRMs focam apenas em organizar contatos, o Prottoset vai mais longe:
+          <p className="text-text-muted mb-10 leading-relaxed">
+            Enquanto outros CRMs focam apenas em organizar contatos, o Closr vai mais longe:
             encontra os leads por você, entra em contato automaticamente e conduz a conversa até o fechamento.
           </p>
 
           <div className="space-y-6">
             {DIFFERENTIALS.map((item) => (
               <div key={item.title} className="flex gap-4">
-                <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-                  <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-mint/20 border border-mint/30 flex items-center justify-center">
+                  <svg className="w-3 h-3 text-mint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-white mb-1">{item.title}</h4>
-                  <p className="text-sm text-white/35 leading-relaxed">{item.desc}</p>
+                  <h4 className="text-sm font-semibold text-text-primary mb-1">{item.title}</h4>
+                  <p className="text-sm text-text-muted leading-relaxed">{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -419,30 +407,30 @@ const Differentials = React.memo(() => (
             <div className="absolute inset-16 rounded-full border border-dashed border-white/[0.05] animate-[spin_30s_linear_infinite]" />
 
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-400 shadow-2xl shadow-blue-500/20 flex items-center justify-center">
+              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 shadow-2xl shadow-brand-400/20 flex items-center justify-center">
                 <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
             </div>
 
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-              <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+              <svg className="w-4 h-4 text-brand-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-              <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+              <svg className="w-4 h-4 text-mint" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
               </svg>
             </div>
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-              <svg className="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+              <svg className="w-4 h-4 text-brand-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-              <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+              <svg className="w-4 h-4 text-brand-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
@@ -457,15 +445,15 @@ Differentials.displayName = 'Differentials';
 /* ─── CTA ─── */
 const CTA = React.memo(({ onNavigate }: { onNavigate: (path: string) => void }) => (
   <section className="px-6 py-24">
-    <div className="max-w-4xl mx-auto relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] p-10 sm:p-16 text-center">
+    <div className="max-w-4xl mx-auto relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-10 sm:p-16 text-center">
       {/* Glow spots */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(51,112,255,0.15) 0%, transparent 70%)' }} />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(123,140,222,0.12) 0%, transparent 70%)' }} />
 
       <div className="relative z-10">
         <h2
-          className="text-3xl sm:text-4xl font-medium mb-4"
+          className="text-3xl sm:text-4xl font-heading font-extrabold mb-4"
           style={{
-            background: 'linear-gradient(to bottom, #ffffff, rgba(255,255,255,0.6))',
+            background: 'linear-gradient(to bottom, #e8eaf0, rgba(232,234,240,0.6))',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
@@ -475,13 +463,13 @@ const CTA = React.memo(({ onNavigate }: { onNavigate: (path: string) => void }) 
           Pronto para automatizar <br className="hidden sm:block" />
           sua prospecção?
         </h2>
-        <p className="text-white/40 max-w-lg mx-auto mb-10 leading-relaxed">
-          Pare de perder tempo buscando leads manualmente. Deixe o Prottoset encontrar,
+        <p className="text-text-muted max-w-lg mx-auto mb-10 leading-relaxed">
+          Pare de perder tempo buscando leads manualmente. Deixe o Closr encontrar,
           contatar e qualificar seus potenciais clientes enquanto você foca no que importa.
         </p>
         <button
           onClick={() => onNavigate('/leads')}
-          className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-medium rounded-lg bg-gradient-to-b from-white via-white/95 to-white/60 text-black hover:scale-105 active:scale-95 transition-all"
+          className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-bold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all shadow-lg shadow-brand-400/20"
         >
           Acessar a Plataforma
           <ArrowRight size={18} />
@@ -496,12 +484,9 @@ CTA.displayName = 'CTA';
 const LandingFooter = React.memo(() => (
   <footer className="border-t border-white/[0.06] px-6 py-8">
     <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <img src="/logo.png" alt="Prottocode" className="w-6 h-6 rounded-md object-cover opacity-60" />
-        <span className="text-sm font-medium text-white/40">PROTTOCODE</span>
-      </div>
-      <p className="text-xs text-white/25">
-        Prottocode — Desenvolvimento de Sistemas
+      <ClosrLogo className="text-base text-text-secondary" />
+      <p className="text-xs text-text-muted">
+        Closr — Plataforma de Prospecção Inteligente
       </p>
     </div>
   </footer>
@@ -514,7 +499,7 @@ export function LandingPage() {
   const go = (path: string) => navigate(path);
 
   return (
-    <main className="min-h-screen bg-[#060918] text-white">
+    <main className="min-h-screen bg-background text-text-primary">
       <Navigation onNavigate={go} />
       <Hero onNavigate={go} />
       <Features />

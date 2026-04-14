@@ -71,8 +71,8 @@ function App() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center animate-fade-in">
-          <div className="mx-auto h-9 w-9 rounded-full border-2 border-brand-200 border-t-brand-500 animate-spin" />
-          <p className="mt-3 text-sm text-brand-500">Verificando acesso...</p>
+          <div className="mx-auto h-9 w-9 rounded-full border-2 border-border border-t-brand-400 animate-spin" />
+          <p className="mt-3 text-sm text-text-secondary">Verificando acesso...</p>
         </div>
       </div>
     );

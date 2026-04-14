@@ -62,11 +62,11 @@ export function VerifyEmailPage() {
       <div className="min-h-screen bg-background px-4 py-10 flex items-center justify-center">
         <div className="w-full max-w-md">
           <Card className="text-center" gradient>
-            <h1 className="text-xl font-bold text-brand-950 mb-2">Verificação de e-mail</h1>
-            <p className="text-sm text-brand-500 mb-5">
+            <h1 className="text-xl font-heading font-extrabold text-text-primary mb-2">Verificação de e-mail</h1>
+            <p className="text-sm text-text-secondary mb-5">
               Nenhum e-mail informado. Volte para o cadastro e tente novamente.
             </p>
-            <Link to="/login" className="text-sm text-brand-700 hover:underline">
+            <Link to="/login" className="text-sm text-brand-400 hover:underline">
               Voltar para o cadastro
             </Link>
           </Card>
@@ -129,15 +129,15 @@ export function VerifyEmailPage() {
     <div className="min-h-screen bg-background px-4 py-10 flex items-center justify-center">
       <div className="w-full max-w-md">
         <Card className="text-center" gradient>
-          <h1 className="text-xl font-bold text-brand-950 mb-2">Confirmar e-mail</h1>
+          <h1 className="text-xl font-heading font-extrabold text-text-primary mb-2">Confirmar e-mail</h1>
 
-          <p className="text-sm text-brand-500 mb-1">
+          <p className="text-sm text-text-secondary mb-1">
             Um código de verificação foi enviado para o e-mail <strong>{maskEmail(email)}</strong>.
           </p>
-          <p className="text-xs text-brand-400 mb-5">Verifique também a caixa de spam.</p>
+          <p className="text-xs text-text-muted mb-5">Verifique também a caixa de spam.</p>
 
           {status === 'error' && errorMessage && (
-            <p className="text-sm text-red-600 mb-3">{errorMessage}</p>
+            <p className="text-sm text-red-400 mb-3">{errorMessage}</p>
           )}
 
           <form className="space-y-3 text-left" onSubmit={submitVerification}>
@@ -162,7 +162,7 @@ export function VerifyEmailPage() {
               type="button"
               onClick={resendCode}
               disabled={cooldown > 0}
-              className="text-sm text-brand-700 hover:underline disabled:opacity-60 disabled:no-underline disabled:cursor-default"
+              className="text-sm text-brand-400 hover:underline disabled:opacity-60 disabled:no-underline disabled:cursor-default"
             >
               {cooldown > 0 ? `Reenviar código (${cooldown}s)` : 'Reenviar código'}
             </button>

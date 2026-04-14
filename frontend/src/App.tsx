@@ -14,10 +14,6 @@ import { LeadsDashboard } from './pages/LeadsDashboard';
 import { EmailBlastPage } from './pages/EmailBlastPage';
 import { WhatsAppBlastPage } from './pages/WhatsAppBlastPage';
 import { ContactsPage } from './pages/ContactsPage';
-import { ProductivityDashboard } from './pages/ProductivityDashboard';
-import { DailyEntryPage } from './pages/DailyEntryPage';
-import { WeeklyViewPage } from './pages/WeeklyViewPage';
-import { SchedulePage } from './pages/SchedulePage';
 import { LoginPage } from './pages/LoginPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfUsePage } from './pages/TermsOfUsePage';
@@ -111,11 +107,6 @@ function App() {
               <Route path="/leads/disparos" element={<EmailBlastPage />} />
               <Route path="/leads/whatsapp" element={<WhatsAppBlastPage />} />
               <Route path="/leads/contatos" element={<ContactsPage />} />
-              <Route path="/produtividade" element={<ProductivityDashboard />} />
-              <Route path="/produtividade/novo" element={<DailyEntryPage />} />
-              <Route path="/produtividade/editar/:id" element={<DailyEntryPage />} />
-              <Route path="/produtividade/semanal" element={<WeeklyViewPage />} />
-              <Route path="/produtividade/agenda" element={<SchedulePage />} />
             </Route>
 
             <Route path="*" element={<Navigate to={user ? '/home' : '/'} replace />} />

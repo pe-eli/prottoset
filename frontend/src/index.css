@@ -86,9 +86,25 @@
 
 /* Glass card utility — dark variant */
 .glass {
-  background: rgba(28, 31, 37, 0.8);
+  background: rgba(28, 31, 37, 0.92);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+button,
+a,
+select,
+summary,
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  cursor: not-allowed;
 }
 
 /* Gradient text utility */

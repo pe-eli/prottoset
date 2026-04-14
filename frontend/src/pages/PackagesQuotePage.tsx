@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { api } from '../lib/axios';
 
 interface PlanConfig {
   name: string;
@@ -140,17 +141,10 @@ export function PackagesQuotePage() {
         createdAt,
       };
 
-      const res = await fetch('/api/packages/generate-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error('Erro do servidor');
-      const data = await res.json();
+      const { data } = await api.post<{ id: string; pdfUrl: string }>('/packages/generate-pdf', payload);
       window.open(data.pdfUrl, '_blank');
     } catch {
-      setError('Erro ao gerar a proposta. Verifique se o backend está rodando.');
+      setError('Erro ao gerar a proposta. Tente novamente em alguns instantes.');
     } finally {
       setLoading(false);
     }

@@ -180,22 +180,30 @@ export function ContactsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/leads" className="w-9 h-9 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors">
+          <Link to="/leads" className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors">
             <svg className="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
-            <h2 className="text-2xl font-bold text-brand-950">Contatos</h2>
-            <p className="text-sm text-brand-400">Gerencie seus potenciais clientes</p>
+            <h2 className="text-2xl font-bold text-text-primary">Contatos</h2>
+            <p className="text-sm text-text-secondary">Gerencie seus potenciais clientes</p>
           </div>
         </div>
-        <Link to="/leads/disparos">
-          <Button variant="outline" size="sm">
-            <EmailIcon className="w-3.5 h-3.5" />
-            Novo Disparo
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link to="/leads/disparos">
+            <Button variant="outline" size="sm">
+              <EmailIcon className="w-3.5 h-3.5" />
+              Novo Disparo E-mail
+            </Button>
+          </Link>
+          <Link to="/leads/whatsapp">
+            <Button variant="outline" size="sm">
+              <WaIcon className="w-3.5 h-3.5" />
+              Novo Disparo WhatsApp
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -207,13 +215,13 @@ export function ContactsPage() {
       </div>
 
       {/* Channel tabs */}
-      <div className="flex items-center gap-1 bg-brand-50 rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-surface-secondary border border-border rounded-xl p-1 w-fit">
         {channelTabs.map(({ key, label, count }) => (
           <button
             key={key}
             onClick={() => setChannelTab(key)}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all duration-200 font-semibold ${
-              channelTab === key ? 'bg-white text-brand-700 shadow-sm' : 'text-brand-400 hover:text-brand-600'
+              channelTab === key ? 'bg-surface text-text-primary shadow-sm border border-border' : 'text-text-secondary hover:text-text-primary'
             }`}
           >
             {key === 'email' && <EmailIcon />}
@@ -222,7 +230,7 @@ export function ContactsPage() {
             {label}
             {count > 0 && (
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center ${
-                channelTab === key ? 'bg-brand-100 text-brand-600' : 'bg-brand-100/60 text-brand-300'
+                channelTab === key ? 'bg-brand-400/15 text-brand-200' : 'bg-brand-400/10 text-brand-300'
               }`}>
                 {count}
               </span>
@@ -232,7 +240,7 @@ export function ContactsPage() {
       </div>
 
       {/* Status filters */}
-      <div className="flex items-center gap-1.5 bg-brand-50 rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1.5 bg-surface-secondary border border-border rounded-xl p-1 w-fit">
         <FilterButton active={filter === 'all'} onClick={() => setFilter('all')} label="Todos" />
         {STATUS_OPTIONS.map((s) => (
           <FilterButton key={s} active={filter === s} onClick={() => setFilter(s)} label={STATUS_CONFIG[s].label} />
@@ -272,7 +280,7 @@ export function ContactsPage() {
                   /* ── Edit mode ── */
                   <div className="p-4 space-y-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-semibold text-brand-950">{contact.email || contact.phone}</span>
+                      <span className="text-sm font-semibold text-text-primary">{contact.email || contact.phone}</span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${getStatusConfig(contact.status).bg} ${getStatusConfig(contact.status).color}`}>
                         {getStatusConfig(contact.status).label}
                       </span>
@@ -282,19 +290,19 @@ export function ContactsPage() {
                         value={editForm.name}
                         onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
                         placeholder="Nome"
-                        className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950 placeholder:text-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                        className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
                       />
                       <input
                         value={editForm.phone}
                         onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
                         placeholder="Telefone"
-                        className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950 placeholder:text-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                        className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
                       />
                       <input
                         value={editForm.company}
                         onChange={(e) => setEditForm((f) => ({ ...f, company: e.target.value }))}
                         placeholder="Empresa"
-                        className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950 placeholder:text-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                        className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
                       />
                     </div>
                     <textarea
@@ -302,7 +310,7 @@ export function ContactsPage() {
                       onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
                       placeholder="Observações..."
                       rows={2}
-                      className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950 placeholder:text-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all resize-none"
+                      className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all resize-none"
                     />
                     <div className="flex gap-2">
                       <Button size="sm" onClick={() => handleSave(contact.id)}>Salvar</Button>
@@ -321,7 +329,7 @@ export function ContactsPage() {
                     <div className="flex-1 min-w-0">
                       {/* Name + badges */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-semibold text-brand-950">{displayName}</h4>
+                        <h4 className="text-sm font-semibold text-text-primary">{displayName}</h4>
                         <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${chCfg.bg} ${chCfg.color}`}>
                           {chCfg.icon}
                           {chCfg.label}
@@ -334,13 +342,13 @@ export function ContactsPage() {
                       {/* Secondary info */}
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
                         {contact.name && contact.email && (
-                          <p className="text-xs text-brand-400">{contact.email}</p>
+                          <p className="text-xs text-text-secondary">{contact.email}</p>
                         )}
                         {contact.phone && (contact.email || contact.name) && (
-                          <span className="text-[11px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg font-medium">{contact.phone}</span>
+                          <span className="text-[11px] text-emerald-200 bg-emerald-500/10 px-2 py-0.5 rounded-lg font-medium border border-emerald-400/20">{contact.phone}</span>
                         )}
                         {contact.company && (
-                          <span className="text-[11px] text-brand-500 bg-brand-50 px-2 py-0.5 rounded-lg font-medium">{contact.company}</span>
+                          <span className="text-[11px] text-brand-200 bg-brand-500/10 px-2 py-0.5 rounded-lg font-medium border border-brand-400/20">{contact.company}</span>
                         )}
                       </div>
 
@@ -358,7 +366,7 @@ export function ContactsPage() {
                               </span>
                             )}
                           </div>
-                          <p className={`text-xs text-brand-800 whitespace-pre-wrap leading-relaxed ${isExpanded ? '' : 'line-clamp-3'}`}>
+                          <p className={`text-xs text-text-primary whitespace-pre-wrap leading-relaxed ${isExpanded ? '' : 'line-clamp-3'}`}>
                             {contact.lastMessage}
                           </p>
                           {contact.lastMessage.length > 160 && (
@@ -373,7 +381,7 @@ export function ContactsPage() {
                       )}
 
                       {contact.notes && (
-                        <p className="text-xs text-brand-400 mt-2 bg-surface-secondary rounded-lg px-3 py-2 leading-relaxed">
+                        <p className="text-xs text-text-secondary mt-2 bg-surface-secondary rounded-lg px-3 py-2 leading-relaxed">
                           {contact.notes}
                         </p>
                       )}
@@ -384,7 +392,7 @@ export function ContactsPage() {
                       <select
                         value={contact.status}
                         onChange={(e) => handleStatusChange(contact.id, e.target.value as ContactStatus)}
-                        className="text-[11px] px-2 py-1.5 bg-surface-secondary border border-border rounded-lg text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-400/40 cursor-pointer"
+                        className="text-[11px] px-2 py-1.5 bg-surface-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-400/40 cursor-pointer"
                       >
                         {STATUS_OPTIONS.map((s) => (
                           <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
@@ -392,7 +400,7 @@ export function ContactsPage() {
                       </select>
                       <button
                         onClick={() => handleEdit(contact)}
-                        className="w-8 h-8 rounded-lg bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+                        className="w-8 h-8 rounded-lg bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
                         title="Editar"
                       >
                         <svg className="w-3.5 h-3.5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -435,7 +443,7 @@ function FilterButton({ active, onClick, label }: { active: boolean; onClick: ()
     <button
       onClick={onClick}
       className={`text-xs px-3 py-1.5 rounded-lg transition-all duration-200 font-semibold ${
-        active ? 'bg-white text-brand-700 shadow-sm' : 'text-brand-400 hover:text-brand-600'
+        active ? 'bg-surface text-text-primary shadow-sm border border-border' : 'text-text-secondary hover:text-text-primary'
       }`}
     >
       {label}

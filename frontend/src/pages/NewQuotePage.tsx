@@ -67,7 +67,7 @@ export function NewQuotePage() {
       nextStep();
     } catch (err) {
       console.error('Erro ao gerar PDF:', err);
-      alert('Erro ao gerar o PDF. Verifique se o backend está rodando.');
+      alert('Erro ao gerar o PDF. Tente novamente em alguns instantes.');
     } finally {
       setLoading(false);
     }

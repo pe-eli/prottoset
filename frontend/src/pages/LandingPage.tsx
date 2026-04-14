@@ -113,7 +113,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
   };
 
   return (
-    <header className="fixed top-0 w-full z-50 border-b border-white/[0.06] bg-background/80 backdrop-blur-md">
+    <header className="fixed top-0 w-full z-50 border-b border-white/[0.06] bg-background/90 backdrop-blur-md">
       <nav className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <ClosrLogo className="text-xl text-text-primary" />
@@ -151,7 +151,7 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
       </nav>
 
       {mobileMenuOpen && (
-        <div className="md:hidden bg-background/95 backdrop-blur-md border-t border-white/[0.06]">
+        <div className="md:hidden bg-background backdrop-blur-md border-t border-white/[0.06]">
           <div className="px-6 py-4 flex flex-col gap-4">
             <button onClick={() => scrollTo('features')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left">
               Funcionalidades
@@ -222,7 +222,7 @@ const Hero = React.memo(({ onNavigate }: { onNavigate: (path: string) => void })
 
     <div className="relative z-10 flex items-center gap-4 mb-20">
       <button
-        onClick={() => onNavigate('/leads')}
+        onClick={() => onNavigate('/login')}
         className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-bold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all shadow-lg shadow-brand-400/20"
       >
         Começar agora
@@ -468,7 +468,7 @@ const CTA = React.memo(({ onNavigate }: { onNavigate: (path: string) => void }) 
           contatar e qualificar seus potenciais clientes enquanto você foca no que importa.
         </p>
         <button
-          onClick={() => onNavigate('/leads')}
+          onClick={() => onNavigate('/login')}
           className="inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-bold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all shadow-lg shadow-brand-400/20"
         >
           Acessar a Plataforma

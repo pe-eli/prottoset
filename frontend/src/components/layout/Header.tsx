@@ -6,7 +6,6 @@ import type { AuthUser } from '../../features/auth/auth.api';
 const NAV_ITEMS = [
   { path: '/home', label: 'Orçamentos' },
   { path: '/leads', label: 'Leads' },
-  { path: '/produtividade', label: 'Produtividade' },
 ];
 
 interface HeaderProps {

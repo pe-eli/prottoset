@@ -58,6 +58,9 @@ app.use(express.json({ limit: '200kb' }));
 
 app.use('/api/auth', requireTrustedOrigin(allowedOrigins));
 app.use('/api/auth', authRoutes);
+app.use('/api/auth', (_req, res) => {
+  res.status(404).json({ error: 'Rota de autenticação não encontrada' });
+});
 app.use('/api', requireTrustedOrigin(allowedOrigins));
 app.use('/api', asyncHandler(requireAuth));
 app.use('/api', asyncHandler(requireVerifiedEmail));

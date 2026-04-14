@@ -139,6 +139,9 @@ function createApp() {
   app.use(cookieParser());
   app.use(express.json());
   app.use('/api/auth', authRoutes);
+  app.use('/api/auth', (_req, res) => {
+    res.status(404).json({ error: 'Rota de autenticação não encontrada' });
+  });
   return app;
 }
 
@@ -237,6 +240,14 @@ describe('auth routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ exists: true, emailVerified: true });
+    });
+
+    it('retorna 404 para rota de auth inexistente sem cair em autenticacao', async () => {
+      const res = await request(app)
+        .get('/api/auth/rota-inexistente');
+
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: 'Rota de autenticação não encontrada' });
     });
   });
 

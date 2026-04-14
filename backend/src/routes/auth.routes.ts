@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import slowDown from 'express-slow-down';
 import { consumeRateLimit } from '../security/rate-limit.store';
-import { loginSchema, registerSchema, resendVerificationSchema, verifyCodeSchema } from '../auth/schemas';
+import { checkEmailSchema, loginSchema, registerSchema, resendVerificationSchema, verifyCodeSchema } from '../auth/schemas';
 import { authService } from '../auth/auth.service';
 import { hashPassword, verifyPassword } from '../auth/password';
 import { hashToken } from '../auth/tokens';
@@ -88,6 +88,20 @@ async function startVerificationForUser(user: { id: string; email: string; displ
 }
 
 router.get('/csrf', authLimiter, sendCsrfToken);
+
+router.get('/check-email', authLimiter, asyncHandler(async (req, res) => {
+  const parsed = checkEmailSchema.safeParse({ email: req.query.email });
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message });
+    return;
+  }
+
+  const existing = await usersRepository.getByEmail(parsed.data.email);
+  res.status(200).json({
+    exists: Boolean(existing),
+    emailVerified: existing?.emailVerified ?? false,
+  });
+}));
 
 // ─── POST /register ──────────────────────────────────────────────
 router.post('/register', registerLimiter, asyncHandler(async (req, res) => {

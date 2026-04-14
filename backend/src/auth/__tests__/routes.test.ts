@@ -205,6 +205,41 @@ describe('auth routes', () => {
     });
   });
 
+  describe('GET /api/auth/check-email', () => {
+    it('retorna exists false para email não cadastrado', async () => {
+      const res = await request(app)
+        .get('/api/auth/check-email')
+        .query({ email: 'new@example.com' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ exists: false, emailVerified: false });
+    });
+
+    it('retorna exists true para email cadastrado', async () => {
+      const hash = await hashPassword('StrongPass123');
+      usersStore['user-existing'] = {
+        id: 'user-existing',
+        email: 'existing@example.com',
+        displayName: 'Existing',
+        passwordHash: hash,
+        googleId: '',
+        emailVerified: true,
+        verificationCodeHash: null,
+        verificationCodeExpiresAt: null,
+        role: 'member',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const res = await request(app)
+        .get('/api/auth/check-email')
+        .query({ email: 'existing@example.com' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ exists: true, emailVerified: true });
+    });
+  });
+
   describe('POST /api/auth/login', () => {
     beforeEach(async () => {
       const hash = await hashPassword('CorrectPassword123');

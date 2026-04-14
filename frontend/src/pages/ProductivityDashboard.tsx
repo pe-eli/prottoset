@@ -14,6 +14,14 @@ import {
 } from '../utils/productivity';
 
 const PIE_COLORS = ['#2563eb', '#8b5cf6', '#f59e0b'];
+const chartTooltipStyle = {
+  background: '#22262e',
+  border: '1px solid #363c4a',
+  borderRadius: 12,
+  boxShadow: '0 12px 32px rgba(0,0,0,0.28)',
+  fontSize: 13,
+  color: '#e8eaf0',
+};
 
 export function ProductivityDashboard() {
   const { entries, loading, fetchEntries } = useProductivityStore();
@@ -66,13 +74,13 @@ export function ProductivityDashboard() {
           <div className="flex items-center gap-3 mb-1">
             <Link
               to="/leads"
-              className="w-9 h-9 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
             >
               <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <h1 className="text-2xl font-bold text-brand-950">Produtividade</h1>
+            <h1 className="text-2xl font-bold text-text-primary">Produtividade</h1>
           </div>
           <p className="text-sm text-brand-400 ml-12">
             {formatWeekLabel(currentWeek)} — Acompanhe seu progresso diário
@@ -81,13 +89,13 @@ export function ProductivityDashboard() {
         <div className="flex gap-2">
           <Link
             to="/produtividade/agenda"
-            className="px-4 py-2 text-sm font-medium rounded-xl bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-xl bg-surface-secondary text-text-primary hover:bg-surface-elevated transition-colors"
           >
             Agenda
           </Link>
           <Link
             to="/produtividade/semanal"
-            className="px-4 py-2 text-sm font-medium rounded-xl bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-xl bg-surface-secondary text-text-primary hover:bg-surface-elevated transition-colors"
           >
             Visão semanal
           </Link>
@@ -147,7 +155,7 @@ export function ProductivityDashboard() {
       ) : (
         <Card>
           <div className="text-center py-8">
-            <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-3">
+            <div className="w-14 h-14 rounded-2xl bg-surface-secondary flex items-center justify-center mx-auto mb-3">
               <svg className="w-7 h-7 text-brand-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -167,20 +175,14 @@ export function ProductivityDashboard() {
       {currentWeekData && chartData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-2">
-            <h3 className="text-sm font-semibold text-brand-950 mb-4">Horas por dia</h3>
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Horas por dia</h3>
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} barCategoryGap="20%">
                   <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={30} />
                   <Tooltip
-                    contentStyle={{
-                      background: '#fff',
-                      border: '1px solid #edf1fa',
-                      borderRadius: 12,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                      fontSize: 13,
-                    }}
+                    contentStyle={chartTooltipStyle}
                   />
                   <Bar dataKey="Prottocode" fill="#2563eb" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Alura" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
@@ -191,7 +193,7 @@ export function ProductivityDashboard() {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-semibold text-brand-950 mb-4">Distribuição</h3>
+            <h3 className="text-sm font-semibold text-text-primary mb-4">Distribuição</h3>
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -209,12 +211,7 @@ export function ProductivityDashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      background: '#fff',
-                      border: '1px solid #edf1fa',
-                      borderRadius: 12,
-                      fontSize: 13,
-                    }}
+                    contentStyle={chartTooltipStyle}
                     formatter={(value) => `${value ?? 0}h`}
                   />
                 </PieChart>
@@ -239,7 +236,7 @@ export function ProductivityDashboard() {
       {/* Recent entries */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-brand-950">Registros recentes</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Registros recentes</h3>
           <Link
             to="/produtividade/semanal"
             className="text-xs text-brand-500 hover:text-brand-600 font-medium"
@@ -280,7 +277,7 @@ function StatCard({
       <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white mb-2`}>
         {icon}
       </div>
-      <p className="text-2xl font-bold text-brand-950">{value}</p>
+      <p className="text-2xl font-bold text-text-primary">{value}</p>
       <p className="text-xs text-brand-400 mt-0.5">{label}</p>
     </div>
   );
@@ -297,7 +294,7 @@ function EntryRow({ entry }: { entry: import('../features/productivity/productiv
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-brand-950">
+          <span className="text-sm font-semibold text-text-primary">
             {dayjs(entry.date).format('DD/MM')}
           </span>
           <span className="text-xs text-brand-400">

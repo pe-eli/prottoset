@@ -210,14 +210,14 @@ export function EmailBlastPage() {
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link to="/leads" className="w-9 h-9 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors">
+        <Link to="/leads" className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors">
           <svg className="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </Link>
         <div>
-          <h2 className="text-2xl font-bold text-brand-950">Disparo de E-mails</h2>
-          <p className="text-sm text-brand-400">Envie em lotes com intervalo anti-spam configurável</p>
+          <h2 className="text-2xl font-bold text-text-primary">Disparo de E-mails</h2>
+          <p className="text-sm text-text-secondary">Envie em lotes com intervalo anti-spam configurável</p>
         </div>
       </div>
 
@@ -226,8 +226,8 @@ export function EmailBlastPage() {
         <>
           {/* Destinatários */}
           <Card gradient>
-            <h3 className="text-sm font-bold text-brand-950 mb-1">Destinatários</h3>
-            <p className="text-xs text-brand-400 mb-4">Cole ou digite e-mails separados por vírgula, ponto-e-vírgula ou quebra de linha</p>
+            <h3 className="text-sm font-bold text-text-primary mb-1">Destinatários</h3>
+            <p className="text-xs text-text-secondary mb-4">Cole ou digite e-mails separados por vírgula, ponto-e-vírgula ou quebra de linha</p>
             <div className="flex gap-2">
               <textarea
                 value={emailInput}
@@ -235,9 +235,9 @@ export function EmailBlastPage() {
                 onKeyDown={handleKeyDown}
                 placeholder="email1@exemplo.com, email2@exemplo.com..."
                 rows={3}
-                className="flex-1 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
-                  placeholder:text-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400
-                  focus:bg-white transition-all duration-200 resize-none"
+                className="flex-1 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
+                  placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400
+                  focus:bg-surface-elevated transition-all duration-200 resize-none"
               />
               <Button onClick={addEmails} variant="secondary" className="self-end">Adicionar</Button>
             </div>
@@ -254,10 +254,10 @@ export function EmailBlastPage() {
                 </div>
                 <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-3 bg-surface-secondary rounded-xl border border-border-light">
                   {emails.map((email) => (
-                    <span key={email} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-50 text-brand-700 rounded-lg text-xs font-medium">
+                    <span key={email} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-500/12 text-brand-200 rounded-lg text-xs font-medium border border-brand-400/20">
                       {email}
-                      <button onClick={() => removeEmail(email)} className="w-4 h-4 rounded-full bg-brand-100 hover:bg-red-200 flex items-center justify-center transition-colors">
-                        <svg className="w-2.5 h-2.5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <button onClick={() => removeEmail(email)} className="w-4 h-4 rounded-full bg-brand-400/15 hover:bg-red-500/20 flex items-center justify-center transition-colors">
+                        <svg className="w-2.5 h-2.5 text-brand-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
@@ -271,22 +271,22 @@ export function EmailBlastPage() {
           {/* Configurações de batch */}
           <Card>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-surface-secondary flex items-center justify-center">
                 <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-sm font-bold text-brand-950">Configurações de Disparo</h3>
-                <p className="text-xs text-brand-400">Intervalo aleatório entre cada envio — anti-spam</p>
+                <h3 className="text-sm font-bold text-text-primary">Configurações de Disparo</h3>
+                <p className="text-xs text-text-secondary">Intervalo aleatório entre cada envio — anti-spam</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Batch size */}
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-brand-900">Emails por lote</label>
+                <label className="text-sm font-medium text-text-primary">Emails por lote</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -294,7 +294,7 @@ export function EmailBlastPage() {
                     max={50}
                     value={batchSize}
                     onChange={(e) => setBatchSize(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                    className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
+                    className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
                       focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
                   />
                   <span className="text-xs text-brand-400">máx. 50</span>
@@ -303,7 +303,7 @@ export function EmailBlastPage() {
 
               {/* Interval min */}
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-brand-900">Intervalo mínimo</label>
+                <label className="text-sm font-medium text-text-primary">Intervalo mínimo</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -315,7 +315,7 @@ export function EmailBlastPage() {
                       setIntervalMin(v);
                       if (v > intervalMax) setIntervalMax(v);
                     }}
-                    className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
+                    className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
                       focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
                   />
                   <span className="text-xs text-brand-400">seg</span>
@@ -324,7 +324,7 @@ export function EmailBlastPage() {
 
               {/* Interval max */}
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-brand-900">Intervalo máximo</label>
+                <label className="text-sm font-medium text-text-primary">Intervalo máximo</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -335,7 +335,7 @@ export function EmailBlastPage() {
                       const v = Math.max(intervalMin, Math.min(3600, Number(e.target.value) || intervalMin));
                       setIntervalMax(v);
                     }}
-                    className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
+                    className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
                       focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
                   />
                   <span className="text-xs text-brand-400">seg</span>
@@ -345,12 +345,12 @@ export function EmailBlastPage() {
 
             {/* Preview do batch */}
             {emails.length > 0 && (
-              <div className="mt-4 px-4 py-3 bg-brand-50/60 border border-brand-100 rounded-xl">
-                <p className="text-xs font-semibold text-brand-700 mb-1">Prévia do disparo</p>
-                <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-brand-500">
+              <div className="mt-4 px-4 py-3 bg-brand-500/10 border border-brand-400/20 rounded-xl">
+                <p className="text-xs font-semibold text-brand-200 mb-1">Prévia do disparo</p>
+                <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-text-secondary">
                   {Array.from({ length: totalBatches }).map((_, i) => (
                     <span key={i} className="inline-flex items-center gap-1">
-                      <span className="px-2 py-0.5 bg-brand-100 text-brand-700 rounded-md font-semibold">
+                      <span className="px-2 py-0.5 bg-brand-400/15 text-brand-100 rounded-md font-semibold">
                         Lote {i + 1}: {Math.min(batchSize, emails.length - i * batchSize)} emails
                       </span>
                       {i < totalBatches - 1 && (
@@ -365,8 +365,8 @@ export function EmailBlastPage() {
 
           {/* Template */}
           <Card>
-            <h3 className="text-sm font-bold text-brand-950 mb-1">Template do E-mail</h3>
-            <p className="text-xs text-brand-400 mb-4">Customize o assunto e corpo do e-mail</p>
+            <h3 className="text-sm font-bold text-text-primary mb-1">Template do E-mail</h3>
+            <p className="text-xs text-text-secondary mb-4">Customize o assunto e corpo do e-mail</p>
             <div className="space-y-4">
               <Input
                 label="Assunto"
@@ -415,7 +415,7 @@ export function EmailBlastPage() {
           <Card gradient>
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-sm font-bold text-brand-950">
+                <h3 className="text-sm font-bold text-text-primary">
                   {phase === 'done' ? 'Disparo concluído' : batchInfo
                     ? `Enviando lote ${batchInfo.current} de ${batchInfo.total}...`
                     : 'Iniciando disparo...'}
@@ -432,7 +432,7 @@ export function EmailBlastPage() {
               <span className="text-2xl font-bold gradient-text">{progress}%</span>
             </div>
 
-            <div className="w-full h-2 bg-brand-100 rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-surface-secondary rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-500"
                 style={{ width: `${progress}%` }}
@@ -449,10 +449,10 @@ export function EmailBlastPage() {
 
             {/* Countdown entre lotes */}
             {phase === 'running' && countdown !== null && (
-              <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-amber-50/80 border border-amber-200 rounded-xl animate-fade-in">
+              <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-amber-500/10 border border-amber-400/20 rounded-xl animate-fade-in">
                 <div className="relative w-12 h-12 shrink-0">
                   <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#fde68a" strokeWidth="3" />
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#5b4a1a" strokeWidth="3" />
                     <circle
                       cx="18" cy="18" r="15.9" fill="none"
                       stroke="#f59e0b" strokeWidth="3"
@@ -460,22 +460,22 @@ export function EmailBlastPage() {
                       strokeLinecap="round"
                     />
                   </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-amber-600">
+                  <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-amber-300">
                     {countdown.remaining}s
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-amber-700">
+                  <p className="text-sm font-semibold text-amber-200">
                     Intervalo entre lotes
                   </p>
-                  <p className="text-xs text-amber-500">
+                  <p className="text-xs text-amber-300">
                     Próximo lote em {formatInterval(countdown.remaining)} — anti-spam
                   </p>
                 </div>
                 {batchInfo && batchInfo.current < batchInfo.total && (
                   <div className="ml-auto text-right">
-                    <p className="text-[10px] text-amber-400 font-medium">PRÓXIMO</p>
-                    <p className="text-xs font-bold text-amber-600">Lote {batchInfo.current + 1} de {batchInfo.total}</p>
+                    <p className="text-[10px] text-amber-300 font-medium">PRÓXIMO</p>
+                    <p className="text-xs font-bold text-amber-200">Lote {batchInfo.current + 1} de {batchInfo.total}</p>
                   </div>
                 )}
               </div>
@@ -484,16 +484,16 @@ export function EmailBlastPage() {
 
           {/* Done summary */}
           {phase === 'done' && summary && (
-            <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl px-5 py-4 animate-fade-in">
-              <p className="text-sm font-semibold text-emerald-800">
+            <div className="bg-emerald-500/10 border border-emerald-400/20 rounded-2xl px-5 py-4 animate-fade-in">
+              <p className="text-sm font-semibold text-emerald-100">
                 Disparo finalizado — <strong>{summary.sent}</strong> enviados
                 {summary.failed > 0 && <span className="text-red-500">, {summary.failed} falharam</span>}
               </p>
               <div className="flex items-center gap-3 mt-2">
-                <Link to="/leads/contatos" className="text-xs text-emerald-600 hover:underline font-semibold">
+                <Link to="/leads/contatos" className="text-xs text-emerald-200 hover:underline font-semibold">
                   Ver contatos salvos →
                 </Link>
-                <button onClick={handleReset} className="text-xs text-emerald-500 hover:text-emerald-700 font-medium">
+                <button onClick={handleReset} className="text-xs text-emerald-300 hover:text-emerald-100 font-medium">
                   Novo disparo
                 </button>
               </div>
@@ -515,7 +515,7 @@ export function EmailBlastPage() {
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all duration-300 ${s.bg}`}
                   >
                     <span className={`shrink-0 ${s.text}`}>{s.icon}</span>
-                    <span className="flex-1 text-sm text-brand-950 font-medium truncate">{job.email}</span>
+                    <span className="flex-1 text-sm text-text-primary font-medium truncate">{job.email}</span>
                     <span className="text-[10px] text-brand-300 shrink-0">Lote {batchNum}</span>
                     <span className={`text-[11px] font-semibold shrink-0 ${s.text}`}>{s.label}</span>
                     {job.error && (

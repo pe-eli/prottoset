@@ -288,15 +288,15 @@ export function LeadsDashboard() {
         <div className="flex items-center gap-3">
           <Link
             to="/leads"
-            className="w-9 h-9 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
           >
             <svg className="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
-            <h2 className="text-2xl font-bold text-brand-950">Prospecção de Leads</h2>
-            <p className="text-sm text-brand-400">Busque leads via Google Maps e extraia contatos</p>
+            <h2 className="text-2xl font-bold text-text-primary">Prospecção de Leads</h2>
+            <p className="text-sm text-text-secondary">Busque leads via Google Maps e extraia contatos</p>
           </div>
         </div>
       </div>
@@ -330,15 +330,15 @@ export function LeadsDashboard() {
 
       {/* Search result feedback */}
       {lastResult && !searchLoading && (
-        <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl px-5 py-4 text-sm animate-fade-in space-y-2">
-          <p className="text-emerald-800 font-medium">
+        <div className="bg-emerald-500/10 border border-emerald-400/20 rounded-2xl px-5 py-4 text-sm animate-fade-in space-y-2">
+          <p className="text-emerald-100 font-medium">
             <strong>{lastResult.saved}</strong> novos leads salvos
             {lastResult.duplicates > 0 && (
-              <span className="text-emerald-600"> ({lastResult.duplicates} duplicados ignorados)</span>
+              <span className="text-emerald-300"> ({lastResult.duplicates} duplicados ignorados)</span>
             )}
           </p>
           <div className="flex flex-wrap gap-3 text-xs">
-            <span className="text-emerald-700">
+            <span className="text-emerald-200">
               Total encontrados: <strong>{lastResult.metrics.totalLeads}</strong>
             </span>
             <span className="text-red-600">
@@ -444,13 +444,13 @@ export function LeadsDashboard() {
                   className={`text-xs px-3 py-1.5 rounded-lg transition-all duration-200 font-semibold ${
                     selecting
                       ? 'bg-brand-600 text-white'
-                      : 'bg-brand-50 text-brand-600 hover:bg-brand-100'
+                      : 'bg-surface-secondary text-text-primary hover:bg-surface-elevated'
                   }`}
                 >
                   {selecting ? 'Cancelar' : 'Selecionar'}
                 </button>
               )}
-              <div className="flex items-center bg-brand-50 rounded-xl p-0.5">
+              <div className="flex items-center bg-surface-secondary rounded-xl p-0.5 border border-border">
                 <ViewToggle active={view === 'cards'} onClick={() => { setView('cards'); }} label="Cards" />
                 <ViewToggle active={view === 'pipeline'} onClick={() => { setView('pipeline'); exitSelection(); }} label="Pipeline" />
               </div>
@@ -459,13 +459,13 @@ export function LeadsDashboard() {
 
           {/* Selection bar */}
           {selecting && view === 'cards' && filtered.length > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 bg-brand-50 border border-brand-100 rounded-xl animate-fade-in">
+            <div className="flex items-center justify-between px-4 py-3 bg-surface-secondary border border-border-light rounded-xl animate-fade-in">
               <div className="flex items-center gap-3">
                 <button onClick={toggleSelectAll} className="flex items-center gap-2 text-xs font-semibold text-brand-700 hover:text-brand-900 transition-colors">
                   <div className={`w-4.5 h-4.5 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-all ${
                     selectedIds.size === filteredWithPhone.length && filteredWithPhone.length > 0
                       ? 'bg-brand-600 border-brand-600'
-                      : 'bg-white border-brand-300'
+                      : 'bg-surface border-brand-300'
                   }`}>
                     {selectedIds.size === filteredWithPhone.length && filteredWithPhone.length > 0 && (
                       <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -486,7 +486,7 @@ export function LeadsDashboard() {
                     <div className="relative" ref={folderAddRef}>
                       <button
                         onClick={() => setShowFolderAdd((v) => !v)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-semibold rounded-lg border border-brand-200 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface-elevated text-text-primary text-xs font-semibold rounded-lg border border-border transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -495,12 +495,12 @@ export function LeadsDashboard() {
                         Pasta
                       </button>
                       {showFolderAdd && (
-                        <div className="absolute top-full mt-1 left-0 z-20 bg-white border border-border-light rounded-xl shadow-lg py-1 min-w-[180px] animate-fade-in">
+                        <div className="absolute top-full mt-1 left-0 z-20 bg-surface border border-border-light rounded-xl shadow-lg shadow-black/30 py-1 min-w-[180px] animate-fade-in">
                           {folders.map((f) => (
                             <button
                               key={f.id}
                               onClick={() => handleFolderAddLeads(f.id)}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-brand-950 hover:bg-brand-50 transition-colors text-left"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-surface-secondary transition-colors text-left"
                             >
                               <span className="w-2 h-2 rounded-full bg-brand-400 shrink-0" />
                               {f.name}
@@ -542,7 +542,7 @@ export function LeadsDashboard() {
           ) : view === 'cards' ? (
             visibleLeads.length === 0 ? (
               <div className="text-center py-16">
-                <div className="w-16 h-16 rounded-3xl bg-brand-50 flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 rounded-3xl bg-surface-secondary flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-brand-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
@@ -630,8 +630,8 @@ function ViewToggle({ active, onClick, label }: { active: boolean; onClick: () =
       onClick={onClick}
       className={`text-xs px-4 py-1.5 rounded-lg transition-all duration-200 font-semibold ${
         active
-          ? 'bg-white text-brand-700 shadow-sm'
-          : 'text-brand-400 hover:text-brand-600'
+          ? 'bg-surface text-text-primary shadow-sm border border-border'
+          : 'text-text-secondary hover:text-text-primary'
       }`}
     >
       {label}
@@ -656,7 +656,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
+        className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
           focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400
           transition-all duration-200 appearance-none cursor-pointer"
       >

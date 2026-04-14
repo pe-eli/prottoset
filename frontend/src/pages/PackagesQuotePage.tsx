@@ -160,8 +160,8 @@ export function PackagesQuotePage() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Proposta por Pacotes</h2>
-          <p className="text-sm text-gray-500">Básico, Profissional e Premium</p>
+          <h2 className="text-xl font-semibold text-text-primary">Proposta por Pacotes</h2>
+          <p className="text-sm text-text-secondary">Básico, Profissional e Premium</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => navigate('/')}>
@@ -172,7 +172,7 @@ export function PackagesQuotePage() {
 
       {/* PROJETO */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Informações do Projeto</h3>
+        <h3 className="text-sm font-semibold text-text-primary mb-4">Informações do Projeto</h3>
         <div className="grid grid-cols-2 gap-4 mb-4">
           <Input
             label="Nome do Cliente"
@@ -188,31 +188,31 @@ export function PackagesQuotePage() {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">Descrição do Projeto</label>
+          <label className="text-sm font-medium text-text-primary">Descrição do Projeto</label>
           <textarea
             rows={3}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+            className="px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
             placeholder="Descreva brevemente o projeto e o objetivo do cliente..."
             value={form.projectDescription}
             onChange={(e) => setForm((p) => ({ ...p, projectDescription: e.target.value }))}
           />
         </div>
         <div className="flex flex-col gap-1.5 mt-4">
-          <label className="text-sm font-medium text-gray-700">Link de referência <span className="text-xs font-normal text-gray-400">(opcional)</span></label>
+          <label className="text-sm font-medium text-text-primary">Link de referência <span className="text-xs font-normal text-text-muted">(opcional)</span></label>
           <input
             type="url"
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="https://exemplo.com"
             value={form.referenceUrl}
             onChange={(e) => setForm((p) => ({ ...p, referenceUrl: e.target.value }))}
           />
-          <p className="text-xs text-gray-400">Tenha uma ideia de como pode ficar seu projeto</p>
+          <p className="text-xs text-text-muted">Tenha uma ideia de como pode ficar seu projeto</p>
         </div>
       </Card>
 
       {/* PLANOS */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Configuração dos Planos</h3>
+        <h3 className="text-sm font-semibold text-text-primary mb-3">Configuração dos Planos</h3>
         <div className="grid grid-cols-3 gap-4">
           {form.plans.map((plan, pi) => (
             <Card
@@ -227,7 +227,7 @@ export function PackagesQuotePage() {
                 />
 
                 {/* PREÇOS */}
-                <div className="border border-gray-100 rounded-lg p-2.5 flex flex-col gap-2 bg-gray-50">
+                <div className="border border-border-light rounded-lg p-2.5 flex flex-col gap-2 bg-surface-secondary/80">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-semibold text-green-700 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
@@ -237,22 +237,22 @@ export function PackagesQuotePage() {
                       type="number"
                       min="0"
                       step="50"
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                      className="px-3 py-2 border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500 bg-surface"
                       placeholder="Ex: 1500"
                       value={plan.priceAVista}
                       onChange={(e) => updatePlan(pi, { priceAVista: e.target.value })}
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">
+                    <label className="text-xs font-semibold text-text-secondary flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block" />
-                      Parcelado (R$) <span className="font-normal text-gray-400">opcional</span>
+                      Parcelado (R$) <span className="font-normal text-text-muted">opcional</span>
                     </label>
                     <input
                       type="number"
                       min="0"
                       step="50"
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                      className="px-3 py-2 border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500 bg-surface"
                       placeholder="Ex: 1800"
                       value={plan.priceInstallments}
                       onChange={(e) => updatePlan(pi, { priceInstallments: e.target.value })}
@@ -267,15 +267,15 @@ export function PackagesQuotePage() {
                 </div>
 
                 {/* MENSALIDADE */}
-                <div className="border-t border-gray-100 pt-3 flex flex-col gap-2">
-                  <p className="text-xs font-semibold text-gray-600">Mensalidade (opcional)</p>
+                <div className="border-t border-border-light pt-3 flex flex-col gap-2">
+                  <p className="text-xs font-semibold text-text-secondary">Mensalidade (opcional)</p>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-gray-600">Valor mensal (R$)</label>
+                    <label className="text-xs font-medium text-text-secondary">Valor mensal (R$)</label>
                     <input
                       type="number"
                       min="0"
                       step="10"
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500"
                       placeholder="Ex: 150"
                       value={plan.monthlyFee}
                       onChange={(e) => updatePlan(pi, { monthlyFee: e.target.value })}
@@ -283,10 +283,10 @@ export function PackagesQuotePage() {
                   </div>
                   {plan.monthlyFee && (
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-gray-600">O que contempla</label>
+                      <label className="text-xs font-medium text-text-secondary">O que contempla</label>
                       <textarea
                         rows={2}
-                        className="px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
+                        className="px-2 py-1.5 bg-surface border border-border rounded text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
                         placeholder="Ex: Suporte técnico, hospedagem e backups automatizados"
                         value={plan.monthlyFeeDescription}
                         onChange={(e) => updatePlan(pi, { monthlyFeeDescription: e.target.value })}
@@ -303,19 +303,19 @@ export function PackagesQuotePage() {
                     onChange={() => setHighlighted(pi)}
                     className="accent-brand-600"
                   />
-                  <span className="text-xs text-gray-600">Destacar como Mais Popular</span>
+                  <span className="text-xs text-text-secondary">Destacar como Mais Popular</span>
                 </label>
 
                 {/* RECURSOS */}
                 <div>
-                  <p className="text-xs font-semibold text-gray-600 mb-1.5">
+                  <p className="text-xs font-semibold text-text-secondary mb-1.5">
                     Recursos ({plan.features.length})
                   </p>
 
                   {plan.features.length > 0 && (
                     <ul className="space-y-1 mb-2">
                       {plan.features.map((feat, fi) => (
-                        <li key={fi} className="flex items-start gap-1.5 text-xs text-gray-700">
+                        <li key={fi} className="flex items-start gap-1.5 text-xs text-text-secondary">
                           <span className="text-green-600 font-bold mt-0.5 flex-shrink-0">✓</span>
                           <span className="flex-1 leading-snug">{feat}</span>
                           <button
@@ -333,7 +333,7 @@ export function PackagesQuotePage() {
                   <div className="flex gap-1.5">
                     <input
                       type="text"
-                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      className="flex-1 px-2 py-1.5 bg-surface border border-border rounded text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-brand-500"
                       placeholder="Ex: Suporte 24h"
                       value={newFeature[pi]}
                       onChange={(e) =>
@@ -357,7 +357,7 @@ export function PackagesQuotePage() {
 
       {/* CONDIÇÕES */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Condições da Proposta</h3>
+        <h3 className="text-sm font-semibold text-text-primary mb-4">Condições da Proposta</h3>
         <div className="grid grid-cols-2 gap-4">
           <Input
             label="Prazo de Entrega"
@@ -374,7 +374,7 @@ export function PackagesQuotePage() {
 
           {/* FORMA DE PAGAMENTO */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Forma de Pagamento</label>
+            <label className="text-sm font-medium text-text-primary">Forma de Pagamento</label>
             <div className="flex gap-2">
               {(['pix', 'cartao', 'boleto'] as const).map((m) => {
                 const active = form.paymentMethods.includes(m);
@@ -397,7 +397,7 @@ export function PackagesQuotePage() {
                     className={`flex-1 py-2 text-xs font-medium rounded-lg border transition-colors ${
                       active
                         ? 'bg-brand-600 text-white border-brand-600'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-brand-400'
+                        : 'bg-surface text-text-secondary border-border hover:border-brand-400'
                     }`}
                   >
                     {m === 'pix' ? 'PIX' : m === 'cartao' ? 'Cartão' : 'Boleto'}
@@ -407,9 +407,9 @@ export function PackagesQuotePage() {
             </div>
             {form.paymentMethods.includes('cartao') && (
               <div className="flex flex-col gap-1 mt-1">
-                <label className="text-xs font-medium text-gray-600">Parcelamento</label>
+                <label className="text-xs font-medium text-text-secondary">Parcelamento</label>
                 <select
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500"
                   value={form.installments}
                   onChange={(e) => setForm((p) => ({ ...p, installments: Number(e.target.value) }))}
                 >
@@ -423,11 +423,11 @@ export function PackagesQuotePage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Validade (dias)</label>
+            <label className="text-sm font-medium text-text-primary">Validade (dias)</label>
             <input
               type="number"
               min="1"
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={form.validityDays}
               onChange={(e) => setForm((p) => ({ ...p, validityDays: e.target.value }))}
             />
@@ -436,7 +436,7 @@ export function PackagesQuotePage() {
       </Card>
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-2.5 rounded-lg">
+        <p className="text-sm text-red-200 bg-red-500/10 border border-red-400/20 px-4 py-2.5 rounded-lg">
           {error}
         </p>
       )}

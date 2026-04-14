@@ -27,6 +27,8 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     setError(null);
     setNotice(null);
 
+    const sanitizedEmail = email.trim().toLowerCase();
+
     if (mode === 'register' && password !== confirmPassword) {
       setError('As senhas não coincidem.');
       return;
@@ -40,11 +42,20 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     setLoading(true);
 
     try {
-      const sanitizedEmail = email.trim().toLowerCase();
       if (mode === 'login') {
         const { data } = await authAPI.login(sanitizedEmail, password);
         onAuthenticated(data.user);
       } else {
+        const { data: emailCheck } = await authAPI.checkEmail(sanitizedEmail);
+        if (emailCheck.exists) {
+          setError(
+            emailCheck.emailVerified
+              ? 'Este e-mail já está cadastrado. Faça login ou use outro e-mail.'
+              : 'Este e-mail já possui um cadastro pendente de verificação. Use outro e-mail ou tente concluir a verificação.'
+          );
+          return;
+        }
+
         const sanitizedName = name.trim().replace(/\s+/g, ' ');
         const { data } = await authAPI.register(sanitizedEmail, password, sanitizedName, acceptedTerms);
         const verificationEmail = data.email || sanitizedEmail;
@@ -198,7 +209,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
               className="w-full inline-flex items-center justify-center font-bold rounded-xl transition-all duration-200 px-5 py-2.5 text-sm bg-brand-400 text-white hover:bg-brand-500 active:scale-[0.98] shadow-md shadow-brand-400/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading
-                ? (mode === 'login' ? 'Entrando...' : 'Criando conta...')
+                ? (mode === 'login' ? 'Entrando...' : 'Verificando e-mail...')
                 : (mode === 'login' ? 'Entrar' : 'Criar Conta')}
             </button>
           </form>

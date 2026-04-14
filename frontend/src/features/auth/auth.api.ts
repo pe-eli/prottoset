@@ -22,8 +22,16 @@ export interface CsrfResponse {
   csrfToken: string;
 }
 
+export interface CheckEmailResponse {
+  exists: boolean;
+  emailVerified: boolean;
+}
+
 export const authAPI = {
   csrf: () => api.get<CsrfResponse>('/auth/csrf'),
+
+  checkEmail: (email: string) =>
+    api.get<CheckEmailResponse>('/auth/check-email', { params: { email } }),
 
   register: (email: string, password: string, name: string, acceptedTerms: boolean) =>
     api.post<RegisterResponse>('/auth/register', { email, password, name, acceptedTerms }),

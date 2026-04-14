@@ -54,15 +54,15 @@ export function WeeklyViewPage() {
         <div className="flex items-center gap-3">
           <Link
             to="/produtividade"
-            className="w-9 h-9 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
           >
             <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-brand-950">Visão Semanal</h1>
-            <p className="text-sm text-brand-400">Análise detalhada por semana</p>
+            <h1 className="text-2xl font-bold text-text-primary">Visão Semanal</h1>
+            <p className="text-sm text-text-secondary">Análise detalhada por semana</p>
           </div>
         </div>
       </div>
@@ -70,7 +70,7 @@ export function WeeklyViewPage() {
       {weeks.length === 0 ? (
         <Card>
           <div className="text-center py-12">
-            <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-3">
+            <div className="w-14 h-14 rounded-2xl bg-surface-secondary flex items-center justify-center mx-auto mb-3">
               <svg className="w-7 h-7 text-brand-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
               </svg>
@@ -104,7 +104,7 @@ export function WeeklyViewPage() {
             {activeWeek && (
               <>
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-brand-950">
+                  <h2 className="text-lg font-bold text-text-primary">
                     {formatWeekLabel(activeWeek.week)}
                   </h2>
                   <div className="flex items-center gap-4 text-sm text-brand-400">
@@ -124,7 +124,7 @@ export function WeeklyViewPage() {
                 {/* Chart */}
                 {chartData.length > 0 && (
                   <Card>
-                    <h3 className="text-sm font-semibold text-brand-950 mb-3">Distribuição diária</h3>
+                    <h3 className="text-sm font-semibold text-text-primary mb-3">Distribuição diária</h3>
                     <div className="h-52">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} barCategoryGap="20%">
@@ -132,11 +132,12 @@ export function WeeklyViewPage() {
                           <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={30} />
                           <Tooltip
                             contentStyle={{
-                              background: '#fff',
-                              border: '1px solid #edf1fa',
+                              background: '#22262e',
+                              border: '1px solid #363c4a',
                               borderRadius: 12,
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                              boxShadow: '0 12px 32px rgba(0,0,0,0.28)',
                               fontSize: 13,
+                              color: '#e8eaf0',
                             }}
                           />
                           <Bar dataKey="Prottocode" fill="#2563eb" radius={[4, 4, 0, 0]} />
@@ -150,7 +151,7 @@ export function WeeklyViewPage() {
 
                 {/* Entries table */}
                 <Card>
-                  <h3 className="text-sm font-semibold text-brand-950 mb-3">Detalhamento</h3>
+                  <h3 className="text-sm font-semibold text-text-primary mb-3">Detalhamento</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -171,12 +172,12 @@ export function WeeklyViewPage() {
                           return (
                             <tr
                               key={entry.id}
-                              className="border-b border-border-light/50 hover:bg-brand-50/30 transition-colors"
+                              className="border-b border-border-light/50 hover:bg-surface-secondary transition-colors"
                             >
                               <td className="py-2.5">
                                 <Link
                                   to={`/produtividade/editar/${entry.id}`}
-                                  className="font-medium text-brand-950 hover:text-brand-600"
+                                  className="font-medium text-text-primary hover:text-brand-300"
                                 >
                                   {dayjs(entry.date).format('DD/MM')}
                                   <span className="text-brand-300 font-normal ml-1.5">
@@ -187,7 +188,7 @@ export function WeeklyViewPage() {
                               <td className="text-center font-medium text-blue-600">{entry.prottocodeHours}h</td>
                               <td className="text-center font-medium text-violet-600">{entry.aluraHours}h</td>
                               <td className="text-center font-medium text-amber-600">{entry.dimourasHours}h</td>
-                              <td className="text-center font-semibold text-brand-950">{total}h</td>
+                              <td className="text-center font-semibold text-text-primary">{total}h</td>
                               <td className="text-center">
                                 <div className="max-w-16 mx-auto">
                                   <ProgressBar value={entry.completion} size="sm" />
@@ -209,7 +210,7 @@ export function WeeklyViewPage() {
 
                 {/* Best day highlight */}
                 {activeWeek.bestDay && (
-                  <Card className="bg-gradient-to-r from-brand-50 to-violet-50 border-brand-200">
+                  <Card className="bg-gradient-to-r from-brand-500/10 to-violet-500/10 border-brand-400/20">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white">
                         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -217,7 +218,7 @@ export function WeeklyViewPage() {
                         </svg>
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-brand-950">
+                        <p className="text-sm font-semibold text-text-primary">
                           Melhor dia: {getDayOfWeekLabel(activeWeek.bestDay.date)}, {dayjs(activeWeek.bestDay.date).format('DD/MM')}
                         </p>
                         <p className="text-xs text-brand-400">
@@ -254,11 +255,11 @@ function WeekCard({
       onClick={onClick}
       className={`w-full text-left rounded-2xl border p-3 transition-all ${
         isActive
-          ? 'border-brand-400 bg-brand-50 shadow-sm'
-          : 'border-border-light bg-surface hover:bg-brand-50/30'
+          ? 'border-brand-400 bg-brand-500/10 shadow-sm'
+          : 'border-border-light bg-surface hover:bg-surface-secondary'
       }`}
     >
-      <p className={`text-sm font-semibold ${isActive ? 'text-brand-700' : 'text-brand-950'}`}>
+      <p className={`text-sm font-semibold ${isActive ? 'text-brand-200' : 'text-text-primary'}`}>
         {formatWeekLabel(summary.week)}
       </p>
       <div className="flex items-center gap-3 mt-1 text-xs text-brand-400">

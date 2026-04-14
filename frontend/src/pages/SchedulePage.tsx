@@ -119,21 +119,21 @@ export function SchedulePage() {
         <div className="flex items-center gap-3">
           <Link
             to="/produtividade"
-            className="w-9 h-9 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
           >
             <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-brand-950">Agenda</h1>
-            <p className="text-sm text-brand-400">{weekLabel}</p>
+            <h1 className="text-2xl font-bold text-text-primary">Agenda</h1>
+            <p className="text-sm text-text-secondary">{weekLabel}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setWeekRef(shiftWeek(weekRef, -1))}
-            className="w-9 h-9 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
           >
             <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -141,13 +141,13 @@ export function SchedulePage() {
           </button>
           <button
             onClick={() => setWeekRef(dayjs().format('YYYY-MM-DD'))}
-            className="px-3 py-2 text-xs font-semibold rounded-xl bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors"
+            className="px-3 py-2 text-xs font-semibold rounded-xl bg-surface-secondary text-text-primary hover:bg-surface-elevated transition-colors"
           >
             Hoje
           </button>
           <button
             onClick={() => setWeekRef(shiftWeek(weekRef, 1))}
-            className="w-9 h-9 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
           >
             <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -185,7 +185,7 @@ export function SchedulePage() {
                 <p className={`text-xs font-medium ${isToday ? 'text-brand-600' : 'text-brand-400'}`}>
                   {getDayLabel(date)}
                 </p>
-                <p className={`text-lg font-bold ${isToday ? 'text-brand-700' : 'text-brand-950'}`}>
+                <p className={`text-lg font-bold ${isToday ? 'text-brand-200' : 'text-text-primary'}`}>
                   {dayjs(date).format('DD')}
                 </p>
               </div>
@@ -264,7 +264,7 @@ export function SchedulePage() {
       {/* Planned vs Actual Comparison */}
       {actualByDate.size > 0 && (
         <Card>
-          <h3 className="text-sm font-semibold text-brand-950 mb-4">Planejado vs Realizado</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Planejado vs Realizado</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {(['prottocode', 'alura', 'dimouras'] as const).map((cat) => {
               const config = CATEGORY_CONFIG[cat];
@@ -277,7 +277,7 @@ export function SchedulePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className={`w-2.5 h-2.5 rounded-full ${config.dot}`} />
-                      <span className="text-xs font-semibold text-brand-950">{config.label}</span>
+                      <span className="text-xs font-semibold text-text-primary">{config.label}</span>
                     </div>
                     <span className="text-xs text-brand-400">{actual}h / {planned}h</span>
                   </div>
@@ -292,7 +292,7 @@ export function SchedulePage() {
           </div>
           <div className="mt-4 pt-3 border-t border-border-light flex items-center justify-between">
             <span className="text-xs font-medium text-brand-400">Total da semana</span>
-            <span className="text-sm font-bold text-brand-950">
+            <span className="text-sm font-bold text-text-primary">
               {actualTotals.total}h realizado / {weekTotals.total}h planejado
             </span>
           </div>
@@ -328,7 +328,7 @@ function StatCard({ label, value, color }: { label: string; value: string; color
   return (
     <div className="bg-surface border border-border-light rounded-2xl shadow-sm p-3 relative overflow-hidden">
       <div className={`absolute -top-3 -right-3 w-14 h-14 bg-gradient-to-br ${color} rounded-full opacity-10`} />
-      <p className="text-xl font-bold text-brand-950">{value}</p>
+      <p className="text-xl font-bold text-text-primary">{value}</p>
       <p className="text-xs text-brand-400">{label}</p>
     </div>
   );

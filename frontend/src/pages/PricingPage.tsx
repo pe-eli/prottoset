@@ -32,6 +32,31 @@ export function PricingPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const resetCheckoutState = () => {
+      setCheckoutLoading(null);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        resetCheckoutState();
+      }
+    };
+
+    // Browsers can restore this page from bfcache after external checkout.
+    // Ensure CTA buttons are re-enabled when the user comes back.
+    resetCheckoutState();
+    window.addEventListener('pageshow', resetCheckoutState);
+    window.addEventListener('focus', resetCheckoutState);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pageshow', resetCheckoutState);
+      window.removeEventListener('focus', resetCheckoutState);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   const handleCheckout = async (planId: string) => {
     try {
       setCheckoutLoading(planId);

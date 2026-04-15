@@ -3,21 +3,6 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockedRepositories = vi.hoisted(() => ({
-  scheduleRepository: {
-    getAll: vi.fn(),
-    getById: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-  },
-  productivityRepository: {
-    getAll: vi.fn(),
-    getById: vi.fn(),
-    getByWeek: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-  },
   queuesRepository: {
     getAll: vi.fn(),
     create: vi.fn(),
@@ -36,13 +21,9 @@ const mockedRepositories = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../modules/schedule/schedule.repository', () => ({ scheduleRepository: mockedRepositories.scheduleRepository }));
-vi.mock('../modules/productivity/productivity.repository', () => ({ productivityRepository: mockedRepositories.productivityRepository }));
 vi.mock('../modules/queues/queues.repository', () => ({ queuesRepository: mockedRepositories.queuesRepository }));
 vi.mock('../modules/leads/lead-folders.repository', () => ({ leadFoldersRepository: mockedRepositories.leadFoldersRepository }));
 
-import scheduleRoutes from '../routes/schedule.routes';
-import productivityRoutes from '../routes/productivity.routes';
 import queuesRoutes from '../routes/queues.routes';
 import leadFoldersRoutes from '../routes/lead-folders.routes';
 
@@ -53,8 +34,6 @@ function buildApp() {
     req.tenantId = '11111111-1111-4111-8111-111111111111';
     next();
   });
-  app.use('/schedule', scheduleRoutes);
-  app.use('/productivity', productivityRoutes);
   app.use('/queues', queuesRoutes);
   app.use('/lead-folders', leadFoldersRoutes);
   return app;
@@ -63,37 +42,6 @@ function buildApp() {
 describe('route validation hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('rejects invalid schedule creation payloads', async () => {
-    const app = buildApp();
-    const response = await request(app)
-      .post('/schedule')
-      .send({ title: 'Agenda', category: 'prottocode', startTime: '09:00', endTime: '10:00' });
-
-    expect(response.status).toBe(400);
-    expect(response.body.error).toContain('Informe date');
-    expect(mockedRepositories.scheduleRepository.create).not.toHaveBeenCalled();
-  });
-
-  it('rejects empty productivity updates', async () => {
-    const app = buildApp();
-    const response = await request(app)
-      .patch('/productivity/11111111-1111-4111-8111-111111111111')
-      .send({});
-
-    expect(response.status).toBe(400);
-    expect(response.body.error).toContain('Nenhum campo');
-    expect(mockedRepositories.productivityRepository.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects invalid productivity week params', async () => {
-    const app = buildApp();
-    const response = await request(app).get('/productivity/week/not-a-week');
-
-    expect(response.status).toBe(400);
-    expect(response.body.error).toContain('Semana inválida');
-    expect(mockedRepositories.productivityRepository.getByWeek).not.toHaveBeenCalled();
   });
 
   it('rejects queue merge with invalid identifiers', async () => {

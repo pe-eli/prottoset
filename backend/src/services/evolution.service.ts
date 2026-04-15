@@ -45,21 +45,25 @@ function formatEvolutionHttpError(status: number, body: string): string {
   return `Evolution API ${status}: ${excerpt}`;
 }
 
+function getApiConfig(): { apiUrl: string; apiKey: string } {
+  const apiUrl = normalizeApiUrl(process.env.EVOLUTION_API_URL);
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  if (!apiUrl || !apiKey) {
+    throw new Error('Evolution API não configurada (EVOLUTION_API_URL / EVOLUTION_API_KEY)');
+  }
+  return { apiUrl, apiKey };
+}
+
 export const evolutionService = {
   /**
    * Validate which phone numbers have WhatsApp.
    * Returns only the numbers that exist on WhatsApp.
    */
   async checkNumbers(
+    instanceName: string,
     phones: string[],
   ): Promise<{ valid: string[]; invalid: string[] }> {
-    const apiUrl = normalizeApiUrl(process.env.EVOLUTION_API_URL);
-    const apiKey = process.env.EVOLUTION_API_KEY;
-    const instance = process.env.EVOLUTION_INSTANCE;
-
-    if (!apiUrl || !apiKey || !instance) {
-      throw new Error('Evolution API não configurada');
-    }
+    const { apiUrl, apiKey } = getApiConfig();
 
     const valid: string[] = [];
     const invalid: string[] = [];
@@ -67,7 +71,7 @@ export const evolutionService = {
 
     // Evolution API checks numbers in batch
     try {
-      const response = await fetch(`${apiUrl}/chat/whatsappNumbers/${instance}`, {
+      const response = await fetch(`${apiUrl}/chat/whatsappNumbers/${instanceName}`, {
         method: 'POST',
         headers: buildEvolutionHeaders(apiKey),
         body: JSON.stringify({ numbers: normalizedPhones }),
@@ -94,7 +98,7 @@ export const evolutionService = {
         }
       }
     } catch (err: any) {
-      console.error('[Evolution] checkNumbers error:', err.message);
+      console.error(`[Evolution:${instanceName}] checkNumbers error:`, err.message);
       throw err;
     }
 
@@ -105,17 +109,11 @@ export const evolutionService = {
    * Fetch all existing chat phone numbers from the instance.
    * Returns a Set of phone numbers (digits only) that already have open conversations.
    */
-  async fetchExistingChats(): Promise<Set<string>> {
-    const apiUrl = normalizeApiUrl(process.env.EVOLUTION_API_URL);
-    const apiKey = process.env.EVOLUTION_API_KEY;
-    const instance = process.env.EVOLUTION_INSTANCE;
-
-    if (!apiUrl || !apiKey || !instance) {
-      throw new Error('Evolution API não configurada');
-    }
+  async fetchExistingChats(instanceName: string): Promise<Set<string>> {
+    const { apiUrl, apiKey } = getApiConfig();
 
     try {
-      const response = await fetch(`${apiUrl}/chat/findChats/${instance}`, {
+      const response = await fetch(`${apiUrl}/chat/findChats/${instanceName}`, {
         method: 'POST',
         headers: buildEvolutionHeaders(apiKey),
         body: JSON.stringify({}),
@@ -140,32 +138,23 @@ export const evolutionService = {
 
       return phones;
     } catch (err: any) {
-      console.error('[Evolution] fetchExistingChats error:', err.message);
+      console.error(`[Evolution:${instanceName}] fetchExistingChats error:`, err.message);
       throw err;
     }
   },
 
   async sendMessage(
+    instanceName: string,
     phone: string,
     message: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const apiUrl = normalizeApiUrl(process.env.EVOLUTION_API_URL);
-    const apiKey = process.env.EVOLUTION_API_KEY;
-    const instance = process.env.EVOLUTION_INSTANCE;
-
-    if (!apiUrl || !apiKey || !instance) {
-      return {
-        success: false,
-        error:
-          'Evolution API não configurada. Configure EVOLUTION_API_URL, EVOLUTION_API_KEY e EVOLUTION_INSTANCE no .env',
-      };
-    }
+    const { apiUrl, apiKey } = getApiConfig();
 
     // Normalize phone: keep only digits, ensure country code
     const cleanPhone = normalizePhoneForWa(phone);
 
     try {
-      const response = await fetch(`${apiUrl}/message/sendText/${instance}`, {
+      const response = await fetch(`${apiUrl}/message/sendText/${instanceName}`, {
         method: 'POST',
         headers: buildEvolutionHeaders(apiKey),
         body: JSON.stringify({
@@ -186,5 +175,77 @@ export const evolutionService = {
     } catch (err: any) {
       return { success: false, error: err.message ?? 'Erro de conexão com a Evolution API' };
     }
+  },
+
+  // ─── Instance management ───
+
+  async createInstance(instanceName: string): Promise<{ qrCode?: string }> {
+    const { apiUrl, apiKey } = getApiConfig();
+    const webhookUrl = process.env.EVOLUTION_WEBHOOK_URL;
+
+    const body: Record<string, unknown> = {
+      instanceName,
+      integration: 'WHATSAPP-BAILEYS',
+      qrcode: true,
+    };
+
+    if (webhookUrl) {
+      body.webhook = `${webhookUrl}/api/webhooks/evolution`;
+      body.webhookByEvents = true;
+      body.webhookEvents = ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'QRCODE_UPDATED'];
+    }
+
+    const response = await fetch(`${apiUrl}/instance/create`, {
+      method: 'POST',
+      headers: buildEvolutionHeaders(apiKey),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(formatEvolutionHttpError(response.status, text));
+    }
+
+    const data = (await response.json()) as Record<string, any>;
+    return { qrCode: data.qrcode?.base64 ?? data.base64 };
+  },
+
+  async connectInstance(instanceName: string): Promise<{ qrCode?: string }> {
+    const { apiUrl, apiKey } = getApiConfig();
+
+    const response = await fetch(`${apiUrl}/instance/connect/${instanceName}`, {
+      method: 'GET',
+      headers: buildEvolutionHeaders(apiKey),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(formatEvolutionHttpError(response.status, text));
+    }
+
+    const data = (await response.json()) as Record<string, any>;
+    return { qrCode: data.base64 };
+  },
+
+  async getInstanceStatus(instanceName: string): Promise<string> {
+    const { apiUrl, apiKey } = getApiConfig();
+
+    const response = await fetch(`${apiUrl}/instance/connectionState/${instanceName}`, {
+      method: 'GET',
+      headers: buildEvolutionHeaders(apiKey),
+    });
+
+    if (!response.ok) return 'close';
+    const data = (await response.json()) as Record<string, any>;
+    return data.instance?.state ?? 'close';
+  },
+
+  async deleteInstance(instanceName: string): Promise<void> {
+    const { apiUrl, apiKey } = getApiConfig();
+
+    await fetch(`${apiUrl}/instance/delete/${instanceName}`, {
+      method: 'DELETE',
+      headers: buildEvolutionHeaders(apiKey),
+    });
   },
 };

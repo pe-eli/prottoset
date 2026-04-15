@@ -5,6 +5,7 @@ import { Contact } from '../types/contacts.types';
 import { blastParamSchema, contactCreateSchema, contactUpdateSchema, emailBlastSchema, uuidParamSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
 import { enqueueEmailBlastJob } from '../jobs/queues';
+import { usageRepository } from '../modules/subscriptions/usage.repository';
 
 function openSse(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -175,6 +176,7 @@ export const contactsController = {
       });
 
       await enqueueEmailBlastJob({ tenantId, runId: blastId });
+      await usageRepository.incrementUsage(tenantId, 'emails_used', cleanEmails.length);
 
       res.json({ blastId, total: cleanEmails.length });
     } catch (err: any) {

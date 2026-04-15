@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
+import { waInstanceAPI } from '../features/whatsapp/wa-instance.api';
+import type { WaInstanceStatus } from '../features/whatsapp/wa-instance.api';
 
 const FEATURES = [
   {
@@ -53,6 +56,14 @@ const FEATURES = [
 ];
 
 export function LeadsHub() {
+  const [waStatus, setWaStatus] = useState<WaInstanceStatus | null>(null);
+
+  useEffect(() => {
+    waInstanceAPI.getStatus()
+      .then(({ data }) => setWaStatus(data))
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="max-w-5xl mx-auto animate-fade-in">
       {/* Hero section */}
@@ -77,8 +88,22 @@ export function LeadsHub() {
           {FEATURES.map((feature) => (
             <Link key={feature.path} to={feature.path}>
               <Card hover className="h-full group">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-lg ${feature.shadowColor} mb-5 group-hover:scale-105 transition-transform duration-300`}>
-                  {feature.icon}
+                <div className="flex items-start justify-between">
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white shadow-lg ${feature.shadowColor} mb-5 group-hover:scale-105 transition-transform duration-300`}>
+                    {feature.icon}
+                  </div>
+                  {feature.path === '/leads/whatsapp' && waStatus && (
+                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold ${
+                      waStatus.status === 'connected'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-400/20'
+                        : 'bg-amber-500/10 text-amber-400 border border-amber-400/20'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        waStatus.status === 'connected' ? 'bg-emerald-400' : 'bg-amber-400'
+                      }`} />
+                      {waStatus.status === 'connected' ? 'Conectado' : 'Desconectado'}
+                    </div>
+                  )}
                 </div>
                 <h3 className="text-lg font-heading font-bold text-text-primary mb-1.5 group-hover:text-brand-400 transition-colors">
                   {feature.title}

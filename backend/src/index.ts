@@ -11,8 +11,9 @@ import contactsRoutes from './routes/contacts.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
 import queuesRoutes from './routes/queues.routes';
 import leadFoldersRoutes from './routes/lead-folders.routes';
-import productivityRoutes from './routes/productivity.routes';
-import scheduleRoutes from './routes/schedule.routes';
+import subscriptionRoutes from './routes/subscriptions.routes';
+import { subscriptionsController } from './controllers/subscriptions.controller';
+import { evolutionWebhookController } from './controllers/evolution-webhook.controller';
 import { requireAuth } from './middleware/auth.middleware';
 import { requireVerifiedEmail } from './middleware/verified-email.middleware';
 import { setTenant } from './middleware/tenant.middleware';
@@ -56,6 +57,12 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: '200kb' }));
 
+// MercadoPago webhook — public endpoint (no auth, validated by signature)
+app.post('/api/webhooks/mercadopago', subscriptionsController.webhook);
+
+// Evolution API webhook — public endpoint (identified by instanceName)
+app.post('/api/webhooks/evolution', evolutionWebhookController.handle);
+
 app.use('/api/auth', requireTrustedOrigin(allowedOrigins));
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', (_req, res) => {
@@ -73,8 +80,7 @@ app.use('/api/contacts', contactsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/queues', queuesRoutes);
 app.use('/api/lead-folders', leadFoldersRoutes);
-app.use('/api/productivity', productivityRoutes);
-app.use('/api/schedule', scheduleRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

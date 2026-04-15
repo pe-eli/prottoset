@@ -4,7 +4,6 @@ const uuidSchema = z.string().uuid('Identificador inválido');
 const isoDateSchema = z.string().datetime('Data inválida');
 const isoDateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida');
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Horário inválido');
-const weekSchema = z.string().regex(/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/, 'Semana inválida');
 const nonEmptyString = (max: number, message: string) => z.string().trim().min(1, message).max(max);
 
 export const quoteSchema = z.object({
@@ -107,67 +106,6 @@ export const blastParamSchema = z.object({
   blastId: uuidSchema,
 });
 
-export const weekParamSchema = z.object({
-  week: weekSchema,
-});
-
-const recurrenceSchema = z.object({
-  type: z.literal('weekly'),
-  dayOfWeek: z.number().int().min(0).max(6),
-});
-
-export const scheduleCreateSchema = z.object({
-  title: nonEmptyString(160, 'Título é obrigatório'),
-  category: z.enum(['prottocode', 'alura', 'dimouras']),
-  startTime: timeSchema,
-  endTime: timeSchema,
-  date: isoDateOnlySchema.optional(),
-  recurrence: recurrenceSchema.optional(),
-}).superRefine((value, ctx) => {
-  if (!value.date && !value.recurrence) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Informe date (evento único) ou recurrence (recorrente)',
-      path: ['date'],
-    });
-  }
-});
-
-export const scheduleUpdateSchema = z.object({
-  title: z.string().trim().min(1).max(160).optional(),
-  category: z.enum(['prottocode', 'alura', 'dimouras']).optional(),
-  startTime: timeSchema.optional(),
-  endTime: timeSchema.optional(),
-  date: isoDateOnlySchema.optional().nullable(),
-  recurrence: recurrenceSchema.optional().nullable(),
-}).refine((value) => Object.keys(value).length > 0, {
-  message: 'Nenhum campo para atualizar foi informado',
-});
-
-export const productivityCreateSchema = z.object({
-  date: isoDateOnlySchema,
-  prottocodeHours: z.number().finite().min(0).max(24),
-  aluraHours: z.number().finite().min(0).max(24).default(0),
-  dimourasHours: z.number().finite().min(0).max(24).default(0),
-  focus: z.string().trim().max(500).default(''),
-  completion: z.number().int().min(0).max(100).default(0),
-  notes: z.string().trim().max(5000).default(''),
-  rating: z.enum(['excellent', 'good', 'average', 'bad']).default('average'),
-});
-
-export const productivityUpdateSchema = z.object({
-  date: isoDateOnlySchema.optional(),
-  prottocodeHours: z.number().finite().min(0).max(24).optional(),
-  aluraHours: z.number().finite().min(0).max(24).optional(),
-  dimourasHours: z.number().finite().min(0).max(24).optional(),
-  focus: z.string().trim().max(500).optional(),
-  completion: z.number().int().min(0).max(100).optional(),
-  notes: z.string().trim().max(5000).optional(),
-  rating: z.enum(['excellent', 'good', 'average', 'bad']).optional(),
-}).refine((value) => Object.keys(value).length > 0, {
-  message: 'Nenhum campo para atualizar foi informado',
-});
-
 export const queueCreateSchema = z.object({
   name: nonEmptyString(120, 'Nome da fila é obrigatório'),
 });
@@ -210,4 +148,8 @@ export const leadStatusUpdateSchema = z.object({
 
 export const captchaTokenSchema = z.object({
   captchaToken: nonEmptyString(2048, 'Captcha é obrigatório'),
+});
+
+export const checkoutSchema = z.object({
+  planId: z.enum(['solo', 'agencia', 'pro'], { message: 'Plano inválido' }),
 });

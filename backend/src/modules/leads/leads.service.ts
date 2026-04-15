@@ -1,11 +1,16 @@
 import { Lead, LeadSearchParams, LeadSearchResult, LeadStatus } from '../../types/leads.types';
 import { leadsRepository } from './leads.repository';
 import { generateLeads } from '../../workflow/leadGenerator';
+import { usageRepository } from '../subscriptions/usage.repository';
 
 export const leadsService = {
   async search(tenantId: string, params: LeadSearchParams): Promise<LeadSearchResult> {
     const { leads, metrics } = await generateLeads(params);
     const saved = await leadsRepository.saveMany(tenantId, leads);
+
+    if (saved.length > 0) {
+      await usageRepository.incrementUsage(tenantId, 'leads_used', saved.length);
+    }
 
     return {
       saved,

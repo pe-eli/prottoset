@@ -3,6 +3,11 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+DROP TABLE IF EXISTS productivity CASCADE;
+DROP TABLE IF EXISTS schedule CASCADE;
+DROP TYPE IF EXISTS schedule_category;
+DROP TYPE IF EXISTS daily_rating;
+
 -- ============================================================
 -- ENUM TYPES
 -- ============================================================
@@ -21,14 +26,6 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   CREATE TYPE contact_channel AS ENUM ('email','whatsapp','manual');
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-DO $$ BEGIN
-  CREATE TYPE schedule_category AS ENUM ('prottocode','alura','dimouras');
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-DO $$ BEGIN
-  CREATE TYPE daily_rating AS ENUM ('excellent','good','average','bad');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
@@ -338,52 +335,58 @@ CREATE POLICY quotes_tenant ON quotes
   USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- SCHEDULE
-CREATE TABLE IF NOT EXISTS schedule (
+-- ─── WHATSAPP INSTANCES (global — no RLS, looked up by webhook) ───
+
+DO $$ BEGIN
+  CREATE TYPE wa_instance_status AS ENUM ('connecting','connected','disconnected');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS whatsapp_instances (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  instance_name TEXT NOT NULL UNIQUE,
+  status        wa_instance_status NOT NULL DEFAULT 'disconnected',
+  phone         TEXT,
+  qr_code       TEXT,
+  qr_expires_at TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT one_instance_per_tenant UNIQUE (tenant_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_instances_tenant ON whatsapp_instances(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_wa_instances_name ON whatsapp_instances(instance_name);
+
+-- ─── SUBSCRIPTIONS (global — no RLS) ───
+CREATE TABLE IF NOT EXISTS subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  category schedule_category NOT NULL,
-  start_time TEXT NOT NULL,
-  end_time TEXT NOT NULL,
-  date DATE,
-  recurrence_type TEXT,
-  recurrence_day_of_week INTEGER CHECK (recurrence_day_of_week BETWEEN 0 AND 6),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id VARCHAR(50) NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'pending',
+  mp_subscription_id TEXT,
+  mp_payer_id TEXT,
+  current_period_start TIMESTAMPTZ,
+  current_period_end TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_schedule_tenant ON schedule (tenant_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_user_active
+  ON subscriptions (user_id) WHERE status IN ('active', 'pending');
+CREATE INDEX IF NOT EXISTS idx_subscriptions_mp_id
+  ON subscriptions (mp_subscription_id) WHERE mp_subscription_id IS NOT NULL;
 
-ALTER TABLE schedule ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS schedule_tenant ON schedule;
-CREATE POLICY schedule_tenant ON schedule
-  USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
-
--- PRODUCTIVITY
-CREATE TABLE IF NOT EXISTS productivity (
+-- ─── SUBSCRIPTION USAGE (global — no RLS) ───
+CREATE TABLE IF NOT EXISTS subscription_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  date DATE NOT NULL,
-  week TEXT NOT NULL,
-  prottocode_hours NUMERIC(4,1) NOT NULL DEFAULT 0,
-  alura_hours NUMERIC(4,1) NOT NULL DEFAULT 0,
-  dimouras_hours NUMERIC(4,1) NOT NULL DEFAULT 0,
-  focus TEXT NOT NULL DEFAULT '',
-  completion INTEGER NOT NULL DEFAULT 0 CHECK (completion BETWEEN 0 AND 100),
-  notes TEXT NOT NULL DEFAULT '',
-  rating daily_rating NOT NULL DEFAULT 'average',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  month DATE NOT NULL,
+  leads_used INTEGER NOT NULL DEFAULT 0 CHECK (leads_used >= 0),
+  whatsapp_used INTEGER NOT NULL DEFAULT 0 CHECK (whatsapp_used >= 0),
+  emails_used INTEGER NOT NULL DEFAULT 0 CHECK (emails_used >= 0),
+  quotes_used INTEGER NOT NULL DEFAULT 0 CHECK (quotes_used >= 0),
+  UNIQUE (user_id, month)
 );
 
-CREATE INDEX IF NOT EXISTS idx_productivity_tenant ON productivity (tenant_id);
-CREATE INDEX IF NOT EXISTS idx_productivity_week ON productivity (tenant_id, week);
-CREATE INDEX IF NOT EXISTS idx_productivity_date ON productivity (tenant_id, date DESC);
-
-ALTER TABLE productivity ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS productivity_tenant ON productivity;
-CREATE POLICY productivity_tenant ON productivity
-  USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
+CREATE INDEX IF NOT EXISTS idx_subscription_usage_user
+  ON subscription_usage (user_id, month DESC);

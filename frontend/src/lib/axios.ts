@@ -67,6 +67,14 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
+    // Paywall: subscription required or limit exceeded
+    if (error.response?.status === 402) {
+      window.dispatchEvent(new CustomEvent('subscription:paywall', {
+        detail: { code: error.response.data?.code || 'subscription_required' },
+      }));
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 403 && typeof error.response?.data?.error === 'string' && error.response.data.error.includes('CSRF')) {
       csrfToken = null;
     }

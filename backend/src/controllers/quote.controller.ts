@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { quoteService } from '../services/quote.service';
 import { quoteSchema, uuidParamSchema } from '../validation/request.schemas';
+import { usageRepository } from '../modules/subscriptions/usage.repository';
 
 export const quoteController = {
   async generatePdf(req: Request, res: Response): Promise<void> {
@@ -12,6 +13,7 @@ export const quoteController = {
       }
 
       const result = await quoteService.generatePdf(req.tenantId!, parsed.data);
+      await usageRepository.incrementUsage(req.tenantId!, 'quotes_used');
       res.json({ id: result.id, pdfUrl: `/api/quotes/${result.id}/pdf` });
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);

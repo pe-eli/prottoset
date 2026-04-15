@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { evolutionService } from '../../services/evolution.service';
 import { deepseekService } from '../../services/deepseek.service';
+import { waInstanceRepository } from './whatsapp-instance.repository';
 
 export type WaJobStatus = 'pending' | 'sending' | 'sent' | 'failed';
 
@@ -20,6 +21,7 @@ export interface WaBlastConfig {
 
 interface WaBlastEntry {
   tenantId: string;
+  instanceName: string;
   jobs: WaJob[];
   config: WaBlastConfig;
   phase: 'sending' | 'done' | 'cancelled';
@@ -97,8 +99,8 @@ async function processBlast(blastId: string) {
 
   try {
     const [validationResult, chats] = await Promise.all([
-      evolutionService.checkNumbers(allPhones),
-      evolutionService.fetchExistingChats(),
+      evolutionService.checkNumbers(entry.instanceName, allPhones),
+      evolutionService.fetchExistingChats(entry.instanceName),
     ]);
     validSet = new Set(Array.from(validationResult.valid, normalizePhone));
     existingChats = new Set(Array.from(chats, normalizePhone));
@@ -192,7 +194,7 @@ async function processBlast(blastId: string) {
       job.message = batchMessage;
       emit(entry, 'progress', { phone: job.phone, status: 'sending', index: globalIndex, total });
 
-      const result = await evolutionService.sendMessage(job.phone, batchMessage);
+      const result = await evolutionService.sendMessage(entry.instanceName, job.phone, batchMessage);
 
       if (result.success) {
         job.status = 'sent';
@@ -235,15 +237,22 @@ async function processBlast(blastId: string) {
 }
 
 export const waBlastQueue = {
-  create(
+  async create(
     tenantId: string,
     blastId: string,
     phones: string[],
     config: WaBlastConfig,
-  ): WaBlastEntry {
+  ): Promise<WaBlastEntry> {
+    // Resolve instance for this tenant
+    const instance = await waInstanceRepository.findByTenant(tenantId);
+    if (!instance || instance.status !== 'connected') {
+      throw new Error('WhatsApp não conectado');
+    }
+
     const jobs: WaJob[] = phones.map((phone) => ({ phone, status: 'pending' }));
     const entry: WaBlastEntry = {
       tenantId,
+      instanceName: instance.instanceName,
       jobs,
       config,
       phase: 'sending',

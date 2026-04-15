@@ -5,6 +5,7 @@ import { resendService } from '../services/resend.service';
 import { deepseekService } from '../services/deepseek.service';
 import { evolutionService } from '../services/evolution.service';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
+import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
 
 interface BlastJobPayload {
   tenantId: string;
@@ -110,13 +111,22 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
   const run = await outboundRunsRepository.getRun(tenantId, runId);
   if (!run) return;
 
+  // Resolve per-tenant WhatsApp instance
+  const waInstance = await waInstanceRepository.findByTenant(tenantId);
+  if (!waInstance || waInstance.status !== 'connected') {
+    await outboundRunsRepository.setFailure(tenantId, runId,
+      'WhatsApp não conectado. Conecte seu WhatsApp antes de enviar.');
+    return;
+  }
+  const { instanceName } = waInstance;
+
   const items = await outboundRunsRepository.getItems(tenantId, runId);
   await outboundRunsRepository.markStarted(tenantId, runId, 'validating');
 
   try {
     const [validationResult, existingChats] = await Promise.all([
-      evolutionService.checkNumbers(items.map((item) => item.target)),
-      evolutionService.fetchExistingChats(),
+      evolutionService.checkNumbers(instanceName, items.map((item) => item.target)),
+      evolutionService.fetchExistingChats(instanceName),
     ]);
 
     const validSet = new Set(Array.from(validationResult.valid, normalizePhone));
@@ -140,6 +150,10 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
     await outboundRunsRepository.refreshSummary(tenantId, runId);
     await outboundRunsRepository.setPhase(tenantId, runId, 'running');
   } catch (err: any) {
+    // If 401/404, instance may have disconnected
+    if (err.message?.includes('401') || err.message?.includes('404')) {
+      await waInstanceRepository.updateStatus(instanceName, 'disconnected');
+    }
     await outboundRunsRepository.setValidationError(tenantId, runId, err.message || 'Erro ao validar números');
     return;
   }
@@ -176,7 +190,7 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
       }
 
       await outboundRunsRepository.updateItem(tenantId, runId, item.target, 'sending', { message: batchMessage });
-      const result = await evolutionService.sendMessage(item.target, batchMessage);
+      const result = await evolutionService.sendMessage(instanceName, item.target, batchMessage);
       await outboundRunsRepository.updateItem(
         tenantId,
         runId,
@@ -188,6 +202,11 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
 
       if (result.success) {
         await updateContactMessage(tenantId, { ...item, message: batchMessage, status: 'sent', updatedAt: new Date().toISOString() });
+      } else if (result.error?.includes('401')) {
+        // Instance disconnected mid-blast
+        await waInstanceRepository.updateStatus(instanceName, 'disconnected');
+        await outboundRunsRepository.setFailure(tenantId, runId, 'WhatsApp desconectou durante o envio');
+        return;
       }
 
       if (index < batch.length - 1) {

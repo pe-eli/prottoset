@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authAPI } from '../../features/auth/auth.api';
 import type { AuthUser } from '../../features/auth/auth.api';
+import { useSubscription } from '../../contexts/SubscriptionContext';
 
 const NAV_ITEMS = [
   { path: '/home', label: 'Orçamentos' },
@@ -15,7 +16,9 @@ interface HeaderProps {
 
 export function Header({ user, onLogout }: HeaderProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { subscription } = useSubscription();
 
   const handleLogout = async () => {
     try {
@@ -95,6 +98,19 @@ export function Header({ user, onLogout }: HeaderProps) {
                   <p className="text-sm font-medium text-text-primary truncate">{user.displayName}</p>
                   <p className="text-xs text-text-muted truncate">{user.email}</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); navigate('/pricing'); }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-white/[0.04] transition-colors flex items-center gap-2.5 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                  {subscription?.status === 'active'
+                    ? <span>Plano <span className="text-brand-400 font-medium">{subscription.planName}</span></span>
+                    : <span className="text-text-muted">Sem plano ativo</span>
+                  }
+                </button>
                 <button
                   type="button"
                   onClick={handleLogout}

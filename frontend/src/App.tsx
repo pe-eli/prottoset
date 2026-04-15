@@ -3,7 +3,9 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { WaBlastProvider } from './contexts/WaBlastContext';
+import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { WaBlastIndicator } from './components/WaBlastIndicator';
+import { PaywallModal } from './features/subscriptions/PaywallModal';
 import { authAPI } from './features/auth/auth.api';
 import type { AuthUser } from './features/auth/auth.api';
 import { LandingPage } from './pages/LandingPage';
@@ -13,8 +15,10 @@ import { LeadsHub } from './pages/LeadsHub';
 import { LeadsDashboard } from './pages/LeadsDashboard';
 import { EmailBlastPage } from './pages/EmailBlastPage';
 import { WhatsAppBlastPage } from './pages/WhatsAppBlastPage';
+import { WhatsAppConnectPage } from './pages/WhatsAppConnectPage';
 import { ContactsPage } from './pages/ContactsPage';
 import { LoginPage } from './pages/LoginPage';
+import { PricingPage } from './pages/PricingPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfUsePage } from './pages/TermsOfUsePage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
@@ -26,14 +30,15 @@ interface ProtectedLayoutProps {
 
 function ProtectedLayout({ user, onLogout }: ProtectedLayoutProps) {
   return (
-    <>
+    <SubscriptionProvider>
       <Header user={user} onLogout={onLogout} />
       <main className="flex-1 px-4 py-8">
         <Outlet />
       </main>
       <Footer />
       <WaBlastIndicator />
-    </>
+      <PaywallModal />
+    </SubscriptionProvider>
   );
 }
 
@@ -100,12 +105,14 @@ function App() {
               }
             >
               <Route path="/home" element={<HomePage />} />
+              <Route path="/pricing" element={<PricingPage />} />
               <Route path="/novo" element={<Navigate to="/pacotes" replace />} />
               <Route path="/pacotes" element={<PackagesQuotePage />} />
               <Route path="/leads" element={<LeadsHub />} />
               <Route path="/leads/prospeccao" element={<LeadsDashboard />} />
               <Route path="/leads/disparos" element={<EmailBlastPage />} />
               <Route path="/leads/whatsapp" element={<WhatsAppBlastPage />} />
+              <Route path="/leads/whatsapp/connect" element={<WhatsAppConnectPage />} />
               <Route path="/leads/contatos" element={<ContactsPage />} />
             </Route>
 

@@ -5,6 +5,8 @@ import { isAxiosError } from 'axios';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { whatsappAPI } from '../features/whatsapp/whatsapp.api';
+import { waInstanceAPI } from '../features/whatsapp/wa-instance.api';
+import type { WaInstanceStatus } from '../features/whatsapp/wa-instance.api';
 import { queuesAPI } from '../features/queues/queues.api';
 import type { PhoneQueue } from '../features/queues/queues.types';
 import { QueueManagerModal } from '../features/queues/QueueManagerModal';
@@ -126,6 +128,10 @@ export function WhatsAppBlastPage() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const safeQueue = useMemo(() => (Array.isArray(queue) ? queue : []), [queue]);
 
+  // WhatsApp instance status
+  const [waStatus, setWaStatus] = useState<WaInstanceStatus | null>(null);
+  const [waStatusLoading, setWaStatusLoading] = useState(true);
+
   const esRef = useRef<EventSource | null>(null);
   const blastIdRef = useRef<string | null>(null);
   const reconnectedRef = useRef(false);
@@ -136,6 +142,14 @@ export function WhatsAppBlastPage() {
 
   useEffect(() => {
     queuesAPI.getAll().then(({ data }) => setPhoneQueues(Array.isArray(data) ? data : [])).catch(() => {});
+  }, []);
+
+  // Fetch WhatsApp instance status
+  useEffect(() => {
+    waInstanceAPI.getStatus()
+      .then(({ data }) => setWaStatus(data))
+      .catch(() => setWaStatus({ status: 'not_created', phone: null, instanceName: null }))
+      .finally(() => setWaStatusLoading(false));
   }, []);
 
   const totalBatches = Math.ceil(phones.length / batchSize);
@@ -444,6 +458,37 @@ export function WhatsAppBlastPage() {
       {/* ─── COMPOSE ─── */}
       {phase === 'compose' && (
         <>
+          {/* WhatsApp connection status */}
+          {!waStatusLoading && waStatus?.status !== 'connected' && (
+            <div className="flex items-center gap-4 px-5 py-4 bg-amber-500/10 border border-amber-400/20 rounded-2xl animate-fade-in">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-amber-200">WhatsApp nao conectado</p>
+                <p className="text-xs text-amber-300/80 mt-0.5">Conecte seu WhatsApp para enviar mensagens</p>
+              </div>
+              <Link to="/leads/whatsapp/connect">
+                <Button size="sm">
+                  Conectar
+                </Button>
+              </Link>
+            </div>
+          )}
+
+          {waStatus?.status === 'connected' && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-emerald-500/10 border border-emerald-400/20 rounded-2xl">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <p className="text-xs font-semibold text-emerald-200">
+                WhatsApp conectado{waStatus.phone ? ` (+${waStatus.phone})` : ''}
+              </p>
+              <Link to="/leads/whatsapp/connect" className="ml-auto text-xs text-emerald-300 hover:text-emerald-100 font-medium transition-colors">
+                Gerenciar
+              </Link>
+            </div>
+          )}
 
 
           {/* Destinatários */}
@@ -756,7 +801,7 @@ export function WhatsAppBlastPage() {
             )}
           </Card>
 
-          <Button onClick={handleSend} disabled={phones.length === 0 || starting || !activePromptText} size="lg">
+          <Button onClick={handleSend} disabled={phones.length === 0 || starting || !activePromptText || waStatus?.status !== 'connected'} size="lg">
             {starting ? (
               <>
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

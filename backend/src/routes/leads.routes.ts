@@ -3,6 +3,7 @@ import { leadsController } from '../controllers/leads.controller';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
 import { enforceQuota } from '../middleware/quota.middleware';
 import { requireVerifiedAccount } from '../middleware/verified-account.middleware';
+import { requireActiveSubscription } from '../middleware/subscription.middleware';
 
 const router = Router();
 
@@ -18,6 +19,7 @@ router.post(
 	'/search',
 	leadsSearchLimiter,
 	requireVerifiedAccount(),
+	requireActiveSubscription('leads'),
 	enforceQuota({
 		quotaKey: 'scrape_requests_daily',
 		message: 'Cota diária de scraping atingida.',

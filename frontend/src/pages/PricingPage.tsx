@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { subscriptionsAPI, type PublicPlan } from '../features/subscriptions/subscriptions.api';
 import { useSubscription } from '../contexts/SubscriptionContext';
 
@@ -10,7 +10,6 @@ const CheckIcon = () => (
 );
 
 export function PricingPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { subscription, refresh } = useSubscription();
   const [plans, setPlans] = useState<PublicPlan[]>([]);

@@ -38,6 +38,17 @@ export const subscriptionService = {
       throw new Error('MercadoPago não configurado');
     }
 
+    // Keep only one actionable subscription per user.
+    // - active: block creating a new checkout
+    // - pending: cancel stale pending and create a fresh checkout
+    const existing = await subscriptionRepository.findActiveByUserId(userId);
+    if (existing?.status === 'active') {
+      throw new Error('Você já possui uma assinatura ativa');
+    }
+    if (existing?.status === 'pending') {
+      await subscriptionRepository.updateStatus(existing.id, 'cancelled');
+    }
+
     const plan = PLANS[planId];
     const preApproval = new PreApproval(mpClient);
 
@@ -62,12 +73,19 @@ export const subscriptionService = {
     }
 
     // Save pending subscription
-    await subscriptionRepository.create({
-      userId,
-      planId,
-      status: 'pending',
-      mpSubscriptionId: response.id ? String(response.id) : undefined,
-    });
+    try {
+      await subscriptionRepository.create({
+        userId,
+        planId,
+        status: 'pending',
+        mpSubscriptionId: response.id ? String(response.id) : undefined,
+      });
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        throw new Error('Já existe um checkout em andamento. Tente novamente em alguns segundos.');
+      }
+      throw err;
+    }
 
     return initPoint;
   },

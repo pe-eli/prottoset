@@ -27,7 +27,12 @@ export const subscriptionsController = {
       res.json({ url });
     } catch (err: any) {
       console.error('[Subscriptions] checkout error:', err.message);
-      if (err.message === 'Plano inválido' || err.message === 'MercadoPago não configurado') {
+      if (
+        err.message === 'Plano inválido'
+        || err.message === 'MercadoPago não configurado'
+        || err.message === 'Você já possui uma assinatura ativa'
+        || err.message === 'Já existe um checkout em andamento. Tente novamente em alguns segundos.'
+      ) {
         res.status(400).json({ error: err.message });
         return;
       }

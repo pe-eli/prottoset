@@ -278,8 +278,8 @@ export function WhatsAppConnectPage() {
         <div className="space-y-3">
           {[
             { step: '1', text: 'Clique em "Conectar WhatsApp" para gerar o QR Code' },
-            { step: '2', text: 'Abra o WhatsApp no celular e escaneie o codigo' },
-            { step: '3', text: 'Pronto! Sua instancia ficara salva e conectada' },
+            { step: '2', text: 'Abra o WhatsApp no celular e escaneie o código' },
+            { step: '3', text: 'Pronto! Sua instância ficará salva e conectada' },
           ].map((item) => (
             <div key={item.step} className="flex items-start gap-3">
               <span className="w-6 h-6 rounded-lg bg-brand-400/10 text-brand-400 text-xs font-bold flex items-center justify-center shrink-0">

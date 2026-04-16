@@ -39,6 +39,12 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       return;
     }
 
+    const sanitizedName = name.trim().replace(/\s+/g, ' ');
+    if (mode === 'register' && sanitizedName.split(' ').length < 2) {
+      setError('Informe nome e sobrenome para continuar.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -68,7 +74,6 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
           setNotice('Não foi possível validar o e-mail antecipadamente. Tentando concluir o cadastro mesmo assim.');
         }
 
-        const sanitizedName = name.trim().replace(/\s+/g, ' ');
         const { data } = await authAPI.register(sanitizedEmail, password, sanitizedName, acceptedTerms);
         const verificationEmail = data.email || sanitizedEmail;
         const verificationId = data.verificationId;
@@ -118,12 +123,13 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
           <form className="space-y-4" onSubmit={handleSubmit}>
             {mode === 'register' && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-text-secondary">Nome</label>
+                <label className="text-sm font-medium text-text-secondary">Nome e sobrenome</label>
                 <input
                   className="px-4 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   autoComplete="name"
+                  placeholder="Ex.: Ana Silva"
                   required
                   minLength={2}
                   maxLength={100}

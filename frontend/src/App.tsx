@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
+import { FeatureRail } from './components/layout/FeatureRail';
 import { WaBlastProvider } from './contexts/WaBlastContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { WaBlastIndicator } from './components/WaBlastIndicator';
@@ -11,7 +12,6 @@ import type { AuthUser } from './features/auth/auth.api';
 import { LandingPage } from './pages/LandingPage';
 import { HomePage } from './pages/HomePage';
 import { PackagesQuotePage } from './pages/PackagesQuotePage';
-import { LeadsHub } from './pages/LeadsHub';
 import { LeadsDashboard } from './pages/LeadsDashboard';
 import { EmailBlastPage } from './pages/EmailBlastPage';
 import { WhatsAppBlastPage } from './pages/WhatsAppBlastPage';
@@ -22,6 +22,7 @@ import { PricingPage } from './pages/PricingPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfUsePage } from './pages/TermsOfUsePage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 interface ProtectedLayoutProps {
   user: AuthUser;
@@ -29,11 +30,22 @@ interface ProtectedLayoutProps {
 }
 
 function ProtectedLayout({ user, onLogout }: ProtectedLayoutProps) {
+  const location = useLocation();
+  const isMainHub = location.pathname === '/home';
+  const showFeatureRail = [
+    '/pacotes',
+    '/leads/prospeccao',
+    '/leads/contatos',
+    '/leads/disparos',
+    '/leads/whatsapp',
+  ].some((path) => location.pathname.startsWith(path));
+
   return (
     <SubscriptionProvider>
-      <Header user={user} onLogout={onLogout} />
-      <main className="flex-1 px-4 py-8">
-        <Outlet />
+      {isMainHub && <Header user={user} onLogout={onLogout} />}
+      {showFeatureRail && <FeatureRail />}
+      <main className={`flex-1 px-4 py-8 ${showFeatureRail ? 'lg:pl-24' : ''}`}>
+        <Outlet context={{ user }} />
       </main>
       <Footer />
       <WaBlastIndicator />
@@ -93,6 +105,14 @@ function App() {
               element={user ? <Navigate to="/home" replace /> : <LoginPage onAuthenticated={(u) => setUser(u)} />}
             />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route
+              path="/pricing"
+              element={
+                <SubscriptionProvider>
+                  <PricingPage />
+                </SubscriptionProvider>
+              }
+            />
             <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
             <Route path="/termos-de-uso" element={<TermsOfUsePage />} />
             <Route path="/landing" element={<Navigate to="/" replace />} />
@@ -105,15 +125,16 @@ function App() {
               }
             >
               <Route path="/home" element={<HomePage />} />
-              <Route path="/pricing" element={<PricingPage />} />
               <Route path="/novo" element={<Navigate to="/pacotes" replace />} />
               <Route path="/pacotes" element={<PackagesQuotePage />} />
-              <Route path="/leads" element={<LeadsHub />} />
+              <Route path="/leads" element={<Navigate to="/home" replace />} />
               <Route path="/leads/prospeccao" element={<LeadsDashboard />} />
               <Route path="/leads/disparos" element={<EmailBlastPage />} />
               <Route path="/leads/whatsapp" element={<WhatsAppBlastPage />} />
               <Route path="/leads/whatsapp/connect" element={<WhatsAppConnectPage />} />
               <Route path="/leads/contatos" element={<ContactsPage />} />
+              <Route path="/configuracoes" element={<SettingsPage />} />
+              <Route path="/assinatura" element={<Navigate to="/pricing" replace />} />
             </Route>
 
             <Route path="*" element={<Navigate to={user ? '/home' : '/'} replace />} />

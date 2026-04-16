@@ -1,13 +1,8 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../../features/auth/auth.api';
 import type { AuthUser } from '../../features/auth/auth.api';
 import { useSubscription } from '../../contexts/SubscriptionContext';
-
-const NAV_ITEMS = [
-  { path: '/home', label: 'Orçamentos' },
-  { path: '/leads', label: 'Leads' },
-];
 
 interface HeaderProps {
   user: AuthUser;
@@ -15,7 +10,6 @@ interface HeaderProps {
 }
 
 export function Header({ user, onLogout }: HeaderProps) {
-  const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const { subscription } = useSubscription();
@@ -38,33 +32,18 @@ export function Header({ user, onLogout }: HeaderProps) {
   return (
     <header className="sticky top-0 z-40 glass border-b border-border">
       <div className="max-w-6xl mx-auto px-6 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-10">
+        <div className="flex items-center gap-4">
           <Link to="/" className="flex items-center gap-3 group">
             <span className="text-lg font-heading font-extrabold text-text-primary tracking-tight group-hover:text-brand-400 transition-colors">
               Clos<span className="text-brand-400">r</span>
             </span>
           </Link>
-          <nav className="hidden sm:flex items-center gap-1">
-            {NAV_ITEMS.map((item) => {
-              const isActive =
-                item.path === '/home'
-                  ? location.pathname === '/home' || location.pathname === '/pacotes'
-                  : location.pathname.startsWith(item.path);
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`text-sm px-4 py-2 rounded-xl transition-all duration-200 font-medium ${
-                    isActive
-                      ? 'bg-brand-400/15 text-brand-400'
-                      : 'text-text-muted hover:text-text-primary hover:bg-white/[0.04]'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="hidden sm:flex items-center gap-2 rounded-xl border border-border-light bg-surface-secondary px-3 py-1.5">
+            <span className="text-xs text-text-muted">Plano:</span>
+            <span className="text-xs font-semibold text-brand-300">
+              {subscription?.status === 'active' ? subscription.planName : 'Sem assinatura'}
+            </span>
+          </div>
         </div>
 
         <div className="relative">
@@ -100,16 +79,24 @@ export function Header({ user, onLogout }: HeaderProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setMenuOpen(false); navigate('/pricing'); }}
+                  onClick={() => { setMenuOpen(false); navigate('/configuracoes'); }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-white/[0.04] transition-colors flex items-center gap-2.5 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317a1 1 0 011.35-.936l1.575.631a1 1 0 00.75 0l1.575-.63a1 1 0 011.35.935l.234 1.87a1 1 0 00.485.724l1.62.944a1 1 0 01.366 1.366l-.933 1.615a1 1 0 000 .75l.933 1.615a1 1 0 01-.366 1.366l-1.62.944a1 1 0 00-.485.724l-.234 1.87a1 1 0 01-1.35.936l-1.575-.631a1 1 0 00-.75 0l-1.575.63a1 1 0 01-1.35-.935l-.234-1.87a1 1 0 00-.485-.724l-1.62-.944a1 1 0 01-.366-1.366l.933-1.615a1 1 0 000-.75l-.933-1.615a1 1 0 01.366-1.366l1.62-.944a1 1 0 00.485-.724l.234-1.87z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Configurações</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); navigate('/assinatura'); }}
                   className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-white/[0.04] transition-colors flex items-center gap-2.5 cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
-                  {subscription?.status === 'active'
-                    ? <span>Plano <span className="text-brand-400 font-medium">{subscription.planName}</span></span>
-                    : <span className="text-text-muted">Sem plano ativo</span>
-                  }
+                  <span>Assinatura</span>
                 </button>
                 <button
                   type="button"

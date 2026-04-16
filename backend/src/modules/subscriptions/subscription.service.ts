@@ -12,6 +12,7 @@ import {
   type PublicPlan,
   type SubscriptionFeature,
 } from '../../config/plans';
+import { getSubscriptionOverride } from '../../config/subscription-overrides';
 import crypto from 'crypto';
 
 export interface SubscriptionInfo {
@@ -118,20 +119,23 @@ export const subscriptionService = {
   },
 
   async getMySubscription(userId: string): Promise<SubscriptionInfo | null> {
+    const override = getSubscriptionOverride(userId);
     const sub = await subscriptionRepository.findActiveByUserId(userId);
-    if (!sub) return null;
+    if (!sub && override?.forceStatus !== 'active') return null;
 
-    const planId = isValidPlanId(sub.planId) ? sub.planId : null;
+    const effectivePlanId = override?.planId ?? sub?.planId ?? 'pro';
+    const planId = isValidPlanId(effectivePlanId) ? effectivePlanId : null;
     if (!planId) return null;
 
     const plan = PLANS[planId];
     const usage = await usageRepository.getUsageForMonth(userId);
+    const effectiveStatus = override?.forceStatus ?? sub?.status ?? 'active';
 
     return {
-      planId: sub.planId,
+      planId,
       planName: plan.name,
-      status: sub.status,
-      currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
+      status: effectiveStatus,
+      currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
       usage,
       limits: plan.limits,
     };
@@ -163,12 +167,21 @@ export const subscriptionService = {
     used: number;
     limit: number | null;
   }> {
+    const override = getSubscriptionOverride(userId);
+    if (override?.bypassLimits) {
+      return { allowed: true, used: 0, limit: null };
+    }
+
     const sub = await subscriptionRepository.findActiveByUserId(userId);
-    if (!sub || sub.status !== 'active') {
+    const hasForcedActive = override?.forceStatus === 'active';
+    const isActive = hasForcedActive || (!!sub && sub.status === 'active');
+
+    if (!isActive) {
       return { allowed: false, used: 0, limit: 0 };
     }
 
-    const planId = isValidPlanId(sub.planId) ? sub.planId : null;
+    const effectivePlanId = override?.planId ?? sub?.planId ?? 'pro';
+    const planId = isValidPlanId(effectivePlanId) ? effectivePlanId : null;
     if (!planId) {
       return { allowed: false, used: 0, limit: 0 };
     }

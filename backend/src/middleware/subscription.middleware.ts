@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { subscriptionRepository } from '../modules/subscriptions/subscription.repository';
 import { usageRepository } from '../modules/subscriptions/usage.repository';
 import { PLANS, FEATURE_LIMIT_MAP, isValidPlanId, type SubscriptionFeature } from '../config/plans';
+import { getSubscriptionOverride } from '../config/subscription-overrides';
 
 export function requireActiveSubscription(feature?: SubscriptionFeature): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -12,8 +13,13 @@ export function requireActiveSubscription(feature?: SubscriptionFeature): Reques
         return;
       }
 
+      const override = getSubscriptionOverride(userId);
       const sub = await subscriptionRepository.findActiveByUserId(userId);
-      if (!sub || sub.status !== 'active') {
+      const forcedStatus = override?.forceStatus;
+      const hasForcedActive = forcedStatus === 'active';
+      const isActive = hasForcedActive || (!!sub && sub.status === 'active');
+
+      if (!isActive) {
         res.status(402).json({
           error: 'Assinatura ativa necessária para esta funcionalidade.',
           code: 'subscription_required',
@@ -28,7 +34,13 @@ export function requireActiveSubscription(feature?: SubscriptionFeature): Reques
         return;
       }
 
-      const planId = isValidPlanId(sub.planId) ? sub.planId : null;
+      if (override?.bypassLimits) {
+        next();
+        return;
+      }
+
+      const effectivePlanId = override?.planId ?? sub?.planId;
+      const planId = effectivePlanId && isValidPlanId(effectivePlanId) ? effectivePlanId : null;
       if (!planId) {
         res.status(402).json({
           error: 'Plano inválido. Entre em contato com o suporte.',

@@ -128,6 +128,9 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
             <button onClick={() => scrollTo('diferenciais')} className="text-sm text-text-muted hover:text-text-primary transition-colors cursor-pointer">
               Diferenciais
             </button>
+            <button onClick={() => onNavigate('/pricing')} className="text-sm text-text-muted hover:text-text-primary transition-colors cursor-pointer">
+              Preços
+            </button>
           </div>
 
           <div className="hidden md:flex items-center gap-4">
@@ -161,6 +164,9 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
             </button>
             <button onClick={() => scrollTo('diferenciais')} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left cursor-pointer">
               Diferenciais
+            </button>
+            <button onClick={() => { setMobileMenuOpen(false); onNavigate('/pricing'); }} className="text-sm text-text-muted hover:text-text-primary transition-colors py-2 text-left cursor-pointer">
+              Preços
             </button>
             <div className="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
               <button

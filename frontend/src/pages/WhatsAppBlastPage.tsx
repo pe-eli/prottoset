@@ -467,7 +467,7 @@ export function WhatsAppBlastPage() {
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-amber-200">WhatsApp nao conectado</p>
+                <p className="text-sm font-semibold text-amber-200">WhatsApp não conectado</p>
                 <p className="text-xs text-amber-300/80 mt-0.5">Conecte seu WhatsApp para enviar mensagens</p>
               </div>
               <Link to="/leads/whatsapp/connect">

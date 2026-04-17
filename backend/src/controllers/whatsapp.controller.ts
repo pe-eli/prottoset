@@ -30,7 +30,9 @@ export const whatsappController = {
         batchSize = 10,
         intervalMinSeconds = 15,
         intervalMaxSeconds = 60,
+        messageMode = 'ai',
         promptBase,
+        manualMessage,
       } = parsed.data;
 
       if (!phones || phones.length === 0) {
@@ -54,6 +56,17 @@ export const whatsappController = {
       const safeMin = Math.max(5, Math.min(3600, Number(intervalMinSeconds) || 15));
       const safeMax = Math.max(safeMin, Math.min(3600, Number(intervalMaxSeconds) || 60));
       const safePromptBase = typeof promptBase === 'string' ? promptBase.trim() : '';
+      const safeManualMessage = typeof manualMessage === 'string' ? manualMessage.trim() : '';
+
+      if (messageMode === 'ai' && !safePromptBase) {
+        res.status(400).json({ error: 'Prompt da IA é obrigatório no modo IA.' });
+        return;
+      }
+
+      if (messageMode === 'manual' && !safeManualMessage) {
+        res.status(400).json({ error: 'Mensagem fixa é obrigatória no modo manual.' });
+        return;
+      }
 
       const blastId = uuid();
 
@@ -78,10 +91,12 @@ export const whatsappController = {
       await outboundRunsRepository.createWhatsAppRun(tenantId, {
         runId: blastId,
         targets: cleanPhones,
+        messageMode,
         batchSize: safeBatchSize,
         intervalMinSeconds: safeMin,
         intervalMaxSeconds: safeMax,
-        promptBase: safePromptBase,
+        promptBase: messageMode === 'ai' ? safePromptBase : undefined,
+        manualMessage: messageMode === 'manual' ? safeManualMessage : undefined,
       });
 
       await enqueueWhatsAppBlastJob({ tenantId, runId: blastId });

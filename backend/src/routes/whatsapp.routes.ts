@@ -27,7 +27,6 @@ router.post(
 	blastLimiter,
 	requireVerifiedAccount(),
 	requireActiveSubscription('whatsapp'),
-	requireActiveSubscription('ai_credits'),
 	enforceQuota({ quotaKey: 'whatsapp_blasts_daily', message: 'Cota diária de blasts WhatsApp atingida.', cost: 1 }),
 	requireConnectedWhatsApp(),
 	whatsappController.sendBlast,

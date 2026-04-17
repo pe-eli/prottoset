@@ -135,6 +135,8 @@ CREATE TABLE IF NOT EXISTS outbound_runs (
   subject TEXT,
   body TEXT,
   prompt_base TEXT,
+  message_mode TEXT NOT NULL DEFAULT 'ai' CHECK (message_mode IN ('ai', 'manual')),
+  manual_message TEXT,
   batch_size INTEGER NOT NULL CHECK (batch_size > 0 AND batch_size <= 50),
   interval_min_seconds INTEGER NOT NULL CHECK (interval_min_seconds >= 5),
   interval_max_seconds INTEGER NOT NULL CHECK (interval_max_seconds >= interval_min_seconds),
@@ -153,6 +155,20 @@ CREATE TABLE IF NOT EXISTS outbound_runs (
   finished_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE outbound_runs ADD COLUMN IF NOT EXISTS message_mode TEXT NOT NULL DEFAULT 'ai';
+ALTER TABLE outbound_runs ADD COLUMN IF NOT EXISTS manual_message TEXT;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'outbound_runs_message_mode_check'
+  ) THEN
+    ALTER TABLE outbound_runs
+      ADD CONSTRAINT outbound_runs_message_mode_check CHECK (message_mode IN ('ai', 'manual'));
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_outbound_runs_tenant ON outbound_runs (tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_outbound_runs_status ON outbound_runs (status);

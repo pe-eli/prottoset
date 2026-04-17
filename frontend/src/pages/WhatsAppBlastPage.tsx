@@ -18,6 +18,7 @@ interface QueueJob { phone: string; status: JobStatus; error?: string }
 interface BlastSummary { sent: number; failed: number; total: number }
 interface Countdown { remaining: number; total: number }
 interface BatchInfo { current: number; total: number; count: number }
+interface SavedPrompt { id: string; name: string; content: string }
 const DEFAULT_PROMPT_BASE = 'Crie uma primeira mensagem curta e cordial para prospecção no WhatsApp.';
 
 const STATUS_STYLE: Record<JobStatus, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
@@ -99,7 +100,12 @@ export function WhatsAppBlastPage() {
   const [configSnapshot, setConfigSnapshot] = useState<{ batchSize: number }>({ batchSize: 5 });
   const [batchMessages, setBatchMessages] = useState<Array<{ batch: number; message: string }>>([]);
 
+  const [messageMode, setMessageMode] = useState<'ai' | 'manual'>('ai');
   const [promptBase, setPromptBase] = useState(DEFAULT_PROMPT_BASE);
+  const [manualMessage, setManualMessage] = useState('');
+  const [promptName, setPromptName] = useState('');
+  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
+  const [selectedPromptId, setSelectedPromptId] = useState('');
 
   const [phoneQueues, setPhoneQueues] = useState<PhoneQueue[]>([]);
   const [showQueuePicker, setShowQueuePicker] = useState(false);
@@ -134,7 +140,82 @@ export function WhatsAppBlastPage() {
       .finally(() => setWaStatusLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem('closr.whatsapp.savedPrompts');
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      const normalized = parsed
+        .filter((entry): entry is SavedPrompt => {
+          if (!entry || typeof entry !== 'object') return false;
+          const candidate = entry as Record<string, unknown>;
+          return typeof candidate.id === 'string'
+            && typeof candidate.name === 'string'
+            && typeof candidate.content === 'string';
+        })
+        .slice(0, 50);
+      setSavedPrompts(normalized);
+    } catch {
+      setSavedPrompts([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('closr.whatsapp.savedPrompts', JSON.stringify(savedPrompts));
+  }, [savedPrompts]);
+
   const totalBatches = Math.ceil(phones.length / batchSize);
+
+  const handleSavePrompt = () => {
+    const name = promptName.trim();
+    const content = promptBase.trim();
+    if (!name) {
+      alert('Informe o nome do prompt.');
+      return;
+    }
+    if (!content) {
+      alert('Informe o conteúdo do prompt.');
+      return;
+    }
+
+    setSavedPrompts((prev) => {
+      const existing = prev.find((prompt) => prompt.name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        const next = prev.map((prompt) => (
+          prompt.id === existing.id
+            ? { ...prompt, name, content }
+            : prompt
+        ));
+        setSelectedPromptId(existing.id);
+        return next;
+      }
+
+      const created: SavedPrompt = {
+        id: `prompt-${Date.now()}`,
+        name,
+        content,
+      };
+      setSelectedPromptId(created.id);
+      return [created, ...prev].slice(0, 50);
+    });
+  };
+
+  const handleSelectPrompt = (id: string) => {
+    setSelectedPromptId(id);
+    const selected = savedPrompts.find((prompt) => prompt.id === id);
+    if (!selected) return;
+    setPromptName(selected.name);
+    setPromptBase(selected.content);
+  };
+
+  const handleDeletePrompt = () => {
+    if (!selectedPromptId) return;
+    setSavedPrompts((prev) => prev.filter((prompt) => prompt.id !== selectedPromptId));
+    setSelectedPromptId('');
+  };
 
   const addPhones = () => {
     const parsed = phoneInput.split(/[\n,;]+/).map((p) => p.trim()).filter(isValidPhone);
@@ -271,17 +352,26 @@ export function WhatsAppBlastPage() {
   const handleSend = async () => {
     if (phones.length === 0) return;
     const normalizedPromptBase = promptBase.trim();
-    if (!normalizedPromptBase) {
+    const normalizedManualMessage = manualMessage.trim();
+
+    if (messageMode === 'ai' && !normalizedPromptBase) {
       alert('Defina um prompt antes de iniciar o disparo.');
       return;
     }
+    if (messageMode === 'manual' && !normalizedManualMessage) {
+      alert('Defina a mensagem fixa antes de iniciar o disparo.');
+      return;
+    }
+
     setStarting(true);
     try {
       const { data } = await whatsappAPI.startBlast(phones, {
         batchSize,
         intervalMinSeconds: intervalMin,
         intervalMaxSeconds: intervalMax,
-        promptBase: normalizedPromptBase,
+        messageMode,
+        promptBase: messageMode === 'ai' ? normalizedPromptBase : undefined,
+        manualMessage: messageMode === 'manual' ? normalizedManualMessage : undefined,
       });
       const { blastId } = data;
       setQueue(phones.map((phone) => ({ phone, status: 'pending' })));
@@ -373,7 +463,7 @@ export function WhatsAppBlastPage() {
         </Link>
         <div>
           <h2 className="text-2xl font-bold text-text-primary">Disparo de WhatsApp</h2>
-          <p className="text-sm text-text-secondary">A IA gera automaticamente a primeira mensagem de cada lote — enviada via Evolution API</p>
+          <p className="text-sm text-text-secondary">Escolha entre mensagem gerada por IA ou mensagem fixa manual, e envie via Evolution API</p>
         </div>
       </div>
 
@@ -532,29 +622,99 @@ export function WhatsAppBlastPage() {
             </div>
 
             <div className="mb-4 rounded-xl border border-violet-400/20 bg-violet-500/10 px-4 py-3">
-              <p className="text-sm font-semibold text-violet-200 flex items-center gap-1.5">
-                <SparkleIcon className="w-3.5 h-3.5" />
-                Prompt da IA
-              </p>
-
-              <div className="mt-3 rounded-xl border border-violet-400/20 bg-surface-secondary/80 px-3 py-3">
-                <p className="text-[11px] font-semibold text-violet-300 uppercase tracking-wider">Dicas para o prompt</p>
-                <ul className="mt-2 space-y-1 text-xs text-violet-100">
-                  <li>1. Peça para responder apenas com o texto da mensagem (sem explicações).</li>
-                  <li>2. Informe para não usar Markdown, listas, asteriscos ou emojis desnecessarios.</li>
-                  <li>3. Defina tom e objetivo: breve, cordial e focado em primeira abordagem.</li>
-                  <li>4. Limite tamanho da mensagem e evite parágrafos longos.</li>
-                </ul>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-sm font-semibold text-violet-200 flex items-center gap-1.5">
+                  <SparkleIcon className="w-3.5 h-3.5" />
+                  Mensagem do disparo
+                </p>
+                <div className="inline-flex rounded-lg border border-violet-400/20 bg-surface p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setMessageMode('ai')}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+                      messageMode === 'ai' ? 'bg-violet-600 text-white' : 'text-violet-200 hover:bg-violet-500/10'
+                    }`}
+                  >
+                    Gerada por IA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMessageMode('manual')}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+                      messageMode === 'manual' ? 'bg-violet-600 text-white' : 'text-violet-200 hover:bg-violet-500/10'
+                    }`}
+                  >
+                    Mensagem própria
+                  </button>
+                </div>
               </div>
 
-              <textarea
-                rows={4}
-                value={promptBase}
-                onChange={(e) => setPromptBase(e.target.value)}
-                placeholder="Descreva como a IA deve escrever a primeira mensagem do lote"
-                className="mt-3 w-full px-3 py-2 bg-surface border border-violet-400/20 rounded-xl text-sm text-text-primary resize-none
-                  placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
-              />
+              {messageMode === 'ai' ? (
+                <>
+                  <div className="mt-3 rounded-xl border border-violet-400/20 bg-surface-secondary/80 px-3 py-3">
+                    <p className="text-[11px] font-semibold text-violet-300 uppercase tracking-wider">Dicas para o prompt</p>
+                    <ul className="mt-2 space-y-1 text-xs text-violet-100">
+                      <li>1. Peça para responder apenas com o texto da mensagem (sem explicações).</li>
+                      <li>2. Informe para não usar Markdown, listas, asteriscos ou emojis desnecessarios.</li>
+                      <li>3. Defina tom e objetivo: breve, cordial e focado em primeira abordagem.</li>
+                      <li>4. Limite tamanho da mensagem e evite parágrafos longos.</li>
+                    </ul>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                    <input
+                      value={promptName}
+                      onChange={(e) => setPromptName(e.target.value)}
+                      placeholder="Nome do prompt"
+                      className="px-3 py-2 bg-surface border border-violet-400/20 rounded-xl text-sm text-text-primary
+                        placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                    />
+                    <Button type="button" onClick={handleSavePrompt} variant="secondary">Salvar prompt</Button>
+                  </div>
+
+                  {savedPrompts.length > 0 && (
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                      <select
+                        value={selectedPromptId}
+                        onChange={(e) => handleSelectPrompt(e.target.value)}
+                        className="px-3 py-2 bg-surface border border-violet-400/20 rounded-xl text-sm text-text-primary
+                          focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                      >
+                        <option value="">Selecionar prompt salvo</option>
+                        {savedPrompts.map((prompt) => (
+                          <option key={prompt.id} value={prompt.id}>{prompt.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleDeletePrompt}
+                        disabled={!selectedPromptId}
+                        className="px-3 py-2 text-xs font-semibold rounded-xl border border-red-300/30 text-red-300 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Excluir prompt
+                      </button>
+                    </div>
+                  )}
+
+                  <textarea
+                    rows={4}
+                    value={promptBase}
+                    onChange={(e) => setPromptBase(e.target.value)}
+                    placeholder="Prompt"
+                    className="mt-3 w-full px-3 py-2 bg-surface border border-violet-400/20 rounded-xl text-sm text-text-primary resize-none
+                      placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                  />
+                </>
+              ) : (
+                <textarea
+                  rows={5}
+                  value={manualMessage}
+                  onChange={(e) => setManualMessage(e.target.value)}
+                  placeholder="Digite a mensagem fixa que será enviada para todos os números"
+                  className="mt-3 w-full px-3 py-2 bg-surface border border-violet-400/20 rounded-xl text-sm text-text-primary resize-none
+                    placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                />
+              )}
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -622,7 +782,16 @@ export function WhatsAppBlastPage() {
             )}
           </Card>
 
-          <Button onClick={handleSend} disabled={phones.length === 0 || starting || !promptBase.trim() || waStatus?.status !== 'connected'} size="lg">
+          <Button
+            onClick={handleSend}
+            disabled={
+              phones.length === 0
+              || starting
+              || (messageMode === 'ai' ? !promptBase.trim() : !manualMessage.trim())
+              || waStatus?.status !== 'connected'
+            }
+            size="lg"
+          >
             {starting ? (
               <>
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

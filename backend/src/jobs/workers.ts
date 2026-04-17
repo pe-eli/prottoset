@@ -190,12 +190,22 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
     return;
   }
 
-  // Pre-flight: verify AI credits before starting generation
-  const creditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
-  if (!creditCheck.allowed) {
-    await outboundRunsRepository.setFailure(tenantId, runId,
-      'Créditos de IA insuficientes para iniciar o disparo.');
+  const messageMode = run.messageMode === 'manual' ? 'manual' : 'ai';
+  const manualMessage = (run.manualMessage || '').trim();
+
+  if (messageMode === 'manual' && !manualMessage) {
+    await outboundRunsRepository.setFailure(tenantId, runId, 'Mensagem manual inválida para disparo.');
     return;
+  }
+
+  if (messageMode === 'ai') {
+    // Pre-flight: verify AI credits before starting generation
+    const creditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
+    if (!creditCheck.allowed) {
+      await outboundRunsRepository.setFailure(tenantId, runId,
+        'Créditos de IA insuficientes para iniciar o disparo.');
+      return;
+    }
   }
 
   const totalBatches = Math.ceil(eligibleItems.length / run.batchSize);
@@ -207,44 +217,48 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
 
     const batch = eligibleItems.slice(batchIndex * run.batchSize, batchIndex * run.batchSize + run.batchSize);
 
-    // Check credits before each DeepSeek call (prevents over-spend during long blasts)
-    const batchCreditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
-    if (!batchCreditCheck.allowed) {
-      await outboundRunsRepository.setFailure(tenantId, runId,
-        'Créditos de IA insuficientes para continuar o disparo.');
-      return;
-    }
-
     let batchMessage = '';
-    let creditsUsed = 0;
-    try {
-      const result = await deepseekService.generateWhatsAppMessage(run.promptBase);
-      batchMessage = result.message;
-      creditsUsed = result.tokensUsed > 0
-        ? calculateCreditsFromTokens(result.tokensUsed)
-        : calculateCreditsFromChars(run.promptBase?.length ?? 0, batchMessage.length);
-    } catch (err: any) {
-      // AI failed — do NOT deduct credits
-      await outboundRunsRepository.setFailure(tenantId, runId, err.message || 'Erro ao gerar mensagem');
-      return;
-    }
+    if (messageMode === 'ai') {
+      // Check credits before each DeepSeek call (prevents over-spend during long blasts)
+      const batchCreditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
+      if (!batchCreditCheck.allowed) {
+        await outboundRunsRepository.setFailure(tenantId, runId,
+          'Créditos de IA insuficientes para continuar o disparo.');
+        return;
+      }
 
-    const aiConsumption = await billingService.consume({
-      tenantId,
-      type: 'AI',
-      amount: creditsUsed,
-      idempotencyKey: `billing:ai:${tenantId}:${runId}:batch:${batchIndex + 1}`,
-      metadata: {
-        runId,
-        batch: batchIndex + 1,
-        creditsUsed,
-      },
-    });
+      let creditsUsed = 0;
+      try {
+        const result = await deepseekService.generateWhatsAppMessage(run.promptBase);
+        batchMessage = result.message;
+        creditsUsed = result.tokensUsed > 0
+          ? calculateCreditsFromTokens(result.tokensUsed)
+          : calculateCreditsFromChars(run.promptBase?.length ?? 0, batchMessage.length);
+      } catch (err: any) {
+        // AI failed — do NOT deduct credits
+        await outboundRunsRepository.setFailure(tenantId, runId, err.message || 'Erro ao gerar mensagem');
+        return;
+      }
 
-    if (!aiConsumption.consumed) {
-      await outboundRunsRepository.setFailure(tenantId, runId,
-        'Créditos de IA insuficientes para continuar o disparo.');
-      return;
+      const aiConsumption = await billingService.consume({
+        tenantId,
+        type: 'AI',
+        amount: creditsUsed,
+        idempotencyKey: `billing:ai:${tenantId}:${runId}:batch:${batchIndex + 1}`,
+        metadata: {
+          runId,
+          batch: batchIndex + 1,
+          creditsUsed,
+        },
+      });
+
+      if (!aiConsumption.consumed) {
+        await outboundRunsRepository.setFailure(tenantId, runId,
+          'Créditos de IA insuficientes para continuar o disparo.');
+        return;
+      }
+    } else {
+      batchMessage = manualMessage;
     }
 
     await outboundRunsRepository.setCurrentBatch(tenantId, runId, batchIndex + 1, batchMessage);

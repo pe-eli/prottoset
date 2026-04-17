@@ -13,6 +13,8 @@ interface OutboundRunRow {
   subject: string | null;
   body: string | null;
   prompt_base: string | null;
+  message_mode: 'ai' | 'manual';
+  manual_message: string | null;
   batch_size: number;
   interval_min_seconds: number;
   interval_max_seconds: number;
@@ -58,7 +60,9 @@ export interface OutboundRun {
   phase: string;
   subject?: string;
   body?: string;
+  messageMode: 'ai' | 'manual';
   promptBase?: string;
+  manualMessage?: string;
   batchSize: number;
   intervalMinSeconds: number;
   intervalMaxSeconds: number;
@@ -97,7 +101,9 @@ function toRun(row: OutboundRunRow): OutboundRun {
     phase: row.phase,
     subject: row.subject || undefined,
     body: row.body || undefined,
+    messageMode: row.message_mode,
     promptBase: row.prompt_base || undefined,
+    manualMessage: row.manual_message || undefined,
     batchSize: row.batch_size,
     intervalMinSeconds: row.interval_min_seconds,
     intervalMaxSeconds: row.interval_max_seconds,
@@ -165,12 +171,35 @@ export const outboundRunsRepository = {
     ));
   },
 
-  async createWhatsAppRun(tenantId: string, input: { runId: string; targets: string[]; promptBase: string; batchSize: number; intervalMinSeconds: number; intervalMaxSeconds: number }): Promise<void> {
+  async createWhatsAppRun(tenantId: string, input: {
+    runId: string;
+    targets: string[];
+    messageMode: 'ai' | 'manual';
+    promptBase?: string;
+    manualMessage?: string;
+    batchSize: number;
+    intervalMinSeconds: number;
+    intervalMaxSeconds: number;
+  }): Promise<void> {
     await tenantQuery(
       tenantId,
-      `INSERT INTO outbound_runs (id, tenant_id, channel, status, phase, prompt_base, batch_size, interval_min_seconds, interval_max_seconds, total, total_batches)
-       VALUES ($1, $2, 'whatsapp', 'queued', 'queued', $3, $4, $5, $6, $7, $8)`,
-      [input.runId, tenantId, input.promptBase, input.batchSize, input.intervalMinSeconds, input.intervalMaxSeconds, input.targets.length, Math.ceil(input.targets.length / input.batchSize)],
+      `INSERT INTO outbound_runs (
+        id, tenant_id, channel, status, phase, prompt_base, message_mode, manual_message,
+        batch_size, interval_min_seconds, interval_max_seconds, total, total_batches
+      )
+       VALUES ($1, $2, 'whatsapp', 'queued', 'queued', $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        input.runId,
+        tenantId,
+        input.promptBase || null,
+        input.messageMode,
+        input.manualMessage || null,
+        input.batchSize,
+        input.intervalMinSeconds,
+        input.intervalMaxSeconds,
+        input.targets.length,
+        Math.ceil(input.targets.length / input.batchSize),
+      ],
     );
 
     await Promise.all(input.targets.map((target) =>

@@ -97,7 +97,9 @@ export const whatsappBlastSchema = z.object({
   batchSize: z.coerce.number().int().positive().max(50).optional(),
   intervalMinSeconds: z.coerce.number().int().min(5).max(3600).optional(),
   intervalMaxSeconds: z.coerce.number().int().min(5).max(3600).optional(),
+  messageMode: z.enum(['ai', 'manual']).optional(),
   promptBase: z.string().trim().max(1000).optional(),
+  manualMessage: z.string().trim().max(1000).optional(),
 });
 
 export const uuidParamSchema = z.object({

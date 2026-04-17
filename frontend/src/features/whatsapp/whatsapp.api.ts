@@ -4,7 +4,9 @@ export interface WaBlastConfig {
   batchSize: number;
   intervalMinSeconds: number;
   intervalMaxSeconds: number;
-  promptBase: string;
+  messageMode: 'ai' | 'manual';
+  promptBase?: string;
+  manualMessage?: string;
 }
 
 export const whatsappAPI = {

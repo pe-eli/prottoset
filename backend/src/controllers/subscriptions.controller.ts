@@ -45,11 +45,12 @@ export const subscriptionsController = {
     try {
       const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
       const signature = req.headers['x-signature'] as string | undefined;
+      const sourceIp = req.ip || req.socket.remoteAddress || 'unknown';
 
       const intake = await webhookIntakeService.intakeMercadoPago({
         rawBody,
         signatureHeader: signature,
-        sourceIp: req.ip,
+        sourceIp,
       });
 
       res.status(202).json({

@@ -8,13 +8,14 @@ export const evolutionWebhookController = {
       const signatureHeader = req.header('x-signature') || req.header('x-webhook-signature') || undefined;
       const timestampHeader = req.header('x-timestamp') || undefined;
       const nonceHeader = req.header('x-nonce') || undefined;
+      const sourceIp = req.ip || req.socket.remoteAddress || 'unknown';
 
       const intake = await webhookIntakeService.intakeEvolution({
         rawBody,
         signatureHeader,
         timestampHeader,
         nonceHeader,
-        sourceIp: req.ip,
+        sourceIp,
       });
 
       res.status(202).json({

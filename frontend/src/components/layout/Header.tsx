@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../../features/auth/auth.api';
 import type { AuthUser } from '../../features/auth/auth.api';
 import { useSubscription } from '../../contexts/SubscriptionContext';
+import { leadsAPI, type LeadsDailyQuota } from '../../features/leads/leads.api';
 
 interface HeaderProps {
   user: AuthUser;
@@ -13,6 +14,33 @@ export function Header({ user, onLogout }: HeaderProps) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const { subscription } = useSubscription();
+  const [freeTierQuota, setFreeTierQuota] = useState<LeadsDailyQuota | null>(null);
+  const hasActiveSubscription = subscription?.status === 'active';
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (hasActiveSubscription) {
+      setFreeTierQuota(null);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    leadsAPI.getSearchQuota()
+      .then(({ data }) => {
+        if (!mounted) return;
+        setFreeTierQuota(data.dailyLeadsQuota ?? null);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setFreeTierQuota(null);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [hasActiveSubscription]);
 
   const handleLogout = async () => {
     try {
@@ -44,6 +72,33 @@ export function Header({ user, onLogout }: HeaderProps) {
               {subscription?.status === 'active' ? subscription.planName : 'Sem assinatura'}
             </span>
           </div>
+          {hasActiveSubscription && subscription && (
+            <>
+              <div className="hidden md:flex items-center gap-1.5 rounded-xl border border-border-light bg-surface-secondary px-2.5 py-1 text-[11px] text-text-secondary">
+                <span className="text-text-muted">Leads:</span>
+                <strong className="text-text-primary">
+                  {subscription.usage.leadsUsed.toLocaleString('pt-BR')}
+                  {subscription.limits.leads_per_month === null ? '' : ` / ${subscription.limits.leads_per_month.toLocaleString('pt-BR')}`}
+                </strong>
+              </div>
+              <div className="hidden md:flex items-center gap-1.5 rounded-xl border border-border-light bg-surface-secondary px-2.5 py-1 text-[11px] text-text-secondary">
+                <span className="text-text-muted">Créditos IA:</span>
+                <strong className="text-text-primary">
+                  {subscription.usage.aiCreditsUsed.toLocaleString('pt-BR')}
+                  {subscription.limits.ai_credits === null ? '' : ` / ${subscription.limits.ai_credits.toLocaleString('pt-BR')}`}
+                </strong>
+              </div>
+            </>
+          )}
+          {!hasActiveSubscription && freeTierQuota?.applied && (
+            <div className="hidden md:flex items-center gap-1.5 rounded-xl border border-amber-300/25 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-100">
+              <span className="text-amber-200/80">Leads hoje:</span>
+              <strong>
+                {freeTierQuota.used}
+                {freeTierQuota.limit === null ? '' : ` / ${freeTierQuota.limit}`}
+              </strong>
+            </div>
+          )}
         </div>
 
         <div className="relative">

@@ -33,8 +33,8 @@ export function requireVerifiedAccount(): RequestHandler {
       return;
     }
 
-    res.status(403).json({ 
-      error: 'Você não tem permissão para executar esta ação. Solicite acesso ao administrador.' 
+    res.status(403).json({
+      error: 'Acesso restrito para esta operação.'
     });
   };
 }

@@ -4,14 +4,16 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { queuesAPI } from '../queues/queues.api';
 import type { PhoneQueue } from '../queues/queues.types';
+import type { LeadsDailyQuota } from './leads.api';
 import type { LeadSearchParams } from './leads.types';
 
 interface LeadSearchFormProps {
   onSearch: (params: LeadSearchParams, queueId?: string) => void;
   loading: boolean;
+  freeTierQuota?: LeadsDailyQuota | null;
 }
 
-export function LeadSearchForm({ onSearch, loading }: LeadSearchFormProps) {
+export function LeadSearchForm({ onSearch, loading, freeTierQuota = null }: LeadSearchFormProps) {
   const [form, setForm] = useState<LeadSearchParams>({
     searchTerm: '',
     city: '',
@@ -52,6 +54,18 @@ export function LeadSearchForm({ onSearch, loading }: LeadSearchFormProps) {
 
   return (
     <Card gradient>
+      {freeTierQuota?.applied && (
+        <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3">
+          <p className="text-xs font-semibold text-amber-200 uppercase tracking-wide">Plano gratuito</p>
+          <p className="mt-1 text-sm text-amber-100">
+            Você pode gerar até <strong>{freeTierQuota.limit ?? 50} leads por dia</strong> na prospecção.
+          </p>
+          <p className="mt-1 text-xs text-amber-200/90">
+            Hoje: <strong>{freeTierQuota.used}</strong> usados • <strong>{Math.max(0, freeTierQuota.remaining ?? 0)}</strong> restantes
+          </p>
+        </div>
+      )}
+
       <div className="mb-5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-brand-400 flex items-center justify-center shadow-sm shadow-brand-500/20">

@@ -11,6 +11,7 @@ import { foldersAPI } from '../features/leads/lead-folders.api';
 import type { LeadFolder } from '../features/leads/lead-folders.api';
 import { queuesAPI } from '../features/queues/queues.api';
 import { AddToQueueModal } from '../features/queues/AddToQueueModal';
+import type { LeadsDailyQuota } from '../features/leads/leads.api';
 import type { Lead, LeadSearchParams, LeadMetrics, LeadStatus, LeadPriority } from '../features/leads/leads.types';
 import { safeArray } from '../utils/safe';
 
@@ -38,6 +39,7 @@ export function LeadsDashboard() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkQueue, setShowBulkQueue] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [freeTierQuota, setFreeTierQuota] = useState<LeadsDailyQuota | null>(null);
 
   // Folders
   const [folders, setFolders] = useState<LeadFolder[]>([]);
@@ -158,6 +160,15 @@ export function LeadsDashboard() {
     }
   }, []);
 
+  const fetchSearchQuota = useCallback(async () => {
+    try {
+      const { data } = await leadsAPI.getSearchQuota();
+      setFreeTierQuota(data.dailyLeadsQuota ?? null);
+    } catch {
+      setFreeTierQuota(null);
+    }
+  }, []);
+
   const fetchFolders = useCallback(async () => {
     try {
       const { data } = await foldersAPI.getAll();
@@ -170,7 +181,8 @@ export function LeadsDashboard() {
   useEffect(() => {
     fetchLeads();
     fetchFolders();
-  }, [fetchLeads, fetchFolders]);
+    fetchSearchQuota();
+  }, [fetchLeads, fetchFolders, fetchSearchQuota]);
 
   const handleSearch = async (params: LeadSearchParams, queueId?: string) => {
     setSearchLoading(true);
@@ -206,6 +218,8 @@ export function LeadsDashboard() {
         const { data: updatedFolder } = await foldersAPI.addLeads(activeFolderId, newIds);
         setFolders((prev) => prev.map((f) => (f.id === activeFolderId ? updatedFolder : f)));
       }
+
+      await fetchSearchQuota();
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Erro ao buscar leads';
       alert(message);
@@ -310,7 +324,7 @@ export function LeadsDashboard() {
       </div>
 
       {/* Search Form */}
-      <LeadSearchForm onSearch={handleSearch} loading={searchLoading} />
+      <LeadSearchForm onSearch={handleSearch} loading={searchLoading} freeTierQuota={freeTierQuota} />
 
       {/* Loading animation */}
       {searchLoading && <SearchLoadingOverlay />}

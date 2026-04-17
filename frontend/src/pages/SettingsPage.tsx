@@ -152,8 +152,8 @@ export function SettingsPage() {
               <p className="text-sm font-semibold text-text-primary">{formatLimit(subscription.limits.leads_per_month, 'leads')}</p>
             </div>
             <div className="rounded-xl border border-border-light bg-surface-secondary px-4 py-3">
-              <p className="text-xs text-text-muted">Mensagens WhatsApp</p>
-              <p className="text-sm font-semibold text-text-primary">{formatLimit(subscription.limits.whatsapp_messages, 'mensagens')}</p>
+              <p className="text-xs text-text-muted">WhatsApp</p>
+              <p className="text-sm font-semibold text-text-primary">Controlado pelos créditos de IA</p>
             </div>
             <div className="rounded-xl border border-border-light bg-surface-secondary px-4 py-3">
               <p className="text-xs text-text-muted">E-mails por mês</p>

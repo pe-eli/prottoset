@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { leadsController } from '../controllers/leads.controller';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
 import { enforceQuota } from '../middleware/quota.middleware';
-import { requireVerifiedAccount } from '../middleware/verified-account.middleware';
-import { requireActiveSubscription } from '../middleware/subscription.middleware';
+import { allowLeadsSearchForFreeTier } from '../middleware/free-tier.middleware';
+import { enforceFeatureLimitForActiveSubscription } from '../middleware/subscription.middleware';
 
 const router = Router();
 
@@ -18,8 +18,8 @@ router.get('/', leadsController.getAll);
 router.post(
 	'/search',
 	leadsSearchLimiter,
-	requireVerifiedAccount(),
-	requireActiveSubscription('leads'),
+	allowLeadsSearchForFreeTier(),
+	enforceFeatureLimitForActiveSubscription('leads'),
 	enforceQuota({
 		quotaKey: 'scrape_requests_daily',
 		message: 'Cota diária de scraping atingida.',
@@ -30,6 +30,7 @@ router.post(
 	}),
 	leadsController.search,
 );
+router.get('/search-quota', leadsController.getSearchQuota);
 router.get('/:id', leadsController.getById);
 router.patch('/:id/status', leadsController.updateStatus);
 router.delete('/:id', leadsController.delete);

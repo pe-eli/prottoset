@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { contactsAPI, type Contact, type ContactStatus, type ContactChannel } from '../features/contacts/contacts.api';
 
 const STATUS_CONFIG: Record<ContactStatus, { label: string; color: string; bg: string }> = {
@@ -96,6 +98,9 @@ function getChannel(c: Contact): ContactChannel {
 }
 
 export function ContactsPage() {
+  const { subscription } = useSubscription();
+  const hasActiveSubscription = subscription?.status === 'active';
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -174,6 +179,15 @@ export function ContactsPage() {
     { key: 'whatsapp', label: 'WhatsApp', count: waCount },
     { key: 'manual', label: 'Manual', count: manualCount },
   ];
+
+  if (!hasActiveSubscription) {
+    return (
+      <SubscriptionLockedView
+        featureName="Contatos e CRM"
+        description="O funil de contatos fica disponível com uma assinatura ativa. Assine para desbloquear gestão de contatos, e-mail e WhatsApp."
+      />
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">

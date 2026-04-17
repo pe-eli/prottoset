@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { whatsappAPI } from '../features/whatsapp/whatsapp.api';
 import { waInstanceAPI } from '../features/whatsapp/wa-instance.api';
 import type { WaInstanceStatus } from '../features/whatsapp/wa-instance.api';
@@ -82,6 +84,9 @@ function WaIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
 
 
 export function WhatsAppBlastPage() {
+  const { subscription } = useSubscription();
+  const hasActiveSubscription = subscription?.status === 'active';
+
   const [phoneInput, setPhoneInput] = useState('');
   const [phones, setPhones] = useState<string[]>([]);
 
@@ -451,6 +456,15 @@ export function WhatsAppBlastPage() {
   const doneCount = counts.sent + counts.failed;
   const progress = safeQueue.length > 0 ? Math.round((doneCount / safeQueue.length) * 100) : 0;
   const countdownPct = countdown ? (countdown.remaining / countdown.total) * 100 : 0;
+
+  if (!hasActiveSubscription) {
+    return (
+      <SubscriptionLockedView
+        featureName="Disparo de WhatsApp"
+        description="Este recurso usa créditos de IA e está disponível apenas para assinantes. Escolha um plano para liberar os disparos."
+      />
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">

@@ -4,6 +4,8 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { TextArea } from '../components/ui/TextArea';
+import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { contactsAPI } from '../features/contacts/contacts.api';
 
 const DEFAULT_SUBJECT = 'Transforme sua presença digital — Closr';
@@ -81,6 +83,9 @@ function formatInterval(seconds: number): string {
 }
 
 export function EmailBlastPage() {
+  const { subscription } = useSubscription();
+  const hasActiveSubscription = subscription?.status === 'active';
+
   const savedResendApiKey = typeof window !== 'undefined' ? localStorage.getItem('closr.emailBlast.resendApiKey') || '' : '';
   const savedResendFrom = typeof window !== 'undefined' ? localStorage.getItem('closr.emailBlast.resendFrom') || '' : '';
 
@@ -234,6 +239,15 @@ export function EmailBlastPage() {
   const doneCount = safeQueue.filter((j) => j.status === 'sent' || j.status === 'failed').length;
   const progress = safeQueue.length > 0 ? Math.round((doneCount / safeQueue.length) * 100) : 0;
   const countdownPct = countdown ? (countdown.remaining / countdown.total) * 100 : 0;
+
+  if (!hasActiveSubscription) {
+    return (
+      <SubscriptionLockedView
+        featureName="Disparo de E-mails"
+        description="Este recurso faz parte dos planos pagos. Assine para enviar campanhas por e-mail e acompanhar os resultados."
+      />
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">

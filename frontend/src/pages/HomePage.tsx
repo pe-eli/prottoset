@@ -1,11 +1,14 @@
 import { useMemo } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import type { AuthUser } from '../features/auth/auth.api';
 
 export function HomePage() {
   const navigate = useNavigate();
   const { user } = useOutletContext<{ user: AuthUser }>();
+  const { subscription } = useSubscription();
+  const hasActiveSubscription = subscription?.status === 'active';
   const firstName = useMemo(() => user.displayName.trim().split(/\s+/)[0] || 'Usuário', [user.displayName]);
 
   const cards = [
@@ -19,6 +22,7 @@ export function HomePage() {
         </svg>
       ),
       accent: 'from-cyan-500/30 to-blue-400/10',
+      requiresSubscription: false,
     },
     {
       path: '/leads/contatos',
@@ -30,6 +34,7 @@ export function HomePage() {
         </svg>
       ),
       accent: 'from-slate-500/30 to-slate-400/10',
+      requiresSubscription: true,
     },
     {
       path: '/leads/disparos',
@@ -41,6 +46,7 @@ export function HomePage() {
         </svg>
       ),
       accent: 'from-fuchsia-500/30 to-rose-400/10',
+      requiresSubscription: true,
     },
     {
       path: '/leads/whatsapp',
@@ -52,6 +58,7 @@ export function HomePage() {
         </svg>
       ),
       accent: 'from-emerald-500/30 to-lime-400/10',
+      requiresSubscription: true,
     },
   ];
 
@@ -69,28 +76,60 @@ export function HomePage() {
 
         <section className="overflow-x-auto pt-3 pb-3">
           <div className="min-w-[1020px] grid grid-cols-4 gap-4 px-1">
-            {cards.map((card) => (
-              <button
-                key={card.path}
-                type="button"
-                onClick={() => navigate(card.path)}
-                className="text-left"
-              >
-                <Card className="h-[260px] p-5 transition-all duration-300 hover:border-brand-400/40 hover:shadow-lg hover:shadow-brand-500/10">
-                  <div className={`mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${card.accent} text-text-primary`}>
-                    {card.icon}
-                  </div>
-                  <h2 className="text-lg font-heading font-bold text-text-primary">{card.title}</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-text-secondary">{card.description}</p>
-                  <div className="mt-6 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-300">
-                    <span>Acessar</span>
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </Card>
-              </button>
-            ))}
+            {cards.map((card) => {
+              const isLocked = card.requiresSubscription && !hasActiveSubscription;
+
+              return (
+                <div
+                  key={card.path}
+                  onClick={() => navigate(card.path)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(card.path);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  className="text-left"
+                >
+                  <Card className={`relative h-[260px] p-5 transition-all duration-300 ${isLocked ? 'border-amber-400/35 bg-amber-500/10' : 'hover:border-brand-400/40 hover:shadow-lg hover:shadow-brand-500/10'}`}>
+                    {isLocked && (
+                      <div className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m6-6V9a6 6 0 10-12 0v2m12 0H6m12 0a2 2 0 012 2v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5a2 2 0 012-2" />
+                        </svg>
+                        Bloqueado
+                      </div>
+                    )}
+                    <div className={`mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${card.accent} text-text-primary`}>
+                      {card.icon}
+                    </div>
+                    <h2 className="text-lg font-heading font-bold text-text-primary">{card.title}</h2>
+                    <p className="mt-2 text-sm leading-relaxed text-text-secondary">{card.description}</p>
+                    {isLocked ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/pricing');
+                        }}
+                        className="mt-6 inline-flex items-center gap-1.5 rounded-lg border border-amber-300/35 bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-100 transition-colors hover:bg-amber-500/20"
+                      >
+                        Ver planos
+                      </button>
+                    ) : (
+                      <div className="mt-6 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-300">
+                        <span>Acessar</span>
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+              );
+            })}
           </div>
         </section>
       </div>

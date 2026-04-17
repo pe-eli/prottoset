@@ -123,6 +123,7 @@ VALUES
   (NULL, 'email_messages_daily', 50),
   (NULL, 'whatsapp_blasts_daily', 20),
   (NULL, 'scrape_requests_daily', 100),
+  (NULL, 'free_leads_daily', 50),
   (NULL, 'pdf_generations_daily', 50)
 ON CONFLICT (tenant_id, quota_key) DO NOTHING;
 

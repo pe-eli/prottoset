@@ -3,7 +3,6 @@ import { whatsappController } from '../controllers/whatsapp.controller';
 import { waInstanceController } from '../controllers/whatsapp-instance.controller';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
 import { enforceQuota } from '../middleware/quota.middleware';
-import { requireVerifiedAccount } from '../middleware/verified-account.middleware';
 import { requireActiveSubscription } from '../middleware/subscription.middleware';
 import { requireConnectedWhatsApp } from '../middleware/whatsapp-connected.middleware';
 
@@ -25,7 +24,6 @@ router.post('/disconnect', waInstanceController.disconnect);
 router.post(
 	'/blast',
 	blastLimiter,
-	requireVerifiedAccount(),
 	requireActiveSubscription('whatsapp'),
 	enforceQuota({ quotaKey: 'whatsapp_blasts_daily', message: 'Cota diária de blasts WhatsApp atingida.', cost: 1 }),
 	requireConnectedWhatsApp(),

@@ -1,8 +1,58 @@
 import { Request, Response } from 'express';
 import { leadsService } from '../modules/leads/leads.service';
 import { leadSearchSchema, leadStatusUpdateSchema, uuidParamSchema } from '../validation/request.schemas';
+import { subscriptionRepository } from '../modules/subscriptions/subscription.repository';
+import { getSubscriptionOverride } from '../config/subscription-overrides';
+import { quotaRepository } from '../security/quota.repository';
 
 export const leadsController = {
+  async getSearchQuota(req: Request, res: Response): Promise<void> {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        res.status(401).json({ error: 'Não autenticado' });
+        return;
+      }
+
+      const override = getSubscriptionOverride(tenantId);
+      const sub = await subscriptionRepository.findActiveByUserId(tenantId);
+      const hasActiveSubscription = override?.forceStatus === 'active' || (!!sub && sub.status === 'active');
+
+      if (hasActiveSubscription) {
+        res.json({
+          hasActiveSubscription: true,
+          dailyLeadsQuota: {
+            key: 'free_leads_daily',
+            limit: null,
+            used: 0,
+            remaining: null,
+            applied: false,
+          },
+        });
+        return;
+      }
+
+      const [limit, used] = await Promise.all([
+        quotaRepository.resolveLimit(tenantId, 'free_leads_daily'),
+        quotaRepository.getUsage(tenantId, 'free_leads_daily'),
+      ]);
+
+      res.json({
+        hasActiveSubscription: false,
+        dailyLeadsQuota: {
+          key: 'free_leads_daily',
+          limit,
+          used,
+          remaining: Math.max(0, limit - used),
+          applied: true,
+        },
+      });
+    } catch (err: any) {
+      console.error('[Leads] getSearchQuota error:', err.message);
+      res.status(500).json({ error: 'Erro ao consultar limite diário de leads' });
+    }
+  },
+
   async search(req: Request, res: Response): Promise<void> {
     try {
       const tenantId = req.tenantId!;

@@ -28,7 +28,7 @@ export const PLANS: Record<PlanId, Plan> = {
     mercadopago_plan_id: process.env.MP_PLAN_ID_SOLO || 'MP_PLAN_ID_SOLO',
     limits: {
       leads_per_month: 1500,
-      whatsapp_messages: 750,
+      whatsapp_messages: null,
       emails_per_month: 3000,
       pdf_quotes: 50,
       ai_credits: 15000,
@@ -48,7 +48,7 @@ export const PLANS: Record<PlanId, Plan> = {
     mercadopago_plan_id: process.env.MP_PLAN_ID_AGENCIA || 'MP_PLAN_ID_AGENCIA',
     limits: {
       leads_per_month: 3000,
-      whatsapp_messages: 3000,
+      whatsapp_messages: null,
       emails_per_month: 5000,
       pdf_quotes: null,
       ai_credits: 25000,

@@ -58,7 +58,7 @@ const FEATURES = [
       </svg>
     ),
     title: 'WhatsApp com IA',
-    description: 'Mensagens únicas geradas por IA para cada lote. Envio via Evolution API com intervalos inteligentes.',
+    description: 'Gere automaticamente a primeira mensagem do lote com IA e envie via Evolution API com intervalos inteligentes.',
   },
   {
     icon: (
@@ -66,8 +66,8 @@ const FEATURES = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4h18l-3 6H6L3 4zm3 6v10a2 2 0 002 2h8a2 2 0 002-2V10" />
       </svg>
     ),
-    title: 'Funil Automático',
-    description: 'IA conduz cada lead pelas etapas: Abordagem, Qualificação, Gancho e Demonstração — sem intervenção.',
+    title: 'Contato Organizado',
+    description: 'Acompanhe cada lead com status claros, histórico e próximas ações sem perder contexto.',
   },
   {
     icon: (
@@ -76,7 +76,7 @@ const FEATURES = [
       </svg>
     ),
     title: 'CRM Integrado',
-    description: 'Gerencie leads, acompanhe status e tenha visão clara do pipeline de vendas em um só lugar.',
+    description: 'Centralize leads, contatos e conversas em um só lugar com visão prática do seu processo comercial.',
   },
   {
     icon: (
@@ -84,22 +84,22 @@ const FEATURES = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ),
-    title: 'Orçamentos em PDF',
-    description: 'Crie orçamentos profissionais e propostas por pacotes com geração automática de PDF.',
+    title: 'Operação sem planilhas',
+    description: 'Use listas, filtros e histórico para executar prospecção no dia a dia sem depender de processos manuais.',
   },
 ];
 
 const STEPS = [
   { number: '01', title: 'Prospecte', description: 'Busque leads por nicho e cidade. O sistema varre bairro a bairro e classifica automaticamente.' },
-  { number: '02', title: 'Contate', description: 'Dispare e-mails e WhatsApp com textos gerados por IA. Cada mensagem é única.' },
-  { number: '03', title: 'Automatize', description: 'O funil de vendas guia cada lead do primeiro contato até a demonstração.' },
-  { number: '04', title: 'Feche', description: 'Acompanhe o pipeline, gere orçamentos em PDF e converta leads em clientes.' },
+  { number: '02', title: 'Contate', description: 'Dispare e-mails e WhatsApp com personalização. A IA cria a primeira mensagem do lote.' },
+  { number: '03', title: 'Acompanhe', description: 'Monitore respostas e evolução de cada lead com status e histórico centralizados.' },
+  { number: '04', title: 'Escale', description: 'Repita o processo com novos segmentos e aumente seu alcance com previsibilidade.' },
 ];
 
 const STATS = [
   { value: '10x', label: 'Mais leads por hora' },
   { value: '85%', label: 'Menos trabalho manual' },
-  { value: '24/7', label: 'Funil funcionando' },
+  { value: '24/7', label: 'Operação em andamento' },
   { value: '< 5min', label: 'Primeiro contato' },
 ];
 
@@ -197,7 +197,7 @@ const Hero = React.memo(({ onNavigate }: { onNavigate: (path: string) => void })
 
     <aside className="relative z-10 mb-8 inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 rounded-full border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm">
       <span className="text-xs text-text-muted">
-        Prospecção + Automação + Inteligência Artificial
+        Prospecção + Contato + Inteligência Artificial
       </span>
       <span className="flex items-center gap-1 text-xs text-brand-400">
         Saiba mais
@@ -221,9 +221,9 @@ const Hero = React.memo(({ onNavigate }: { onNavigate: (path: string) => void })
     </h1>
 
     <p className="relative z-10 text-sm md:text-base text-center max-w-2xl px-4 mb-10 text-text-muted leading-relaxed">
-      Plataforma completa de prospecção e gerenciamento de clientes. <br className="hidden sm:block" />
-      Busca automática de leads, disparo inteligente por e-mail e WhatsApp, <br className="hidden sm:block" />
-      funil de vendas com IA e CRM — tudo em um só lugar.
+      Plataforma completa de prospecção e gestão comercial. <br className="hidden sm:block" />
+      Busca automática de leads, disparo por e-mail e WhatsApp, <br className="hidden sm:block" />
+      primeira mensagem assistida por IA e CRM em um só lugar.
     </p>
 
     <div className="relative z-10 flex items-center gap-4 mb-20">
@@ -270,7 +270,7 @@ const Features = React.memo(() => (
           Tudo para converter leads
         </h2>
         <p className="text-text-muted max-w-lg mx-auto">
-          Da prospecção ao fechamento, cada etapa do seu processo comercial coberta por uma ferramenta dedicada.
+          Da prospecção ao contato inicial, cada etapa operacional coberta por uma ferramenta dedicada.
         </p>
       </div>
 
@@ -323,13 +323,12 @@ const HowItWorks = React.memo(() => (
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {STEPS.map((step, i) => (
-          <div key={step.number} className="relative">
-            {i < STEPS.length - 1 && (
-              <div className="hidden lg:block absolute top-7 left-full w-full h-px border-t border-dashed border-white/[0.08] -translate-x-4 z-0" />
-            )}
-            <div className="relative z-10">
+      <div className="relative">
+        <div className="hidden lg:block absolute left-12 right-12 top-7 border-t border-dashed border-white/[0.08]" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {STEPS.map((step) => (
+          <div key={step.number} className="relative z-10 h-full">
+            <div className="relative z-10 h-full">
               <div className="w-14 h-14 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-5">
                 <span className="text-lg font-heading font-extrabold text-brand-400">
                   {step.number}
@@ -340,6 +339,7 @@ const HowItWorks = React.memo(() => (
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   </section>
@@ -354,7 +354,7 @@ const DIFFERENTIALS = [
   },
   {
     title: 'IA que vende por você',
-    desc: 'Mensagens de WhatsApp únicas geradas por IA. Funil automático que guia o lead do primeiro contato até a demonstração.',
+    desc: 'A IA prepara a primeira mensagem do lote para acelerar a abordagem inicial com consistência.',
   },
   {
     title: 'Multicanal: E-mail + WhatsApp',
@@ -362,7 +362,7 @@ const DIFFERENTIALS = [
   },
   {
     title: 'Sem dependência de planilhas',
-    desc: 'Pipeline visual, CRM integrado e orçamentos em PDF. Tudo no navegador, sem instalar nada.',
+    desc: 'CRM integrado, histórico de contatos e visão operacional no navegador, sem instalação.',
   },
 ];
 
@@ -385,7 +385,7 @@ const Differentials = React.memo(() => (
           </h2>
           <p className="text-text-muted mb-10 leading-relaxed">
             Enquanto outros CRMs focam apenas em organizar contatos, o Closr vai mais longe:
-            encontra os leads por você, entra em contato automaticamente e conduz a conversa até o fechamento.
+            encontra os leads por você, acelera o primeiro contato e mantém sua operação comercial organizada.
           </p>
 
           <div className="space-y-6">
@@ -466,12 +466,12 @@ const CTA = React.memo(({ onNavigate }: { onNavigate: (path: string) => void }) 
             letterSpacing: '-0.03em',
           }}
         >
-          Pronto para automatizar <br className="hidden sm:block" />
+          Pronto para acelerar <br className="hidden sm:block" />
           sua prospecção?
         </h2>
         <p className="text-text-muted max-w-lg mx-auto mb-10 leading-relaxed">
           Pare de perder tempo buscando leads manualmente. Deixe o Closr encontrar,
-          contatar e qualificar seus potenciais clientes enquanto você foca no que importa.
+          iniciar o contato e organizar seu processo comercial enquanto você foca no fechamento.
         </p>
         <button
           onClick={() => onNavigate('/login')}

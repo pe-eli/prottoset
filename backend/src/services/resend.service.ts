@@ -1,14 +1,19 @@
 import { Resend } from 'resend';
 
-let _client: Resend | null = null;
+const clientByKey = new Map<string, Resend>();
 
-function getClient(): Resend {
-  if (!_client) {
-    const key = process.env.RESEND_API_KEY;
-    if (!key) throw new Error('RESEND_API_KEY não configurado no .env');
-    _client = new Resend(key);
+function getClient(apiKey?: string): Resend {
+  const key = (apiKey || process.env.RESEND_API_KEY || '').trim();
+  if (!key) {
+    throw new Error('RESEND_API_KEY não configurado no .env nem informado no disparo');
   }
-  return _client;
+
+  const cached = clientByKey.get(key);
+  if (cached) return cached;
+
+  const created = new Resend(key);
+  clientByKey.set(key, created);
+  return created;
 }
 
 const FROM = () => process.env.EMAIL_FROM || process.env.RESEND_FROM || 'Prottoset <noreply@prottocode.com.br>';
@@ -16,6 +21,8 @@ const FROM = () => process.env.EMAIL_FROM || process.env.RESEND_FROM || 'Prottos
 interface SendEmailOptions {
   html?: string;
   text?: string;
+  resendApiKey?: string;
+  from?: string;
 }
 
 export const resendService = {
@@ -25,11 +32,8 @@ export const resendService = {
     body: string,
     options: SendEmailOptions = {},
   ): Promise<{ success: boolean; error?: string }> {
-    const from = FROM();
+    const from = options.from?.trim() || FROM();
     console.log(`[Resend] Iniciando envio de e-mail para=${to}, from=${from}, subject="${subject}"`);
-    console.log(`[Resend] RESEND_API_KEY presente: ${!!process.env.RESEND_API_KEY} (${(process.env.RESEND_API_KEY || '').slice(0, 8)}...)`);
-    console.log(`[Resend] EMAIL_FROM=${process.env.EMAIL_FROM || '(vazio)'}, RESEND_FROM=${process.env.RESEND_FROM || '(vazio)'}`);
-    console.log(`[Resend] Usando html customizado: ${!!options.html}, usando text customizado: ${!!options.text}`);
 
     try {
       const htmlBody = body
@@ -50,8 +54,7 @@ export const resendService = {
           </div>
         `;
 
-      console.log(`[Resend] Chamando resend.emails.send()...`);
-      const { data, error } = await getClient().emails.send({
+      const { data, error } = await getClient(options.resendApiKey).emails.send({
         from,
         to,
         subject,

@@ -85,6 +85,8 @@ export const emailBlastSchema = z.object({
   emails: z.array(z.string().trim().email('E-mail inválido').max(255)).min(1).max(1000),
   subject: nonEmptyString(200, 'Assunto é obrigatório'),
   body: nonEmptyString(10000, 'Corpo do email é obrigatório'),
+  resendApiKey: z.string().trim().min(10, 'RESEND_API_KEY inválida').max(300).optional(),
+  resendFrom: z.string().trim().min(5, 'RESEND_FROM inválido').max(255).optional(),
   batchSize: z.coerce.number().int().positive().max(50).optional(),
   intervalMinSeconds: z.coerce.number().int().min(5).max(3600).optional(),
   intervalMaxSeconds: z.coerce.number().int().min(5).max(3600).optional(),
@@ -152,4 +154,8 @@ export const captchaTokenSchema = z.object({
 
 export const checkoutSchema = z.object({
   planId: z.enum(['solo', 'agencia', 'pro'], { message: 'Plano inválido' }),
+});
+
+export const reconcileSubscriptionSchema = z.object({
+  mpSubscriptionId: nonEmptyString(120, 'mpSubscriptionId é obrigatório'),
 });

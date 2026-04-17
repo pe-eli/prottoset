@@ -11,7 +11,6 @@ import { authAPI } from './features/auth/auth.api';
 import type { AuthUser } from './features/auth/auth.api';
 import { LandingPage } from './pages/LandingPage';
 import { HomePage } from './pages/HomePage';
-import { PackagesQuotePage } from './pages/PackagesQuotePage';
 import { LeadsDashboard } from './pages/LeadsDashboard';
 import { EmailBlastPage } from './pages/EmailBlastPage';
 import { WhatsAppBlastPage } from './pages/WhatsAppBlastPage';
@@ -33,7 +32,6 @@ function ProtectedLayout({ user, onLogout }: ProtectedLayoutProps) {
   const location = useLocation();
   const isMainHub = location.pathname === '/home';
   const showFeatureRail = [
-    '/pacotes',
     '/leads/prospeccao',
     '/leads/contatos',
     '/leads/disparos',
@@ -125,8 +123,8 @@ function App() {
               }
             >
               <Route path="/home" element={<HomePage />} />
-              <Route path="/novo" element={<Navigate to="/pacotes" replace />} />
-              <Route path="/pacotes" element={<PackagesQuotePage />} />
+              <Route path="/novo" element={<Navigate to="/home" replace />} />
+              <Route path="/pacotes" element={<Navigate to="/home" replace />} />
               <Route path="/leads" element={<Navigate to="/home" replace />} />
               <Route path="/leads/prospeccao" element={<LeadsDashboard />} />
               <Route path="/leads/disparos" element={<EmailBlastPage />} />

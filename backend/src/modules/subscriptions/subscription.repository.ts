@@ -59,12 +59,30 @@ export const subscriptionRepository = {
     status?: string;
     mpSubscriptionId?: string;
     mpPayerId?: string;
+    currentPeriodStart?: Date;
+    currentPeriodEnd?: Date;
   }): Promise<Subscription> {
     const { rows } = await query<SubscriptionRow>(
-      `INSERT INTO subscriptions (user_id, plan_id, status, mp_subscription_id, mp_payer_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO subscriptions (
+        user_id,
+        plan_id,
+        status,
+        mp_subscription_id,
+        mp_payer_id,
+        current_period_start,
+        current_period_end
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [data.userId, data.planId, data.status || 'pending', data.mpSubscriptionId || null, data.mpPayerId || null],
+      [
+        data.userId,
+        data.planId,
+        data.status || 'pending',
+        data.mpSubscriptionId || null,
+        data.mpPayerId || null,
+        data.currentPeriodStart || null,
+        data.currentPeriodEnd || null,
+      ],
     );
     return toSubscription(rows[0]);
   },

@@ -2,6 +2,9 @@ import { Response } from 'express';
 import { evolutionService } from '../../services/evolution.service';
 import { deepseekService } from '../../services/deepseek.service';
 import { waInstanceRepository } from './whatsapp-instance.repository';
+import { subscriptionService } from '../subscriptions/subscription.service';
+import { usageRepository } from '../subscriptions/usage.repository';
+import { calculateCreditsFromTokens, calculateCreditsFromChars } from '../subscriptions/ai-credits';
 
 export type WaJobStatus = 'pending' | 'sending' | 'sent' | 'failed';
 
@@ -148,6 +151,17 @@ async function processBlast(blastId: string) {
   const total = eligible.length;
   const totalBatches = Math.ceil(total / batchSize);
 
+  // Pre-flight: verify AI credits
+  const creditCheck = await subscriptionService.checkLimit(entry.tenantId, 'ai_credits');
+  if (!creditCheck.allowed) {
+    emit(entry, 'gen_error', { batch: 1, error: 'Créditos de IA insuficientes' });
+    entry.phase = 'done';
+    entry.finishedAt = new Date().toISOString();
+    setTimeout(() => closeAll(entry), 500);
+    return;
+  }
+  const aiCreditLimit = creditCheck.limit;
+
   for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
     if (entry.cancelled) break;
 
@@ -162,15 +176,28 @@ async function processBlast(blastId: string) {
     });
 
     let batchMessage: string;
+    let creditsUsed = 0;
     try {
-      batchMessage = await deepseekService.generateWhatsAppMessage(promptBase);
+      const result = await deepseekService.generateWhatsAppMessage(promptBase);
+      batchMessage = result.message;
+      creditsUsed = result.tokensUsed > 0
+        ? calculateCreditsFromTokens(result.tokensUsed)
+        : calculateCreditsFromChars(promptBase.length, batchMessage.length);
+
       if (!batchMessage) {
         throw new Error('DeepSeek não retornou uma mensagem válida. Verifique a DEEPSEEK_API_KEY no .env');
       }
     } catch (genErr: unknown) {
+      // AI failed — do NOT deduct credits
       const error = genErr instanceof Error ? genErr.message : 'Erro na geração de mensagem';
       emit(entry, 'gen_error', { batch: batchIndex + 1, error });
-      // Aborta o disparo — nunca envia o prompt como mensagem
+      break;
+    }
+
+    // Atomically deduct credits after successful generation
+    const deducted = await usageRepository.deductAiCredits(entry.tenantId, creditsUsed, aiCreditLimit);
+    if (!deducted) {
+      emit(entry, 'gen_error', { batch: batchIndex + 1, error: 'Créditos de IA insuficientes' });
       break;
     }
 

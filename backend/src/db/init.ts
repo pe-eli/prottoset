@@ -11,15 +11,13 @@ function resolveSslConfig() {
   }
 
   const certificateAuthority = process.env.DATABASE_CA_CERT?.trim();
-  if (certificateAuthority) {
-    return {
-      rejectUnauthorized: true,
-      ca: certificateAuthority,
-    };
+  if (!certificateAuthority) {
+    throw new Error('DATABASE_CA_CERT is required in production');
   }
 
   return {
-    rejectUnauthorized: false,
+    rejectUnauthorized: true,
+    ca: certificateAuthority,
   };
 }
 

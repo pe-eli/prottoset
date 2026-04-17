@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { packagesService } from '../services/packages.service';
 import { packagesQuoteSchema, uuidParamSchema } from '../validation/request.schemas';
+import { billingService } from '../modules/subscriptions/billing.service';
 
 export const packagesController = {
   async generatePdf(req: Request, res: Response): Promise<void> {
@@ -12,6 +13,20 @@ export const packagesController = {
       }
 
       const result = await packagesService.generatePdf(req.tenantId!, parsed.data);
+
+      const consumed = await billingService.consume({
+        tenantId: req.tenantId!,
+        type: 'PDF',
+        amount: 1,
+        idempotencyKey: `pdf:packages:${req.tenantId}:${result.id}`,
+        metadata: { source: 'packages.generatePdf', quoteId: result.id },
+      });
+
+      if (!consumed.consumed) {
+        res.status(429).json({ error: 'Limite de PDF atingido para este período.' });
+        return;
+      }
+
       res.json({ id: result.id, pdfUrl: `/api/packages/${result.id}/pdf` });
     } catch (error) {
       console.error('Erro ao gerar proposta de pacotes:', error);

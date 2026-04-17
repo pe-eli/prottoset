@@ -31,26 +31,45 @@ export const quotaRepository = {
     return rows[0]?.used_count ?? 0;
   },
 
-  async ensureWithinLimit(tenantId: string, quotaKey: QuotaKey, cost: number): Promise<{ allowed: boolean; remaining: number; limit: number }> {
+  async tryConsumeAtomic(tenantId: string, quotaKey: QuotaKey, cost: number): Promise<{ allowed: boolean; remaining: number; limit: number }> {
+    const normalizedCost = Math.max(1, Math.floor(cost || 1));
     const limit = await this.resolveLimit(tenantId, quotaKey);
-    const used = await this.getUsage(tenantId, quotaKey);
-    const remaining = Math.max(0, limit - used);
-    return {
-      allowed: used + cost <= limit,
-      remaining,
-      limit,
-    };
-  },
 
-  async consume(tenantId: string, quotaKey: QuotaKey, cost: number): Promise<void> {
-    await query(
+    if (normalizedCost > limit) {
+      const used = await this.getUsage(tenantId, quotaKey);
+      return {
+        allowed: false,
+        remaining: Math.max(0, limit - used),
+        limit,
+      };
+    }
+
+    const { rowCount, rows } = await query<QuotaUsageRow>(
       `INSERT INTO quota_usage (tenant_id, quota_key, usage_date, used_count, updated_at)
        VALUES ($1, $2, CURRENT_DATE, $3, now())
        ON CONFLICT (tenant_id, quota_key, usage_date)
        DO UPDATE SET
          used_count = quota_usage.used_count + EXCLUDED.used_count,
-         updated_at = now()`,
-      [tenantId, quotaKey, cost],
+         updated_at = now()
+       WHERE quota_usage.used_count + EXCLUDED.used_count <= $4
+       RETURNING used_count`,
+      [tenantId, quotaKey, normalizedCost, limit],
     );
+
+    if ((rowCount ?? 0) > 0) {
+      const usedAfter = rows[0]?.used_count ?? normalizedCost;
+      return {
+        allowed: true,
+        remaining: Math.max(0, limit - usedAfter),
+        limit,
+      };
+    }
+
+    const used = await this.getUsage(tenantId, quotaKey);
+    return {
+      allowed: false,
+      remaining: Math.max(0, limit - used),
+      limit,
+    };
   },
 };

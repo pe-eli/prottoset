@@ -10,17 +10,6 @@ export function HomePage() {
 
   const cards = [
     {
-      path: '/pacotes',
-      title: 'Orçamentos',
-      description: 'Monte propostas comerciais por pacotes em minutos.',
-      icon: (
-        <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-      ),
-      accent: 'from-brand-500/30 to-brand-300/10',
-    },
-    {
       path: '/leads/prospeccao',
       title: 'Prospecção',
       description: 'Pesquise empresas e gere leads com enriquecimento por IA.',
@@ -79,7 +68,7 @@ export function HomePage() {
         </div>
 
         <section className="overflow-x-auto pt-3 pb-3">
-          <div className="min-w-[1280px] grid grid-cols-5 gap-4 px-1">
+          <div className="min-w-[1020px] grid grid-cols-4 gap-4 px-1">
             {cards.map((card) => (
               <button
                 key={card.path}

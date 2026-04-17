@@ -4,14 +4,14 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import authRoutes from './routes/auth.routes';
-import quoteRoutes from './routes/quote.routes';
-import packagesRoutes from './routes/packages.routes';
 import leadsRoutes from './routes/leads.routes';
 import contactsRoutes from './routes/contacts.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
 import queuesRoutes from './routes/queues.routes';
 import leadFoldersRoutes from './routes/lead-folders.routes';
 import subscriptionRoutes from './routes/subscriptions.routes';
+import quoteRoutes from './routes/quote.routes';
+import packagesRoutes from './routes/packages.routes';
 import { subscriptionsController } from './controllers/subscriptions.controller';
 import { evolutionWebhookController } from './controllers/evolution-webhook.controller';
 import { requireAuth } from './middleware/auth.middleware';
@@ -21,13 +21,29 @@ import { getAllowedOrigins, requireTrustedOrigin, sanitizeErrorMessage } from '.
 import { asyncHandler } from './utils/asyncHandler';
 import { refreshTokensRepository } from './auth/refresh-tokens.repository';
 import { startBackgroundWorkers } from './jobs/workers';
+import { createSecurityRateLimit } from './middleware/rate-limit.middleware';
+import { requireTenantNotBlocked } from './middleware/tenant-block.middleware';
+import { webhookEventsRepository } from './modules/webhooks/webhook-events.repository';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const allowedOrigins = getAllowedOrigins();
 const isProduction = process.env.NODE_ENV === 'production';
+const trustProxy = process.env.TRUST_PROXY?.trim();
 
-app.set('trust proxy', 1);
+const webhookLimiter = createSecurityRateLimit({
+  name: 'webhooks-global',
+  message: 'Muitas requisições de webhook. Aguarde alguns instantes.',
+  ip: { limit: 120, windowMs: 60 * 1000 },
+});
+
+if (trustProxy === 'true' || trustProxy === '1') {
+  app.set('trust proxy', 1);
+} else if (trustProxy === 'false' || trustProxy === '0') {
+  app.set('trust proxy', false);
+} else {
+  app.set('trust proxy', 1);
+}
 app.use(helmet({
   crossOriginResourcePolicy: false,
   hsts: isProduction,
@@ -55,13 +71,14 @@ app.use(cors({
   credentials: true,
 }));
 app.use(cookieParser());
-app.use(express.json({ limit: '200kb' }));
 
 // MercadoPago webhook — public endpoint (no auth, validated by signature)
-app.post('/api/webhooks/mercadopago', subscriptionsController.webhook);
+app.post('/api/webhooks/mercadopago', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), subscriptionsController.webhook);
 
 // Evolution API webhook — public endpoint (identified by instanceName)
-app.post('/api/webhooks/evolution', evolutionWebhookController.handle);
+app.post('/api/webhooks/evolution', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), evolutionWebhookController.handle);
+
+app.use(express.json({ limit: '200kb' }));
 
 app.use('/api/auth', requireTrustedOrigin(allowedOrigins));
 app.use('/api/auth', authRoutes);
@@ -72,15 +89,16 @@ app.use('/api', requireTrustedOrigin(allowedOrigins));
 app.use('/api', asyncHandler(requireAuth));
 app.use('/api', asyncHandler(requireVerifiedEmail));
 app.use('/api', setTenant);
+app.use('/api', asyncHandler(requireTenantNotBlocked));
 
-app.use('/api/quotes', quoteRoutes);
-app.use('/api/packages', packagesRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/contacts', contactsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/queues', queuesRoutes);
 app.use('/api/lead-folders', leadFoldersRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/quotes', quoteRoutes);
+app.use('/api/packages', packagesRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -103,6 +121,12 @@ setInterval(() => {
     console.error('[Auth] Failed to cleanup expired refresh tokens:', sanitizeErrorMessage(err, isProduction));
   });
 }, 6 * 60 * 60 * 1000);
+
+setInterval(() => {
+  webhookEventsRepository.cleanupExpiredNonces().catch((err) => {
+    console.error('[Webhook] Failed to cleanup expired nonces:', sanitizeErrorMessage(err, isProduction));
+  });
+}, 10 * 60 * 1000);
 
 if (process.env.RUN_JOB_WORKERS_INLINE !== 'false') {
   startBackgroundWorkers();

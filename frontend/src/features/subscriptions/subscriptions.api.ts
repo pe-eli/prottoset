@@ -5,6 +5,7 @@ export interface PlanLimits {
   whatsapp_messages: number | null;
   emails_per_month: number | null;
   pdf_quotes: number | null;
+  ai_credits: number | null;
   seats: number;
 }
 
@@ -22,6 +23,7 @@ export interface Usage {
   whatsappUsed: number;
   emailsUsed: number;
   quotesUsed: number;
+  aiCreditsUsed: number;
 }
 
 export interface SubscriptionInfo {

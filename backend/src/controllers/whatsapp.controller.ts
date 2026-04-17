@@ -5,7 +5,6 @@ import { Contact } from '../types/contacts.types';
 import { blastParamSchema, whatsappBlastSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
 import { enqueueWhatsAppBlastJob } from '../jobs/queues';
-import { usageRepository } from '../modules/subscriptions/usage.repository';
 
 function openSse(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -86,7 +85,6 @@ export const whatsappController = {
       });
 
       await enqueueWhatsAppBlastJob({ tenantId, runId: blastId });
-      await usageRepository.incrementUsage(tenantId, 'whatsapp_used', cleanPhones.length);
 
       res.json({ blastId, total: cleanPhones.length });
     } catch (err: unknown) {

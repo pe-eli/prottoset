@@ -13,7 +13,7 @@ import {
   type SubscriptionFeature,
 } from '../../config/plans';
 import { getSubscriptionOverride } from '../../config/subscription-overrides';
-import crypto from 'crypto';
+import { fraudService } from '../../security/fraud.service';
 
 export interface SubscriptionInfo {
   planId: string;
@@ -52,6 +52,7 @@ export const subscriptionService = {
 
     const plan = PLANS[planId];
     const preApproval = new PreApproval(mpClient);
+    const externalReference = buildExternalReference(userId, planId);
 
     const response = await preApproval.create({
       body: {
@@ -63,6 +64,7 @@ export const subscriptionService = {
           currency_id: 'BRL',
         },
         payer_email: userEmail,
+        external_reference: externalReference,
         back_url: process.env.MP_SUCCESS_URL || 'http://localhost:5173/home?subscribed=true',
         status: 'pending',
       },
@@ -91,17 +93,7 @@ export const subscriptionService = {
     return initPoint;
   },
 
-  async processWebhook(body: Record<string, unknown>, signatureHeader: string | undefined): Promise<void> {
-    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim();
-
-    // Validate signature if secret is configured
-    if (webhookSecret && signatureHeader) {
-      const isValid = validateWebhookSignature(signatureHeader, body, webhookSecret);
-      if (!isValid) {
-        throw new Error('Assinatura do webhook inválida');
-      }
-    }
-
+  async processWebhookPayload(body: Record<string, unknown>): Promise<void> {
     const type = body.type as string | undefined;
     const action = body.action as string | undefined;
     const data = body.data as Record<string, unknown> | undefined;
@@ -201,10 +193,99 @@ export const subscriptionService = {
       whatsapp: usage.whatsappUsed,
       emails: usage.emailsUsed,
       quotes: usage.quotesUsed,
+      ai_credits: usage.aiCreditsUsed,
     };
 
     const used = usageMap[feature];
     return { allowed: used < limit, used, limit };
+  },
+
+  async reconcileByMpSubscriptionId(mpSubscriptionId: string): Promise<{
+    mpSubscriptionId: string;
+    status: string;
+    action: 'updated' | 'created';
+    userId: string;
+    planId: PlanId;
+  }> {
+    const mpClient = getMercadoPagoClient();
+    if (!mpClient) {
+      throw new Error('MercadoPago não configurado');
+    }
+
+    const preApproval = new PreApproval(mpClient);
+
+    let detail: any;
+    try {
+      detail = await preApproval.get({ id: mpSubscriptionId });
+    } catch {
+      throw new Error('Assinatura não encontrada no MercadoPago');
+    }
+
+    const parsedRef = parseExternalReference(detail.external_reference);
+    if (!parsedRef) {
+      throw new Error('Não foi possível reconciliar sem external_reference válido');
+    }
+
+    const status = mapMpStatusToLocal(detail.status);
+    const now = new Date();
+    const periodEnd = new Date(now);
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+    const periodStart = status === 'active' ? now : undefined;
+    const safePeriodEnd = status === 'active' ? periodEnd : undefined;
+
+    const updated = await subscriptionRepository.updateByMpSubscriptionId(mpSubscriptionId, {
+      status,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: safePeriodEnd,
+      mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
+    });
+
+    if (updated) {
+      if (parsedRef && updated.planId !== parsedRef.planId) {
+        await fraudService.recordEvent({
+          tenantId: updated.userId,
+          eventType: 'abrupt_plan_change',
+          severity: 'high',
+          details: {
+            source: 'reconcileByMpSubscriptionId',
+            mpSubscriptionId,
+            dbPlanId: updated.planId,
+            externalRefPlanId: parsedRef.planId,
+          },
+        });
+      }
+
+      return {
+        mpSubscriptionId,
+        status,
+        action: 'updated',
+        userId: updated.userId,
+        planId: isValidPlanId(updated.planId) ? updated.planId : parsedRef.planId,
+      };
+    }
+
+    const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
+    if (existing) {
+      await subscriptionRepository.updateStatus(existing.id, 'cancelled');
+    }
+
+    const created = await subscriptionRepository.create({
+      userId: parsedRef.userId,
+      planId: parsedRef.planId,
+      status,
+      mpSubscriptionId,
+      mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: safePeriodEnd,
+    });
+
+    return {
+      mpSubscriptionId,
+      status,
+      action: 'created',
+      userId: created.userId,
+      planId: parsedRef.planId,
+    };
   },
 };
 
@@ -217,26 +298,71 @@ async function handlePreapprovalEvent(action: string | undefined, preapprovalId:
   try {
     const detail = await preApproval.get({ id: preapprovalId });
     const mpStatus = detail.status;
+    const parsedRef = parseExternalReference(detail.external_reference);
 
     if (mpStatus === 'authorized') {
       const now = new Date();
       const periodEnd = new Date(now);
       periodEnd.setMonth(periodEnd.getMonth() + 1);
 
-      await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
+      const updated = await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
         status: 'active',
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
         mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
       });
+
+      if (!updated && parsedRef) {
+        const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
+        if (existing) {
+          if (existing.planId !== parsedRef.planId) {
+            await fraudService.recordEvent({
+              tenantId: parsedRef.userId,
+              eventType: 'abrupt_plan_change',
+              severity: 'high',
+              details: {
+                source: 'handlePreapprovalEvent',
+                mpSubscriptionId: preapprovalId,
+                oldPlanId: existing.planId,
+                newPlanId: parsedRef.planId,
+              },
+            });
+          }
+          await subscriptionRepository.updateStatus(existing.id, 'cancelled');
+        }
+
+        await subscriptionRepository.create({
+          userId: parsedRef.userId,
+          planId: parsedRef.planId,
+          status: 'active',
+          mpSubscriptionId: preapprovalId,
+          mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+        });
+      }
     } else if (mpStatus === 'cancelled') {
-      await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
+      const updated = await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
         status: 'cancelled',
       });
+
+      if (!updated && parsedRef) {
+        const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
+        if (existing) {
+          await subscriptionRepository.updateStatus(existing.id, 'cancelled');
+        }
+      }
     } else if (mpStatus === 'paused') {
-      await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
+      const updated = await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
         status: 'paused',
       });
+
+      if (!updated && parsedRef) {
+        const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
+        if (existing) {
+          await subscriptionRepository.updateStatus(existing.id, 'paused');
+        }
+      }
     }
   } catch (err: any) {
     console.error('[Subscriptions] Error fetching preapproval detail:', err.message);
@@ -249,37 +375,26 @@ async function handlePaymentEvent(paymentId: string): Promise<void> {
   console.log('[Subscriptions] Payment event received:', paymentId);
 }
 
-function validateWebhookSignature(
-  signatureHeader: string,
-  body: Record<string, unknown>,
-  secret: string,
-): boolean {
-  try {
-    // MercadoPago x-signature format: ts=<timestamp>,v1=<hash>
-    const parts = signatureHeader.split(',');
-    const tsEntry = parts.find((p) => p.startsWith('ts='));
-    const v1Entry = parts.find((p) => p.startsWith('v1='));
+function buildExternalReference(userId: string, planId: PlanId): string {
+  return `closr:${userId}:${planId}`;
+}
 
-    if (!tsEntry || !v1Entry) return false;
+function parseExternalReference(value: unknown): { userId: string; planId: PlanId } | null {
+  if (typeof value !== 'string') return null;
 
-    const ts = tsEntry.split('=')[1];
-    const receivedHash = v1Entry.split('=')[1];
+  const parts = value.split(':');
+  if (parts.length !== 3 || parts[0] !== 'closr') return null;
 
-    const data = body.data as Record<string, unknown> | undefined;
-    const dataId = data?.id ?? '';
+  const userId = parts[1];
+  const planIdRaw = parts[2];
+  if (!isValidPlanId(planIdRaw)) return null;
 
-    // Build manifest following MP docs
-    const manifest = `id:${dataId};request-id:;ts:${ts};`;
-    const expectedHash = crypto
-      .createHmac('sha256', secret)
-      .update(manifest)
-      .digest('hex');
+  return { userId, planId: planIdRaw };
+}
 
-    return crypto.timingSafeEqual(
-      Buffer.from(receivedHash, 'hex'),
-      Buffer.from(expectedHash, 'hex'),
-    );
-  } catch {
-    return false;
-  }
+function mapMpStatusToLocal(mpStatus: unknown): 'active' | 'pending' | 'paused' | 'cancelled' {
+  if (mpStatus === 'authorized') return 'active';
+  if (mpStatus === 'paused') return 'paused';
+  if (mpStatus === 'cancelled') return 'cancelled';
+  return 'pending';
 }

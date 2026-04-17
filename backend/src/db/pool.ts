@@ -9,15 +9,13 @@ function resolveSslConfig() {
   }
 
   const certificateAuthority = process.env.DATABASE_CA_CERT?.trim();
-  if (certificateAuthority) {
-    return {
-      rejectUnauthorized: true,
-      ca: certificateAuthority,
-    };
+  if (!certificateAuthority) {
+    throw new Error('DATABASE_CA_CERT is required in production');
   }
 
   return {
-    rejectUnauthorized: false,
+    rejectUnauthorized: true,
+    ca: certificateAuthority,
   };
 }
 
@@ -76,6 +74,26 @@ export async function tenantTransaction<T>(
   try {
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.current_tenant', $1, true)", [tenantId]);
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Generic transaction helper (non-tenant scoped).
+ */
+export async function withTransaction<T>(
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
     const result = await fn(client);
     await client.query('COMMIT');
     return result;

@@ -122,7 +122,8 @@ VALUES
   (NULL, 'email_blasts_daily', 20),
   (NULL, 'email_messages_daily', 50),
   (NULL, 'whatsapp_blasts_daily', 20),
-  (NULL, 'scrape_requests_daily', 100)
+  (NULL, 'scrape_requests_daily', 100),
+  (NULL, 'pdf_generations_daily', 50)
 ON CONFLICT (tenant_id, quota_key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS outbound_runs (
@@ -385,8 +386,86 @@ CREATE TABLE IF NOT EXISTS subscription_usage (
   whatsapp_used INTEGER NOT NULL DEFAULT 0 CHECK (whatsapp_used >= 0),
   emails_used INTEGER NOT NULL DEFAULT 0 CHECK (emails_used >= 0),
   quotes_used INTEGER NOT NULL DEFAULT 0 CHECK (quotes_used >= 0),
+  ai_credits_used INTEGER NOT NULL DEFAULT 0 CHECK (ai_credits_used >= 0),
   UNIQUE (user_id, month)
 );
 
+ALTER TABLE subscription_usage ADD COLUMN IF NOT EXISTS ai_credits_used INTEGER NOT NULL DEFAULT 0;
+
 CREATE INDEX IF NOT EXISTS idx_subscription_usage_user
   ON subscription_usage (user_id, month DESC);
+
+-- ─── WEBHOOK SECURITY / IDEMPOTENCY ───
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  event_type TEXT,
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | processed | failed
+  payload JSONB NOT NULL,
+  signature_valid BOOLEAN NOT NULL DEFAULT false,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  processed_at TIMESTAMPTZ,
+  failure_reason TEXT,
+  UNIQUE (provider, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_provider_status
+  ON webhook_events (provider, status, received_at DESC);
+
+CREATE TABLE IF NOT EXISTS webhook_nonces (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  UNIQUE (provider, nonce)
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_nonces_exp
+  ON webhook_nonces (provider, expires_at);
+
+-- ─── BILLING LEDGER (idempotent) ───
+CREATE TABLE IF NOT EXISTS billing_consumptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  idempotency_key TEXT NOT NULL,
+  consumption_type TEXT NOT NULL, -- AI | EMAIL | WHATSAPP | PDF
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | processed | failed
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  processed_at TIMESTAMPTZ,
+  failure_reason TEXT,
+  UNIQUE (idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_billing_consumptions_tenant_created
+  ON billing_consumptions (tenant_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_billing_consumptions_status
+  ON billing_consumptions (status, created_at DESC);
+
+-- ─── ANTI-FRAUD EVENTS / BLOCKS ───
+CREATE TABLE IF NOT EXISTS fraud_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL,
+  severity TEXT NOT NULL DEFAULT 'medium', -- low | medium | high | critical
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fraud_events_tenant_created
+  ON fraud_events (tenant_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_fraud_events_type_created
+  ON fraud_events (event_type, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS tenant_security_blocks (
+  tenant_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  blocked_until TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -19,7 +19,7 @@ export function enforceQuota(options: QuotaOptions): RequestHandler {
 
       const computedCost = typeof options.cost === 'function' ? options.cost(req) : options.cost;
       const cost = Math.max(1, Math.floor(computedCost || 1));
-      const result = await quotaRepository.ensureWithinLimit(tenantId, options.quotaKey, cost);
+      const result = await quotaRepository.tryConsumeAtomic(tenantId, options.quotaKey, cost);
       if (!result.allowed) {
         res.status(429).json({
           error: options.message,
@@ -31,8 +31,6 @@ export function enforceQuota(options: QuotaOptions): RequestHandler {
         });
         return;
       }
-
-      await quotaRepository.consume(tenantId, options.quotaKey, cost);
       next();
     } catch (err) {
       next(err);

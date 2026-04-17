@@ -1,12 +1,13 @@
 export type PlanId = 'solo' | 'agencia' | 'pro';
 
-export type SubscriptionFeature = 'leads' | 'whatsapp' | 'emails' | 'quotes';
+export type SubscriptionFeature = 'leads' | 'whatsapp' | 'emails' | 'quotes' | 'ai_credits';
 
 export interface PlanLimits {
   leads_per_month: number | null;
   whatsapp_messages: number | null;
   emails_per_month: number | null;
   pdf_quotes: number | null;
+  ai_credits: number | null;
   seats: number;
 }
 
@@ -23,63 +24,61 @@ export const PLANS: Record<PlanId, Plan> = {
   solo: {
     id: 'solo',
     name: 'Solo',
-    price_brl: 19700,
+    price_brl: 9900,
     mercadopago_plan_id: process.env.MP_PLAN_ID_SOLO || 'MP_PLAN_ID_SOLO',
     limits: {
-      leads_per_month: 300,
-      whatsapp_messages: 150,
-      emails_per_month: 500,
-      pdf_quotes: 20,
+      leads_per_month: 1500,
+      whatsapp_messages: 750,
+      emails_per_month: 3000,
+      pdf_quotes: 50,
+      ai_credits: 15000,
       seats: 1,
     },
     features: [
-      '300 leads por mês',
-      '150 mensagens WhatsApp',
-      '500 e-mails por mês',
-      '20 orçamentos PDF',
+      '1.500 leads por mês',
+      '3.000 e-mails por mês',
+      '15.000 créditos de IA',
       'Histórico de contatos',
     ],
   },
   agencia: {
     id: 'agencia',
     name: 'Agência',
-    price_brl: 39700,
+    price_brl: 19900,
     mercadopago_plan_id: process.env.MP_PLAN_ID_AGENCIA || 'MP_PLAN_ID_AGENCIA',
     limits: {
-      leads_per_month: 1500,
-      whatsapp_messages: 800,
+      leads_per_month: 3000,
+      whatsapp_messages: 3000,
       emails_per_month: 5000,
-      pdf_quotes: 100,
+      pdf_quotes: null,
+      ai_credits: 25000,
       seats: 3,
     },
     features: [
-      '1.500 leads por mês',
-      '800 mensagens WhatsApp',
+      '3.000 leads por mês',
       '5.000 e-mails por mês',
-      '100 orçamentos PDF',
-      'Até 3 usuários',
+      '25.000 créditos de IA',
       'Histórico de contatos',
     ],
   },
   pro: {
     id: 'pro',
     name: 'Pro',
-    price_brl: 79700,
+    price_brl: 29900,
     mercadopago_plan_id: process.env.MP_PLAN_ID_PRO || 'MP_PLAN_ID_PRO',
     limits: {
       leads_per_month: null,
       whatsapp_messages: null,
       emails_per_month: null,
       pdf_quotes: null,
+      ai_credits: 40000,
       seats: 10,
     },
     features: [
       'Leads ilimitados',
-      'Mensagens ilimitadas',
       'E-mails ilimitados',
-      'Orçamentos ilimitados',
-      'Até 10 usuários',
-      'Acesso via API',
+      '40.000 créditos de IA',
+      'Histórico de contatos',
     ],
   },
 };
@@ -126,6 +125,7 @@ export const FEATURE_LIMIT_MAP: Record<SubscriptionFeature, keyof PlanLimits> = 
   whatsapp: 'whatsapp_messages',
   emails: 'emails_per_month',
   quotes: 'pdf_quotes',
+  ai_credits: 'ai_credits',
 };
 
 /** Map subscription feature to its usage column in subscription_usage table */
@@ -134,4 +134,5 @@ export const FEATURE_USAGE_COLUMN: Record<SubscriptionFeature, string> = {
   whatsapp: 'whatsapp_used',
   emails: 'emails_used',
   quotes: 'quotes_used',
+  ai_credits: 'ai_credits_used',
 };

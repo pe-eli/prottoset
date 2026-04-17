@@ -114,12 +114,7 @@ function buildVerificationTemplate(params: {
             <tr>
               <td align="center" style="padding: 10px 40px 30px;">
                 <!-- Observação: muitos clientes de email não suportam botões estilizados, então usamos um link simples também -->
-                <p style="margin: 0; font-size: 14px; color: #8892a0;">
-                  Ou se preferir, acesse: <br />
-                  <a href="${params.verificationUrl}" style="color: #3b82f6; text-decoration: none; word-break: break-all;">
-                    ${params.verificationUrl}
-                  </a>
-                </p>
+                
               </td>
             </tr>
 
@@ -156,7 +151,7 @@ export async function sendVerificationCode(params: {
   displayName: string;
   code: string;
 }): Promise<void> {
-  const appName = escapeHtml(process.env.APP_NAME?.trim() || 'Prottoset');
+  const appName = escapeHtml(process.env.APP_NAME?.trim() || 'Closr');
   const verificationUrl = new URL('/verify-email', authConfig.clientUrl());
   verificationUrl.searchParams.set('email', params.to.trim().toLowerCase());
 
@@ -179,21 +174,14 @@ export async function sendVerificationCode(params: {
   verificationUrl: escapeHtml(verificationUrl.toString()),
   });
 
-  console.log(`[Auth] Preparando envio de código de verificação para ${params.to} (displayName: ${params.displayName})`);
-  console.log(`[Auth] NODE_ENV=${process.env.NODE_ENV}`);
-
   const result = await resendService.sendEmail(params.to, subject, body, { html, text: body });
-  console.log(`[Auth] Resultado do envio:`, JSON.stringify(result));
 
   if (!result.success) {
     console.error(`[Auth] Falha ao enviar código de verificação para ${params.to}:`, result.error);
 
     if (process.env.NODE_ENV !== 'production') {
-      console.info(`[Auth] Código de verificação para ${params.to}: ${params.code}`);
       return;
     }
     throw new Error(result.error || 'Falha ao enviar código de verificação');
-  } else {
-    console.log(`[Auth] Código de verificação enviado com sucesso para ${params.to}`);
   }
 }

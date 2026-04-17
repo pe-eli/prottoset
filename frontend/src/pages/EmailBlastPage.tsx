@@ -81,10 +81,15 @@ function formatInterval(seconds: number): string {
 }
 
 export function EmailBlastPage() {
+  const savedResendApiKey = typeof window !== 'undefined' ? localStorage.getItem('closr.emailBlast.resendApiKey') || '' : '';
+  const savedResendFrom = typeof window !== 'undefined' ? localStorage.getItem('closr.emailBlast.resendFrom') || '' : '';
+
   const [emailInput, setEmailInput] = useState('');
   const [emails, setEmails] = useState<string[]>([]);
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
+  const [resendApiKey, setResendApiKey] = useState(savedResendApiKey);
+  const [resendFrom, setResendFrom] = useState(savedResendFrom);
 
   // Batch config
   const [batchSize, setBatchSize] = useState(10);
@@ -106,6 +111,16 @@ export function EmailBlastPage() {
     return () => { esRef.current?.close(); };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('closr.emailBlast.resendApiKey', resendApiKey);
+  }, [resendApiKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('closr.emailBlast.resendFrom', resendFrom);
+  }, [resendFrom]);
+
   const totalBatches = Math.ceil(emails.length / batchSize);
 
   const addEmails = () => {
@@ -125,12 +140,26 @@ export function EmailBlastPage() {
 
   const handleSend = async () => {
     if (emails.length === 0) return;
+    const normalizedApiKey = resendApiKey.trim();
+    const normalizedFrom = resendFrom.trim();
+
+    if (!normalizedApiKey) {
+      alert('Informe sua RESEND_API_KEY para iniciar o disparo.');
+      return;
+    }
+    if (!normalizedFrom) {
+      alert('Informe seu RESEND_FROM para iniciar o disparo.');
+      return;
+    }
+
     setStarting(true);
     try {
       const { data } = await contactsAPI.startBlast(emails, subject, body, {
         batchSize,
         intervalMinSeconds: intervalMin,
         intervalMaxSeconds: intervalMax,
+        resendApiKey: normalizedApiKey,
+        resendFrom: normalizedFrom,
       });
       const { blastId } = data;
 
@@ -363,6 +392,37 @@ export function EmailBlastPage() {
             )}
           </Card>
 
+          <Card>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-lg bg-surface-secondary flex items-center justify-center">
+                <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-text-primary">Credenciais do seu envio</h3>
+                <p className="text-xs text-text-secondary">Cada usuário envia com a própria conta do Resend</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <Input
+                label="RESEND_API_KEY"
+                value={resendApiKey}
+                onChange={(e) => setResendApiKey(e.target.value)}
+                placeholder="re_********************************"
+                autoComplete="off"
+              />
+              <Input
+                label="RESEND_FROM"
+                value={resendFrom}
+                onChange={(e) => setResendFrom(e.target.value)}
+                placeholder="Seu Nome <noreply@seudominio.com>"
+                autoComplete="off"
+              />
+            </div>
+          </Card>
+
           {/* Template */}
           <Card>
             <h3 className="text-sm font-bold text-text-primary mb-1">Template do E-mail</h3>
@@ -385,7 +445,7 @@ export function EmailBlastPage() {
 
           <Button
             onClick={handleSend}
-            disabled={emails.length === 0 || !subject.trim() || !body.trim() || starting}
+            disabled={emails.length === 0 || !subject.trim() || !body.trim() || !resendApiKey.trim() || !resendFrom.trim() || starting}
             size="lg"
           >
             {starting ? (

@@ -21,11 +21,58 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
+
+  const navigateToVerifyEmail = (targetEmail: string, verificationId?: string, cooldownSeconds = 60) => {
+    const query = new URLSearchParams({
+      email: targetEmail,
+      cooldown: String(Math.max(0, cooldownSeconds)),
+    });
+    if (verificationId) query.set('verificationId', verificationId);
+    navigate(`/verify-email?${query.toString()}`);
+  };
+
+  const getRetryAfterSeconds = (err: any): number => {
+    const rawHeader = err?.response?.headers?.['retry-after'];
+    const retryAfter = Number(rawHeader);
+    return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60;
+  };
+
+  const handleVerifyEmailAgain = async () => {
+    const targetEmail = (pendingVerificationEmail || email).trim().toLowerCase();
+    if (!targetEmail) {
+      setError('Informe um e-mail válido para continuar com a verificação.');
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setResendingVerification(true);
+
+    try {
+      const { data } = await authAPI.resendCode(targetEmail);
+      navigateToVerifyEmail(targetEmail, data.verificationId, 60);
+      return;
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 429) {
+        navigateToVerifyEmail(targetEmail, undefined, getRetryAfterSeconds(err));
+        return;
+      }
+
+      const msg = err?.response?.data?.error;
+      setError(msg || 'Não foi possível reenviar o código agora. Tente novamente em instantes.');
+    } finally {
+      setResendingVerification(false);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
     setNotice(null);
+    setPendingVerificationEmail(null);
 
     const sanitizedEmail = email.trim().toLowerCase();
 
@@ -55,11 +102,13 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
         try {
           const { data: emailCheck } = await authAPI.checkEmail(sanitizedEmail);
           if (emailCheck.exists) {
-            setError(
-              emailCheck.emailVerified
-                ? 'Este e-mail já está cadastrado. Faça login ou use outro e-mail.'
-                : 'Este e-mail já possui um cadastro pendente de verificação. Use outro e-mail ou tente concluir a verificação.'
-            );
+            if (emailCheck.emailVerified) {
+              setError('Este e-mail já está cadastrado. Faça login ou use outro e-mail.');
+            } else {
+              setError('Este e-mail já possui um cadastro pendente de verificação.');
+              setNotice('Você pode continuar a confirmação sem perder o progresso.');
+              setPendingVerificationEmail(sanitizedEmail);
+            }
             return;
           }
         } catch (checkError: any) {
@@ -77,14 +126,18 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
         const { data } = await authAPI.register(sanitizedEmail, password, sanitizedName, acceptedTerms);
         const verificationEmail = data.email || sanitizedEmail;
         const verificationId = data.verificationId;
-        const query = new URLSearchParams({ email: verificationEmail });
-        if (verificationId) query.set('verificationId', verificationId);
-        navigate(`/verify-email?${query.toString()}`);
+        navigateToVerifyEmail(verificationEmail, verificationId, 60);
         return;
       }
     } catch (err: any) {
       const msg = err?.response?.data?.error;
-      setError(msg || 'Credenciais inválidas ou sessão bloqueada temporariamente.');
+      if (mode === 'login' && typeof msg === 'string' && msg.toLowerCase().includes('confirme seu e-mail')) {
+        setError('Seu e-mail ainda está pendente de confirmação.');
+        setNotice('Clique em "Verificar e-mail novamente" para receber/validar o código de 6 dígitos.');
+        setPendingVerificationEmail(sanitizedEmail);
+      } else {
+        setError(msg || 'Credenciais inválidas ou sessão bloqueada temporariamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -95,6 +148,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     setError(null);
     setNotice(null);
     setAcceptedTerms(false);
+    setPendingVerificationEmail(null);
   };
 
   return (
@@ -215,6 +269,17 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
 
             {error ? (
               <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl px-3 py-2">{error}</p>
+            ) : null}
+
+            {pendingVerificationEmail ? (
+              <button
+                type="button"
+                onClick={handleVerifyEmailAgain}
+                disabled={loading || resendingVerification}
+                className="w-full inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200 px-5 py-2.5 text-sm border border-brand-400/40 text-brand-300 hover:bg-brand-400/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resendingVerification ? 'Preparando verificação...' : 'Verificar e-mail novamente'}
+              </button>
             ) : null}
 
             {notice ? (

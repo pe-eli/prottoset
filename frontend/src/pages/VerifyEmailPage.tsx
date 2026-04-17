@@ -21,6 +21,11 @@ export function VerifyEmailPage() {
   const [params] = useSearchParams();
   const email = useMemo(() => (params.get('email') || '').trim().toLowerCase(), [params]);
   const initialVerificationId = useMemo(() => (params.get('verificationId') || '').trim(), [params]);
+  const initialCooldown = useMemo(() => {
+    const raw = Number(params.get('cooldown'));
+    if (!Number.isFinite(raw) || raw < 0) return RESEND_COOLDOWN;
+    return Math.floor(raw);
+  }, [params]);
 
   const [status, setStatus] = useState<VerifyStatus>('idle');
   const [loading, setLoading] = useState(false);
@@ -31,8 +36,14 @@ export function VerifyEmailPage() {
   const [cooldown, setCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const startCooldown = useCallback(() => {
-    setCooldown(RESEND_COOLDOWN);
+  const startCooldown = useCallback((seconds = RESEND_COOLDOWN) => {
+    const nextSeconds = Math.max(0, Math.floor(seconds));
+    if (nextSeconds <= 0) {
+      setCooldown(0);
+      return;
+    }
+
+    setCooldown(nextSeconds);
     if (cooldownRef.current) clearInterval(cooldownRef.current);
     cooldownRef.current = setInterval(() => {
       setCooldown((prev) => {
@@ -54,8 +65,8 @@ export function VerifyEmailPage() {
 
   // Start cooldown on mount (user just registered, code was already sent)
   useEffect(() => {
-    if (email) startCooldown();
-  }, [email, startCooldown]);
+    if (email) startCooldown(initialCooldown);
+  }, [email, initialCooldown, startCooldown]);
 
   if (!email) {
     return (

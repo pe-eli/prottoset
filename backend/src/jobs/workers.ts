@@ -6,10 +6,18 @@ import { deepseekService } from '../services/deepseek.service';
 import { evolutionService } from '../services/evolution.service';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
+import { subscriptionService } from '../modules/subscriptions/subscription.service';
+import { billingService } from '../modules/subscriptions/billing.service';
+import { calculateCreditsFromTokens, calculateCreditsFromChars } from '../modules/subscriptions/ai-credits';
+import type { WebhookJobPayload } from './queues';
+import { webhookEventsRepository } from '../modules/webhooks/webhook-events.repository';
+import { webhookProcessorService } from '../modules/webhooks/webhook-processor.service';
 
 interface BlastJobPayload {
   tenantId: string;
   runId: string;
+  resendApiKey?: string;
+  resendFrom?: string;
 }
 
 let workersStarted = false;
@@ -28,7 +36,7 @@ async function sleepWithCancel(tenantId: string, runId: string, seconds: number)
   return true;
 }
 
-async function processEmailBlast({ tenantId, runId }: BlastJobPayload): Promise<void> {
+async function processEmailBlast({ tenantId, runId, resendApiKey, resendFrom }: BlastJobPayload): Promise<void> {
   const run = await outboundRunsRepository.getRun(tenantId, runId);
   if (!run) return;
 
@@ -53,7 +61,10 @@ async function processEmailBlast({ tenantId, runId }: BlastJobPayload): Promise<
       }
 
       await outboundRunsRepository.updateItem(tenantId, runId, item.target, 'sending');
-      const result = await resendService.sendEmail(item.target, run.subject || '', run.body || '');
+      const result = await resendService.sendEmail(item.target, run.subject || '', run.body || '', {
+        resendApiKey,
+        from: resendFrom,
+      });
       await outboundRunsRepository.updateItem(
         tenantId,
         runId,
@@ -61,6 +72,21 @@ async function processEmailBlast({ tenantId, runId }: BlastJobPayload): Promise<
         result.success ? 'sent' : 'failed',
         { error: result.error },
       );
+
+      if (result.success) {
+        await billingService.consume({
+          tenantId,
+          type: 'EMAIL',
+          amount: 1,
+          idempotencyKey: `billing:email:${tenantId}:${runId}:${item.target}`,
+          metadata: {
+            runId,
+            target: item.target,
+            channel: 'email',
+          },
+        });
+      }
+
       await outboundRunsRepository.refreshSummary(tenantId, runId);
 
       if (index < batch.length - 1) {
@@ -164,6 +190,14 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
     return;
   }
 
+  // Pre-flight: verify AI credits before starting generation
+  const creditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
+  if (!creditCheck.allowed) {
+    await outboundRunsRepository.setFailure(tenantId, runId,
+      'Créditos de IA insuficientes para iniciar o disparo.');
+    return;
+  }
+
   const totalBatches = Math.ceil(eligibleItems.length / run.batchSize);
   for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
     if (await outboundRunsRepository.isCancelRequested(tenantId, runId)) {
@@ -172,11 +206,44 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
     }
 
     const batch = eligibleItems.slice(batchIndex * run.batchSize, batchIndex * run.batchSize + run.batchSize);
+
+    // Check credits before each DeepSeek call (prevents over-spend during long blasts)
+    const batchCreditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
+    if (!batchCreditCheck.allowed) {
+      await outboundRunsRepository.setFailure(tenantId, runId,
+        'Créditos de IA insuficientes para continuar o disparo.');
+      return;
+    }
+
     let batchMessage = '';
+    let creditsUsed = 0;
     try {
-      batchMessage = await deepseekService.generateWhatsAppMessage(run.promptBase);
+      const result = await deepseekService.generateWhatsAppMessage(run.promptBase);
+      batchMessage = result.message;
+      creditsUsed = result.tokensUsed > 0
+        ? calculateCreditsFromTokens(result.tokensUsed)
+        : calculateCreditsFromChars(run.promptBase?.length ?? 0, batchMessage.length);
     } catch (err: any) {
+      // AI failed — do NOT deduct credits
       await outboundRunsRepository.setFailure(tenantId, runId, err.message || 'Erro ao gerar mensagem');
+      return;
+    }
+
+    const aiConsumption = await billingService.consume({
+      tenantId,
+      type: 'AI',
+      amount: creditsUsed,
+      idempotencyKey: `billing:ai:${tenantId}:${runId}:batch:${batchIndex + 1}`,
+      metadata: {
+        runId,
+        batch: batchIndex + 1,
+        creditsUsed,
+      },
+    });
+
+    if (!aiConsumption.consumed) {
+      await outboundRunsRepository.setFailure(tenantId, runId,
+        'Créditos de IA insuficientes para continuar o disparo.');
       return;
     }
 
@@ -198,6 +265,21 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
         result.success ? 'sent' : 'failed',
         { error: result.error, message: batchMessage },
       );
+
+      if (result.success) {
+        await billingService.consume({
+          tenantId,
+          type: 'WHATSAPP',
+          amount: 1,
+          idempotencyKey: `billing:whatsapp:${tenantId}:${runId}:${item.target}`,
+          metadata: {
+            runId,
+            target: item.target,
+            channel: 'whatsapp',
+          },
+        });
+      }
+
       await outboundRunsRepository.refreshSummary(tenantId, runId);
 
       if (result.success) {
@@ -230,6 +312,26 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
   await outboundRunsRepository.finalize(tenantId, runId, 'completed');
 }
 
+async function processWebhookEvent(payload: WebhookJobPayload): Promise<void> {
+  const event = await webhookEventsRepository.findById(payload.webhookEventId);
+  if (!event) {
+    return;
+  }
+
+  if (event.status === 'processed') {
+    return;
+  }
+
+  try {
+    await webhookProcessorService.process(payload.provider, event.payload);
+    await webhookEventsRepository.markProcessed(event.id);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Erro desconhecido no processamento de webhook';
+    await webhookEventsRepository.markFailed(event.id, message);
+    throw err;
+  }
+}
+
 export function startBackgroundWorkers(): void {
   if (workersStarted) return;
   const connection = getRedisClient();
@@ -247,4 +349,8 @@ export function startBackgroundWorkers(): void {
   new Worker<BlastJobPayload>('whatsapp-blasts', async (job) => {
     await processWhatsAppBlast(job.data);
   }, { connection, concurrency: 2 });
+
+  new Worker<WebhookJobPayload>('webhook-events', async (job) => {
+    await processWebhookEvent(job.data);
+  }, { connection, concurrency: 8 });
 }

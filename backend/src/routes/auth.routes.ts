@@ -37,6 +37,7 @@ const loginLimiter = createSecurityRateLimit({
   name: 'auth-login',
   message: 'Muitas tentativas de login. Aguarde alguns minutos.',
   ip: { limit: 10, windowMs: 10 * 60 * 1000 },
+  email: { limit: 8, windowMs: 10 * 60 * 1000, field: 'email' },
 });
 
 const loginSlowDown = slowDown({
@@ -379,48 +380,21 @@ router.post('/refresh', refreshLimiter, requireCsrfToken(), asyncHandler(async (
   }
 
   const hash = hashToken(raw);
-  let tokenDoc = await refreshTokensRepository.findByHash(hash);
-
-  if (!tokenDoc) {
-    const revoked = await refreshTokensRepository.findByHashIncludingRevoked(hash);
-    if (revoked) {
-      await refreshTokensRepository.revokeFamily(revoked.family);
-    }
+  const rotated = await authService.rotateRefreshWithLock(res, hash);
+  if (!rotated) {
     authService.clearSession(res);
     res.status(401).json({ error: 'Token inválido' });
     return;
   }
 
-  if (new Date(tokenDoc.expiresAt) < new Date()) {
-    await refreshTokensRepository.revokeById(tokenDoc.id);
-    authService.clearSession(res);
-    res.status(401).json({ error: 'Token expirado' });
-    return;
-  }
-
-  const accessToken = await authService.rotateRefresh(res, {
-    id: tokenDoc.id,
-    userId: tokenDoc.userId,
-    family: tokenDoc.family,
-  });
-
-  if (!accessToken) {
-    authService.clearSession(res);
-    res.status(401).json({ error: 'Usuário não encontrado' });
-    return;
-  }
-
-  const user = await usersRepository.getById(tokenDoc.userId);
   res.json({
-    user: user
-      ? {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role,
-        emailVerified: user.emailVerified,
-      }
-      : null,
+    user: {
+      id: rotated.user.id,
+      email: rotated.user.email,
+      displayName: rotated.user.displayName,
+      role: rotated.user.role,
+      emailVerified: rotated.user.emailVerified,
+    },
   });
 }));
 

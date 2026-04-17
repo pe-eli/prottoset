@@ -66,6 +66,7 @@ export function requireActiveSubscription(feature?: SubscriptionFeature): Reques
         whatsapp: usage.whatsappUsed,
         emails: usage.emailsUsed,
         quotes: usage.quotesUsed,
+        ai_credits: usage.aiCreditsUsed,
       };
 
       const used = usageMap[feature];

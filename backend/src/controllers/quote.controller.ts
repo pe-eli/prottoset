@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { quoteService } from '../services/quote.service';
 import { quoteSchema, uuidParamSchema } from '../validation/request.schemas';
-import { usageRepository } from '../modules/subscriptions/usage.repository';
+import { billingService } from '../modules/subscriptions/billing.service';
 
 export const quoteController = {
   async generatePdf(req: Request, res: Response): Promise<void> {
@@ -13,7 +13,20 @@ export const quoteController = {
       }
 
       const result = await quoteService.generatePdf(req.tenantId!, parsed.data);
-      await usageRepository.incrementUsage(req.tenantId!, 'quotes_used');
+
+      const consumed = await billingService.consume({
+        tenantId: req.tenantId!,
+        type: 'PDF',
+        amount: 1,
+        idempotencyKey: `pdf:quote:${req.tenantId}:${result.id}`,
+        metadata: { source: 'quote.generatePdf', quoteId: result.id },
+      });
+
+      if (!consumed.consumed) {
+        res.status(429).json({ error: 'Limite de PDF atingido para este período.' });
+        return;
+      }
+
       res.json({ id: result.id, pdfUrl: `/api/quotes/${result.id}/pdf` });
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);

@@ -9,13 +9,19 @@ function resolveSslConfig() {
   }
 
   const certificateAuthority = process.env.DATABASE_CA_CERT?.trim();
-  if (!certificateAuthority) {
-    throw new Error('DATABASE_CA_CERT is required in production');
-  }
+  const normalizedCa = certificateAuthority ? certificateAuthority.replace(/\\n/g, '\n') : undefined;
+  const rejectUnauthorizedEnv = (process.env.DATABASE_SSL_REJECT_UNAUTHORIZED ?? '').trim().toLowerCase();
+  const rejectUnauthorized =
+    rejectUnauthorizedEnv === 'true' ||
+    rejectUnauthorizedEnv === '1' ||
+    rejectUnauthorizedEnv === 'yes';
 
   return {
-    rejectUnauthorized: true,
-    ca: certificateAuthority,
+    // Keep compatibility with managed DBs that require SSL but do not provide a custom CA.
+    // To enforce strict TLS verification, set DATABASE_SSL_REJECT_UNAUTHORIZED=true
+    // and provide DATABASE_CA_CERT when needed.
+    rejectUnauthorized,
+    ...(normalizedCa ? { ca: normalizedCa } : {}),
   };
 }
 

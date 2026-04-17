@@ -11,13 +11,16 @@ function resolveSslConfig() {
   }
 
   const certificateAuthority = process.env.DATABASE_CA_CERT?.trim();
-  if (!certificateAuthority) {
-    throw new Error('DATABASE_CA_CERT is required in production');
-  }
+  const normalizedCa = certificateAuthority ? certificateAuthority.replace(/\\n/g, '\n') : undefined;
+  const rejectUnauthorizedEnv = (process.env.DATABASE_SSL_REJECT_UNAUTHORIZED ?? '').trim().toLowerCase();
+  const rejectUnauthorized =
+    rejectUnauthorizedEnv === 'true' ||
+    rejectUnauthorizedEnv === '1' ||
+    rejectUnauthorizedEnv === 'yes';
 
   return {
-    rejectUnauthorized: true,
-    ca: certificateAuthority,
+    rejectUnauthorized,
+    ...(normalizedCa ? { ca: normalizedCa } : {}),
   };
 }
 

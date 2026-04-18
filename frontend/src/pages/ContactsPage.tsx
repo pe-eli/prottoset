@@ -113,11 +113,31 @@ export function ContactsPage() {
     }
   }, []);
 
-  const markGroupAsRead = useCallback(async (group: ContactGroup) => {
+  const markGroupAsRead = useCallback(async (group: ContactGroup, optimistic = false) => {
     const ids = [...new Set(group.contacts.map((contact) => contact.id))];
+    if (optimistic) {
+      const readAt = new Date().toISOString();
+      setContacts((prev) => prev.map((contact) => (
+        ids.includes(contact.id)
+          ? { ...contact, lastReadAt: readAt }
+          : contact
+      )));
+    }
     await Promise.allSettled(ids.map((id) => contactsAPI.markRead(id)));
-    await fetchContacts();
-  }, [fetchContacts]);
+  }, []);
+
+  const closeDetailModal = useCallback(() => {
+    if (!detailGroup) {
+      setDetailGroup(null);
+      return;
+    }
+
+    const target = detailGroup;
+    setDetailGroup(null);
+    if (target.unreadCount > 0) {
+      void markGroupAsRead(target, true);
+    }
+  }, [detailGroup, markGroupAsRead]);
 
   const fetchMessages = useCallback(async (list: Contact[]) => {
     const candidates = list.filter((c) => getChannel(c) === 'whatsapp');
@@ -351,10 +371,7 @@ export function ContactsPage() {
               <Card key={group.key} hover className="!p-0">
                 <div className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
-                    <button
-                      onClick={() => setDetailGroup(group)}
-                      className="flex items-start gap-3 text-left min-w-0"
-                    >
+                    <div className="flex items-start gap-3 text-left min-w-0">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-400 flex items-center justify-center shrink-0 shadow-sm">
                         <span className="text-white font-bold text-sm">{displayName.charAt(0).toUpperCase()}</span>
                       </div>
@@ -386,7 +403,7 @@ export function ContactsPage() {
                           )}
                         </div>
                       </div>
-                    </button>
+                    </div>
 
                     <div className="flex items-center gap-2 shrink-0" onClick={(event) => event.stopPropagation()}>
                       <select
@@ -404,6 +421,13 @@ export function ContactsPage() {
                         disabled={getChannel(group.primary) !== 'whatsapp' || !group.primary.phone}
                       >
                         Responder
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setDetailGroup(group)}
+                      >
+                        Detalhes
                       </Button>
                     </div>
                   </div>
@@ -449,10 +473,7 @@ export function ContactsPage() {
       {detailGroup && (
         <DetailModal
           group={detailGroup}
-          onClose={async () => {
-            await markGroupAsRead(detailGroup);
-            setDetailGroup(null);
-          }}
+          onClose={closeDetailModal}
           onDeleted={async (id) => {
             await handleDelete(id);
             setDetailGroup(null);
@@ -755,7 +776,6 @@ function DetailModal({
           <Button onClick={onReply} disabled={getChannel(group.primary) !== 'whatsapp' || !group.primary.phone}>Responder</Button>
           <Button variant="secondary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Editar / Salvar'}</Button>
           <Button variant="outline" onClick={() => onDeleted(group.primary.id)}>Excluir</Button>
-          <Button variant="ghost" onClick={onClose}>Fechar</Button>
         </div>
       </div>
     </div>

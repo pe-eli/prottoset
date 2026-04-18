@@ -3,6 +3,7 @@ import { contactsController } from '../controllers/contacts.controller';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
 import { enforceQuota } from '../middleware/quota.middleware';
 import { requireActiveSubscription } from '../middleware/subscription.middleware';
+import { requireConnectedWhatsApp } from '../middleware/whatsapp-connected.middleware';
 
 const router = Router();
 
@@ -24,6 +25,14 @@ router.post(
 	contactsController.sendBlast,
 );
 router.get('/blast/:blastId/stream', contactsController.streamBlast);
+router.get('/:id/messages', contactsController.getMessages);
+router.post('/:id/read', contactsController.markRead);
+router.post(
+	'/:id/reply',
+	requireActiveSubscription('whatsapp'),
+	requireConnectedWhatsApp(),
+	contactsController.replyWhatsapp,
+);
 router.get('/:id', contactsController.getById);
 router.patch('/:id', contactsController.update);
 router.delete('/:id', contactsController.delete);

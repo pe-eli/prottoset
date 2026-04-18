@@ -1,10 +1,14 @@
 import { Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
+import { contactMessagesRepository } from '../modules/contacts/contact-messages.repository';
 import { Contact } from '../types/contacts.types';
-import { blastParamSchema, contactCreateSchema, contactUpdateSchema, emailBlastSchema, uuidParamSchema } from '../validation/request.schemas';
+import { blastParamSchema, contactCreateSchema, contactUpdateSchema, contactWhatsappReplySchema, emailBlastSchema, uuidParamSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
 import { enqueueEmailBlastJob } from '../jobs/queues';
+import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
+import { deepseekService } from '../services/deepseek.service';
+import { evolutionService } from '../services/evolution.service';
 
 function openSse(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -94,6 +98,116 @@ export const contactsController = {
     } catch (err: any) {
       console.error('[Contacts] update error:', err.message);
       res.status(500).json({ error: 'Erro ao atualizar contato' });
+    }
+  },
+
+  async getMessages(req: Request, res: Response) {
+    try {
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+
+      const contact = await contactsRepository.getById(req.tenantId!, paramsParsed.data.id);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contato não encontrado' });
+      }
+
+      const messages = await contactMessagesRepository.listByContact(req.tenantId!, contact.id);
+      res.json(messages);
+    } catch (err: any) {
+      console.error('[Contacts] getMessages error:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar mensagens do contato' });
+    }
+  },
+
+  async markRead(req: Request, res: Response) {
+    try {
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+
+      const contact = await contactsRepository.markRead(req.tenantId!, paramsParsed.data.id);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contato não encontrado' });
+      }
+
+      res.json({ ok: true, lastReadAt: contact.lastReadAt });
+    } catch (err: any) {
+      console.error('[Contacts] markRead error:', err.message);
+      res.status(500).json({ error: 'Erro ao marcar conversa como lida' });
+    }
+  },
+
+  async replyWhatsapp(req: Request, res: Response) {
+    try {
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+
+      const bodyParsed = contactWhatsappReplySchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return res.status(400).json({ error: bodyParsed.error.issues[0].message });
+      }
+
+      const tenantId = req.tenantId!;
+      const contact = await contactsRepository.getById(tenantId, paramsParsed.data.id);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contato não encontrado' });
+      }
+
+      if (!contact.phone) {
+        return res.status(400).json({ error: 'Contato sem telefone para resposta via WhatsApp' });
+      }
+
+      const waInstance = await waInstanceRepository.findByTenant(tenantId);
+      if (!waInstance || waInstance.status !== 'connected') {
+        return res.status(400).json({ error: 'WhatsApp não conectado. Conecte antes de responder.' });
+      }
+
+      const { messageMode, promptBase, manualMessage } = bodyParsed.data;
+      let message = '';
+
+      if (messageMode === 'manual') {
+        message = (manualMessage || '').trim();
+        if (!message) {
+          return res.status(400).json({ error: 'Mensagem fixa é obrigatória no modo manual.' });
+        }
+      } else {
+        const generated = await deepseekService.generateWhatsAppMessage(promptBase);
+        message = (generated.message || '').trim();
+        if (!message) {
+          return res.status(500).json({ error: 'Não foi possível gerar uma mensagem de resposta.' });
+        }
+      }
+
+      const send = await evolutionService.sendMessage(waInstance.instanceName, contact.phone, message);
+      if (!send.success) {
+        return res.status(502).json({ error: send.error || 'Falha ao enviar mensagem pelo WhatsApp' });
+      }
+
+      const sentAt = new Date().toISOString();
+      await contactsRepository.update(tenantId, contact.id, {
+        status: 'contacted',
+        channel: 'whatsapp',
+        lastMessage: message,
+        lastMessageAt: sentAt,
+      });
+
+      await contactMessagesRepository.create(tenantId, {
+        contactId: contact.id,
+        channel: 'whatsapp',
+        direction: 'outbound',
+        content: message,
+        sentAt,
+      });
+
+      res.json({ ok: true, message });
+    } catch (err: any) {
+      console.error('[Contacts] replyWhatsapp error:', err.message);
+      res.status(500).json({ error: 'Erro ao responder contato no WhatsApp' });
     }
   },
 

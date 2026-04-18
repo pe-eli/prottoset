@@ -489,10 +489,27 @@ CTA.displayName = 'CTA';
 /* ─── Footer ─── */
 const LandingFooter = React.memo(() => (
   <footer className="border-t border-white/[0.06] px-6 py-8">
-    <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div className="max-w-6xl mx-auto flex flex-col items-center gap-4">
       <ClosrLogo className="text-base text-text-secondary" />
       <p className="text-xs text-text-muted">
         Closr — Plataforma de Prospecção Inteligente
+      </p>
+      <a
+        href="https://wa.me/5537998409691"
+        target="_blank"
+        rel="noreferrer"
+        className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-400/20 hover:bg-emerald-500/25 transition-colors"
+      >
+        Suporte no WhatsApp
+      </a>
+      <p className="text-xs text-text-muted text-center">
+        Contato: <a href="mailto:prottocode@gmail.com" className="hover:text-brand-300 transition-colors">prottocode@gmail.com</a>
+      </p>
+      <p className="text-xs text-text-muted text-center">
+        Plataforma desenvolvida pela Prottocode ·{' '}
+        <a href="https://instagram.com/prottocode" target="_blank" rel="noreferrer" className="hover:text-brand-300 transition-colors">Instagram</a>
+        {' '}·{' '}
+        <a href="https://www.prottocode.com.br" target="_blank" rel="noreferrer" className="hover:text-brand-300 transition-colors">www.prottocode.com.br</a>
       </p>
     </div>
   </footer>

@@ -102,6 +102,12 @@ export const whatsappBlastSchema = z.object({
   manualMessage: z.string().trim().max(1000).optional(),
 });
 
+export const contactWhatsappReplySchema = z.object({
+  messageMode: z.enum(['ai', 'manual']),
+  promptBase: z.string().trim().max(1000).optional(),
+  manualMessage: z.string().trim().max(1000).optional(),
+});
+
 export const uuidParamSchema = z.object({
   id: uuidSchema,
 });

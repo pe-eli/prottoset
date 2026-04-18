@@ -14,8 +14,19 @@ export interface Contact {
   channel?: ContactChannel;
   lastMessage?: string;
   lastMessageAt?: string;
+  lastReadAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ContactMessage {
+  id: string;
+  contactId: string;
+  channel: ContactChannel;
+  direction: 'inbound' | 'outbound';
+  content: string;
+  sentAt: string;
+  createdAt: string;
 }
 
 export interface BlastConfig {
@@ -36,6 +47,18 @@ export const contactsAPI = {
 
   update: (id: string, data: Partial<Pick<Contact, 'name' | 'phone' | 'company' | 'status' | 'notes'>>) =>
     api.patch<Contact>(`/contacts/${id}`, data),
+
+  getMessages: (id: string) =>
+    api.get<ContactMessage[]>(`/contacts/${id}/messages`),
+
+  markRead: (id: string) =>
+    api.post<{ ok: boolean; lastReadAt?: string }>(`/contacts/${id}/read`),
+
+  replyWhatsapp: (id: string, data: {
+    messageMode: 'ai' | 'manual';
+    promptBase?: string;
+    manualMessage?: string;
+  }) => api.post<{ ok: boolean; message: string }>(`/contacts/${id}/reply`, data),
 
   delete: (id: string) => api.delete(`/contacts/${id}`),
 

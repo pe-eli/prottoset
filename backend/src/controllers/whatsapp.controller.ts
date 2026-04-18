@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
-import { Contact } from '../types/contacts.types';
 import { blastParamSchema, whatsappBlastSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
 import { enqueueWhatsAppBlastJob } from '../jobs/queues';
@@ -70,21 +69,13 @@ export const whatsappController = {
 
       const blastId = uuid();
 
-      // Auto-save phone numbers as contacts (fire-and-forget)
+      // Auto-save phone numbers as contacts (dedupe by phone)
       const now = new Date().toISOString();
-      const newContacts: Contact[] = cleanPhones.map((phone) => ({
-        id: uuid(),
-        email: '',
-        name: '',
+      Promise.all(cleanPhones.map((phone) => contactsRepository.upsertWhatsappContactByPhone(tenantId, {
         phone,
-        company: '',
-        status: 'contacted' as const,
-        notes: '',
-        channel: 'whatsapp' as const,
-        createdAt: now,
-        updatedAt: now,
-      }));
-      contactsRepository.saveMany(tenantId, newContacts).catch((err: Error) => {
+        status: 'contacted',
+        lastMessageAt: now,
+      }))).catch((err: Error) => {
         console.error('[WhatsApp] Failed to auto-save contacts:', err.message);
       });
 

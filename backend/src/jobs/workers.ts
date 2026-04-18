@@ -5,6 +5,7 @@ import { resendService } from '../services/resend.service';
 import { deepseekService } from '../services/deepseek.service';
 import { evolutionService } from '../services/evolution.service';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
+import { contactMessagesRepository } from '../modules/contacts/contact-messages.repository';
 import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
 import { subscriptionService } from '../modules/subscriptions/subscription.service';
 import { billingService } from '../modules/subscriptions/billing.service';
@@ -123,13 +124,26 @@ function buildPhoneKeys(value: string): string[] {
 
 async function updateContactMessage(tenantId: string, item: OutboundRunItem): Promise<void> {
   if (!item.message) return;
-  const contacts = await contactsRepository.getAll(tenantId);
-  const normalized = item.target.replace(/\D/g, '');
-  const contact = contacts.find((entry) => entry.phone === normalized);
-  if (!contact) return;
+  const sentAt = new Date().toISOString();
+  const contact = await contactsRepository.upsertWhatsappContactByPhone(tenantId, {
+    phone: item.target,
+    status: 'contacted',
+    lastMessage: item.message,
+    lastMessageAt: sentAt,
+  });
+
+  await contactMessagesRepository.create(tenantId, {
+    contactId: contact.id,
+    channel: 'whatsapp',
+    direction: 'outbound',
+    content: item.message,
+    sentAt,
+    externalId: `${item.runId}:${item.target}:${item.updatedAt}`,
+  });
+
   await contactsRepository.update(tenantId, contact.id, {
     lastMessage: item.message,
-    lastMessageAt: new Date().toISOString(),
+    lastMessageAt: sentAt,
   });
 }
 

@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { subscriptionsAPI, type SubscriptionInfo } from '../features/subscriptions/subscriptions.api';
 
 type PaywallReason = 'subscription_required' | 'limit_exceeded';
+const SUBSCRIPTION_REFRESH_INTERVAL_MS = 10_000;
 
 interface SubscriptionContextValue {
   subscription: SubscriptionInfo | null;
@@ -28,14 +29,20 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
+  const fetchingRef = useRef(false);
 
-  const fetchSubscription = useCallback(async () => {
+  const fetchSubscription = useCallback(async (options?: { clearOnError?: boolean }) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       const { data } = await subscriptionsAPI.getMe();
       setSubscription(data.subscription);
     } catch {
-      setSubscription(null);
+      if (options?.clearOnError) {
+        setSubscription(null);
+      }
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
     }
   }, []);
@@ -61,7 +68,27 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, [openPaywall]);
 
   useEffect(() => {
-    fetchSubscription();
+    fetchSubscription({ clearOnError: true });
+  }, [fetchSubscription]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchSubscription();
+      }
+    };
+
+    const interval = window.setInterval(refreshIfVisible, SUBSCRIPTION_REFRESH_INTERVAL_MS);
+    window.addEventListener('focus', refreshIfVisible);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshIfVisible);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    };
   }, [fetchSubscription]);
 
   return (

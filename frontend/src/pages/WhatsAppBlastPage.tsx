@@ -23,21 +23,21 @@ interface BatchInfo { current: number; total: number; count: number }
 interface SavedPrompt { id: string; name: string; content: string }
 const DEFAULT_PROMPT_BASE = 'Crie uma primeira mensagem curta e cordial para prospecção no WhatsApp.';
 
-const STATUS_STYLE: Record<JobStatus, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
+const STATUS_STYLE: Record<JobStatus, { badge: string; text: string; label: string; icon: React.ReactNode }> = {
   pending: {
-    bg: 'bg-brand-50 border-brand-100', text: 'text-brand-400', label: 'Aguardando',
+    badge: 'bg-brand-500/15 border-brand-400/25', text: 'text-brand-200', label: 'Aguardando',
     icon: <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
   },
   sending: {
-    bg: 'bg-amber-50 border-amber-200', text: 'text-amber-600', label: 'Enviando',
+    badge: 'bg-amber-500/15 border-amber-400/30', text: 'text-amber-200', label: 'Enviando',
     icon: <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>,
   },
   sent: {
-    bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-600', label: 'Enviado',
+    badge: 'bg-emerald-500/15 border-emerald-400/25', text: 'text-emerald-200', label: 'Enviado',
     icon: <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>,
   },
   failed: {
-    bg: 'bg-red-50 border-red-200', text: 'text-red-500', label: 'Falhou',
+    badge: 'bg-red-500/15 border-red-400/25', text: 'text-red-200', label: 'Falhou',
     icon: <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
   },
 };
@@ -84,7 +84,7 @@ function WaIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
 
 
 export function WhatsAppBlastPage() {
-  const { subscription } = useSubscription();
+  const { subscription, refresh: refreshSubscription } = useSubscription();
   const hasActiveSubscription = subscription?.status === 'active';
 
   const [phoneInput, setPhoneInput] = useState('');
@@ -126,6 +126,7 @@ export function WhatsAppBlastPage() {
   const [waStatusLoading, setWaStatusLoading] = useState(true);
 
   const esRef = useRef<EventSource | null>(null);
+  const startRequestRef = useRef(false);
   const blastIdRef = useRef<string | null>(null);
   const reconnectedRef = useRef(false);
 
@@ -290,7 +291,13 @@ export function WhatsAppBlastPage() {
 
     es.addEventListener('batch_message', (e) => {
       const { batch, message } = JSON.parse(e.data) as { batch: number; message: string };
-      setBatchMessages((prev) => [...prev, { batch, message }]);
+      setBatchMessages((prev) => {
+        const existing = prev.find((item) => item.batch === batch);
+        if (!existing) return [...prev, { batch, message }];
+        if (existing.message === message) return prev;
+        return prev.map((item) => (item.batch === batch ? { batch, message } : item));
+      });
+      refreshSubscription().catch(() => {});
     });
 
     es.addEventListener('gen_error', (e) => {
@@ -317,6 +324,7 @@ export function WhatsAppBlastPage() {
       setCancelling(false);
       setPhase('done');
       clearActive();
+      refreshSubscription().catch(() => {});
       es.close();
       esRef.current = null;
     };
@@ -337,7 +345,7 @@ export function WhatsAppBlastPage() {
       }
       // Transient error — let EventSource auto-reconnect
     };
-  }, [clearActive, updateProgress]);
+  }, [clearActive, refreshSubscription, updateProgress]);
 
 
   // Sync queue changes to global context (avoids calling updateProgress inside setQueue updater)
@@ -355,7 +363,7 @@ export function WhatsAppBlastPage() {
   }, [globalActive, connectToBlast]);
 
   const handleSend = async () => {
-    if (phones.length === 0) return;
+    if (phones.length === 0 || startRequestRef.current || starting) return;
     const normalizedPromptBase = promptBase.trim();
     const normalizedManualMessage = manualMessage.trim();
 
@@ -368,6 +376,7 @@ export function WhatsAppBlastPage() {
       return;
     }
 
+    startRequestRef.current = true;
     setStarting(true);
     try {
       const { data } = await whatsappAPI.startBlast(phones, {
@@ -388,6 +397,7 @@ export function WhatsAppBlastPage() {
     } catch (err: unknown) {
       alert(getAxiosErrorMessage(err, 'Erro ao iniciar disparo'));
     } finally {
+      startRequestRef.current = false;
       setStarting(false);
     }
   };
@@ -407,6 +417,7 @@ export function WhatsAppBlastPage() {
     setGenError(null);
     setBatchMessages([]);
     setCancelling(false);
+    startRequestRef.current = false;
     setValidating(false);
     setValidationResult(null);
     setValidationError(null);
@@ -777,6 +788,16 @@ export function WhatsAppBlastPage() {
               </div>
             </div>
 
+            <div className="mt-4 space-y-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3">
+              <p className="text-xs font-semibold text-amber-200 uppercase tracking-wide">Cuidados com envio em massa</p>
+              <p className="text-xs text-amber-100/90 leading-relaxed">
+                Evite listas frias e mantenha intervalos maiores para reduzir bloqueios por comportamento automatizado.
+              </p>
+              <p className="text-xs text-amber-100/90 leading-relaxed">
+                Volume alto em pouco tempo pode causar restrição temporária ou banimento do número no WhatsApp.
+              </p>
+            </div>
+
             {phones.length > 0 && (
               <div className="mt-4 px-4 py-3 bg-brand-500/10 border border-brand-400/20 rounded-xl">
                 <p className="text-xs font-semibold text-brand-200 mb-1">Prévia do disparo</p>
@@ -1039,14 +1060,14 @@ export function WhatsAppBlastPage() {
                 const s = STATUS_STYLE[job.status];
                 const batchNum = Math.floor(idx / configSnapshot.batchSize) + 1;
                 return (
-                  <div key={job.phone} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all duration-300 ${s.bg}`}>
+                  <div key={job.phone} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border-light bg-surface-secondary/95 transition-all duration-200 hover:bg-surface-elevated">
                     <span className={`shrink-0 ${s.text}`}>{s.icon}</span>
                     <WaIcon className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                    <span className="flex-1 text-sm text-text-primary font-medium truncate">{job.phone}</span>
-                    {batchNum && <span className="text-[10px] text-brand-300 shrink-0">Lote {batchNum}</span>}
-                    <span className={`text-[11px] font-semibold shrink-0 ${s.text}`}>{s.label}</span>
+                    <span className="flex-1 text-sm text-text-primary font-semibold tracking-[0.01em] truncate">{job.phone}</span>
+                    {batchNum && <span className="text-[10px] text-text-muted shrink-0">Lote {batchNum}</span>}
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold shrink-0 ${s.badge} ${s.text}`}>{s.label}</span>
                     {job.error && (
-                      <span className="text-[10px] text-red-400 truncate max-w-[140px]" title={job.error}>{job.error}</span>
+                      <span className="text-[10px] text-red-300 truncate max-w-[160px]" title={job.error}>{job.error}</span>
                     )}
                   </div>
                 );

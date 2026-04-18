@@ -55,8 +55,8 @@ const CHANNEL_CONFIG: Record<ContactChannel, {
     color: 'text-blue-600',
     bg: 'bg-blue-50 border-blue-200',
     avatarGrad: 'from-brand-600 to-brand-400',
-    msgBg: 'bg-blue-50/60',
-    msgBorder: 'border-blue-100',
+    msgBg: 'bg-surface-secondary/90',
+    msgBorder: 'border-border-light',
     msgText: 'text-blue-500',
     icon: <EmailIcon />,
   },
@@ -65,8 +65,8 @@ const CHANNEL_CONFIG: Record<ContactChannel, {
     color: 'text-emerald-600',
     bg: 'bg-emerald-50 border-emerald-200',
     avatarGrad: 'from-emerald-500 to-teal-400',
-    msgBg: 'bg-emerald-50/60',
-    msgBorder: 'border-emerald-100',
+    msgBg: 'bg-surface-secondary/90',
+    msgBorder: 'border-border-light',
     msgText: 'text-emerald-600',
     icon: <WaIcon />,
   },
@@ -75,8 +75,8 @@ const CHANNEL_CONFIG: Record<ContactChannel, {
     color: 'text-brand-500',
     bg: 'bg-brand-50 border-brand-200',
     avatarGrad: 'from-brand-500 to-brand-400',
-    msgBg: 'bg-brand-50/60',
-    msgBorder: 'border-brand-100',
+    msgBg: 'bg-surface-secondary/90',
+    msgBorder: 'border-border-light',
     msgText: 'text-brand-400',
     icon: <PersonIcon />,
   },
@@ -359,7 +359,7 @@ export function ContactsPage() {
                           <p className="text-xs text-text-secondary">{contact.email}</p>
                         )}
                         {contact.phone && (contact.email || contact.name) && (
-                          <span className="text-[11px] text-emerald-200 bg-emerald-500/10 px-2 py-0.5 rounded-lg font-medium border border-emerald-400/20">{contact.phone}</span>
+                          <span className="text-[11px] text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-lg font-medium border border-emerald-400/30">{contact.phone}</span>
                         )}
                         {contact.company && (
                           <span className="text-[11px] text-brand-200 bg-brand-500/10 px-2 py-0.5 rounded-lg font-medium border border-brand-400/20">{contact.company}</span>
@@ -375,7 +375,7 @@ export function ContactsPage() {
                               Mensagem enviada
                             </span>
                             {contact.lastMessageAt && (
-                              <span className="text-[10px] text-brand-300 ml-auto shrink-0">
+                              <span className="text-[10px] text-text-muted ml-auto shrink-0">
                                 {formatDateTime(contact.lastMessageAt)}
                               </span>
                             )}

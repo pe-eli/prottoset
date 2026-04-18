@@ -9,17 +9,17 @@ const STATUS_LABELS: Record<LeadStatus, string> = {
 };
 
 const STATUS_COLORS: Record<LeadStatus, string> = {
-  new: 'bg-blue-50 text-blue-700 border-blue-200',
-  contacted: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  replied: 'bg-purple-50 text-purple-700 border-purple-200',
-  converted: 'bg-green-50 text-green-700 border-green-200',
-  ignored: 'bg-gray-100 text-gray-500 border-gray-200',
+  new: 'bg-blue-500/15 text-blue-200 border-blue-400/30',
+  contacted: 'bg-amber-500/15 text-amber-200 border-amber-400/35',
+  replied: 'bg-indigo-500/15 text-indigo-200 border-indigo-400/35',
+  converted: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/35',
+  ignored: 'bg-slate-500/15 text-slate-300 border-slate-400/30',
 };
 
 const PRIORITY_SURFACE: Record<LeadPriority, string> = {
-  HIGH: 'bg-red-50/60 border-red-100 hover:border-red-200',
-  MEDIUM: 'bg-amber-50/60 border-amber-100 hover:border-amber-200',
-  LOW: 'bg-slate-50/85 border-slate-200 hover:border-slate-300',
+  HIGH: 'bg-surface border-red-400/30 hover:border-red-300/45',
+  MEDIUM: 'bg-surface border-amber-400/30 hover:border-amber-300/45',
+  LOW: 'bg-surface border-border-light hover:border-brand-400/35',
 };
 
 function titleCase(str: string): string {
@@ -80,16 +80,16 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
       className={`w-full text-left border rounded-2xl p-4 shadow-sm
-        hover:shadow-lg hover:shadow-brand-100/50 hover:-translate-y-0.5
+        hover:shadow-lg hover:shadow-black/25 hover:-translate-y-0.5
         transition-all duration-200 cursor-pointer group relative outline-none
-        ${selected ? 'border-brand-500 ring-2 ring-brand-400/30' : prioritySurface}`}
+        ${selected ? 'bg-surface border-brand-400 ring-2 ring-brand-400/30' : prioritySurface}`}
     >
       {/* Selection checkbox */}
       {selectable && (
         <div className={`absolute top-3 left-3 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all
           ${selected
             ? 'bg-brand-600 border-brand-600'
-            : 'bg-white border-brand-200 group-hover:border-brand-400'}`}
+            : 'bg-surface-secondary border-border-light group-hover:border-brand-400/60'}`}
         >
           {selected && (
             <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,11 +101,11 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h4 className="text-sm font-semibold text-brand-950 truncate group-hover:text-brand-600 transition-colors">
+          <h4 className="text-sm font-semibold text-text-primary truncate group-hover:text-brand-200 transition-colors">
             {lead.name}
           </h4>
           {lead.neighborhood && (
-            <p className="text-xs text-brand-400 mt-0.5">{lead.neighborhood}</p>
+            <p className="text-xs text-text-muted mt-0.5">{lead.neighborhood}</p>
           )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
@@ -120,7 +120,7 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
         <Chip icon="map" text={titleCase(lead.city)} />
         <Chip icon="tag" text={titleCase(lead.niche)} />
         {lead.rating > 0 && (
-          <span className="inline-flex items-center gap-0.5 text-[11px] text-amber-500">
+          <span className="inline-flex items-center gap-0.5 text-[11px] text-amber-300">
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
             </svg>
@@ -138,7 +138,7 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
               target="_blank"
               rel="noreferrer"
               onClick={(event) => event.stopPropagation()}
-              className="inline-flex items-center gap-1.5 text-[11px] text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg font-medium max-w-[220px] hover:bg-blue-100 transition-colors"
+              className="inline-flex items-center gap-1.5 text-[11px] text-blue-200 bg-blue-500/15 border border-blue-400/30 px-2.5 py-1 rounded-lg font-medium max-w-[220px] hover:bg-blue-500/20 transition-colors"
               title={normalizeWebsite(lead.website)}
             >
               <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,7 +148,7 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
             </a>
 
             {lead.websiteFetchError && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg font-semibold">
+              <span className="inline-flex items-center gap-1 text-[11px] text-rose-200 bg-rose-500/15 border border-rose-400/35 px-2 py-0.5 rounded-lg font-semibold">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.33 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
@@ -157,17 +157,17 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
             )}
           </>
         ) : (
-          <span className="text-[11px] text-red-600 bg-red-50 px-2 py-0.5 rounded-lg font-medium">
+          <span className="text-[11px] text-rose-200 bg-rose-500/15 border border-rose-400/30 px-2 py-0.5 rounded-lg font-medium">
             Sem site
           </span>
         )}
         {lead.phone && (
-          <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-lg font-medium text-[11px]">
+          <span className="inline-flex items-center gap-1 bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded-lg font-medium text-[11px]">
             <span>{lead.phone}</span>
             <button
               type="button"
               onClick={handleCopyPhone}
-              className="w-4 h-4 rounded-md flex items-center justify-center hover:bg-green-100 transition-colors"
+              className="w-4 h-4 rounded-md flex items-center justify-center hover:bg-emerald-500/25 transition-colors"
               title="Copiar telefone"
               aria-label="Copiar telefone"
             >
@@ -178,7 +178,7 @@ export function LeadCard({ lead, onClick, selectable, selected, onToggle }: Lead
           </span>
         )}
         {lead.email1 && (
-          <span className="text-[11px] text-orange-600 bg-orange-50 px-2 py-0.5 rounded-lg font-medium truncate max-w-[160px]">
+          <span className="text-[11px] text-amber-200 bg-amber-500/15 border border-amber-400/30 px-2 py-0.5 rounded-lg font-medium truncate max-w-[160px]">
             {lead.email1}
           </span>
         )}
@@ -194,7 +194,7 @@ function Chip({ icon, text }: { icon: string; text: string }) {
   };
 
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-brand-400">
+    <span className="inline-flex items-center gap-1 text-[11px] text-text-secondary">
       <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={icons[icon]} />
       </svg>

@@ -28,6 +28,9 @@ export interface GenerateLeadsResult {
  */
 export async function generateLeads(params: LeadSearchParams): Promise<GenerateLeadsResult> {
   const { searchTerm, city, maxResults } = params;
+  const targetResults = Number.isFinite(maxResults) && (maxResults ?? 0) > 0
+    ? Math.max(1, Math.floor(maxResults as number))
+    : 20;
   logger.info(`Iniciando workflow: "${searchTerm}" em "${city}"`);
 
   // --- PASSO 1: Bairros via OpenStreetMap ---
@@ -51,11 +54,17 @@ export async function generateLeads(params: LeadSearchParams): Promise<GenerateL
   const seen = new Set<string>();
 
   for (let i = 0; i < neighborhoods.length; i++) {
+    if (allPlaces.length >= targetResults) {
+      logger.info(`Limite de resultados atingido (${targetResults}). Interrompendo busca por bairros.`);
+      break;
+    }
+
     const neighborhood = neighborhoods[i];
     const query = `${searchTerm} ${neighborhood}`;
+    const remaining = targetResults - allPlaces.length;
 
     try {
-      const places = await googleMapsService.searchPlaces(query, city, maxResults);
+      const places = await googleMapsService.searchPlaces(query, city, remaining);
 
       for (const place of places) {
         // Deduplica por nome normalizado (evita duplicar empresas sem website)
@@ -65,6 +74,10 @@ export async function generateLeads(params: LeadSearchParams): Promise<GenerateL
         if (!seen.has(key)) {
           seen.add(key);
           allPlaces.push({ ...place, neighborhood });
+
+          if (allPlaces.length >= targetResults) {
+            break;
+          }
         }
       }
     } catch (err: any) {
@@ -72,7 +85,7 @@ export async function generateLeads(params: LeadSearchParams): Promise<GenerateL
     }
 
     // Rate limiting entre queries Serper
-    if (i < neighborhoods.length - 1) {
+    if (i < neighborhoods.length - 1 && allPlaces.length < targetResults) {
       await sleep(DELAY_BETWEEN_SERPER_MS);
     }
   }

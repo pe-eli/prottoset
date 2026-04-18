@@ -72,4 +72,19 @@ export const quotaRepository = {
       limit,
     };
   },
+
+  async releaseAtomic(tenantId: string, quotaKey: QuotaKey, cost: number): Promise<void> {
+    const normalizedCost = Math.max(1, Math.floor(cost || 1));
+
+    await query(
+      `UPDATE quota_usage
+       SET used_count = GREATEST(0, used_count - $3),
+           updated_at = now()
+       WHERE tenant_id = $1
+         AND quota_key = $2
+         AND usage_date = CURRENT_DATE
+         AND used_count > 0`,
+      [tenantId, quotaKey, normalizedCost],
+    );
+  },
 };

@@ -1,6 +1,6 @@
 import { PreApproval } from 'mercadopago';
 import { getMercadoPagoClient } from '../../infrastructure/mercadopago';
-import { subscriptionRepository } from './subscription.repository';
+import { subscriptionRepository, type Subscription } from './subscription.repository';
 import { usageRepository, type Usage } from './usage.repository';
 import {
   PLANS,
@@ -22,6 +22,14 @@ export interface SubscriptionInfo {
   currentPeriodEnd: string | null;
   usage: Usage;
   limits: PlanLimits;
+}
+
+export interface SubscriptionAccessState {
+  subscription: Subscription | null;
+  effectiveStatus: string;
+  isActive: boolean;
+  planId: PlanId | null;
+  bypassLimits: boolean;
 }
 
 export const subscriptionService = {
@@ -111,25 +119,45 @@ export const subscriptionService = {
   },
 
   async getMySubscription(userId: string): Promise<SubscriptionInfo | null> {
-    const override = getSubscriptionOverride(userId);
-    const sub = await subscriptionRepository.findActiveByUserId(userId);
-    if (!sub && override?.forceStatus !== 'active') return null;
+    const state = await this.resolveAccessState(userId);
+    if (!state.subscription && !state.isActive) return null;
 
-    const effectivePlanId = override?.planId ?? sub?.planId ?? 'pro';
-    const planId = isValidPlanId(effectivePlanId) ? effectivePlanId : null;
+    const planId = state.planId;
     if (!planId) return null;
 
     const plan = PLANS[planId];
     const usage = await usageRepository.getUsageForMonth(userId);
-    const effectiveStatus = override?.forceStatus ?? sub?.status ?? 'active';
 
     return {
       planId,
       planName: plan.name,
-      status: effectiveStatus,
-      currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
+      status: state.effectiveStatus,
+      currentPeriodEnd: state.subscription?.currentPeriodEnd?.toISOString() ?? null,
       usage,
       limits: plan.limits,
+    };
+  },
+
+  async resolveAccessState(userId: string): Promise<SubscriptionAccessState> {
+    const override = getSubscriptionOverride(userId);
+    let sub = await subscriptionRepository.findActiveByUserId(userId);
+
+    if (sub && sub.status === 'pending' && sub.mpSubscriptionId && !override?.forceStatus) {
+      sub = await reconcilePendingSubscriptionStatus(sub);
+    }
+
+    const effectiveStatus = override?.forceStatus ?? sub?.status ?? 'inactive';
+    const isActive = effectiveStatus === 'active';
+
+    const effectivePlanId = override?.planId ?? sub?.planId ?? (isActive ? 'pro' : null);
+    const planId = effectivePlanId && isValidPlanId(effectivePlanId) ? effectivePlanId : null;
+
+    return {
+      subscription: sub,
+      effectiveStatus,
+      isActive,
+      planId,
+      bypassLimits: override?.bypassLimits === true,
     };
   },
 
@@ -159,21 +187,16 @@ export const subscriptionService = {
     used: number;
     limit: number | null;
   }> {
-    const override = getSubscriptionOverride(userId);
-    if (override?.bypassLimits) {
+    const state = await this.resolveAccessState(userId);
+    if (state.bypassLimits) {
       return { allowed: true, used: 0, limit: null };
     }
 
-    const sub = await subscriptionRepository.findActiveByUserId(userId);
-    const hasForcedActive = override?.forceStatus === 'active';
-    const isActive = hasForcedActive || (!!sub && sub.status === 'active');
-
-    if (!isActive) {
+    if (!state.isActive) {
       return { allowed: false, used: 0, limit: 0 };
     }
 
-    const effectivePlanId = override?.planId ?? sub?.planId ?? 'pro';
-    const planId = isValidPlanId(effectivePlanId) ? effectivePlanId : null;
+    const planId = state.planId;
     if (!planId) {
       return { allowed: false, used: 0, limit: 0 };
     }
@@ -288,6 +311,36 @@ export const subscriptionService = {
     };
   },
 };
+
+async function reconcilePendingSubscriptionStatus(sub: Subscription): Promise<Subscription> {
+  if (!sub.mpSubscriptionId) return sub;
+
+  const mpClient = getMercadoPagoClient();
+  if (!mpClient) return sub;
+
+  const preApproval = new PreApproval(mpClient);
+
+  try {
+    const detail: any = await preApproval.get({ id: sub.mpSubscriptionId });
+    const mappedStatus = mapMpStatusToLocal(detail.status);
+    if (mappedStatus === sub.status) return sub;
+
+    const now = new Date();
+    const periodEnd = new Date(now);
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+    const updated = await subscriptionRepository.updateByMpSubscriptionId(sub.mpSubscriptionId, {
+      status: mappedStatus,
+      currentPeriodStart: mappedStatus === 'active' ? (sub.currentPeriodStart ?? now) : undefined,
+      currentPeriodEnd: mappedStatus === 'active' ? (sub.currentPeriodEnd ?? periodEnd) : undefined,
+      mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
+    });
+
+    return updated ?? sub;
+  } catch {
+    return sub;
+  }
+}
 
 async function handlePreapprovalEvent(action: string | undefined, preapprovalId: string): Promise<void> {
   const mpClient = getMercadoPagoClient();

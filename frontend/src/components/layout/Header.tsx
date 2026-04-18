@@ -10,6 +10,14 @@ interface HeaderProps {
   onLogout: () => void;
 }
 
+function formatSubscriptionBadge(planName: string, status: string): string {
+  if (status === 'active') return planName;
+  if (status === 'pending') return `${planName} (pendente)`;
+  if (status === 'cancelled') return `${planName} (cancelado)`;
+  if (status === 'paused') return `${planName} (pausado)`;
+  return `${planName} (${status})`;
+}
+
 export function Header({ user, onLogout }: HeaderProps) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -69,7 +77,7 @@ export function Header({ user, onLogout }: HeaderProps) {
           <div className="hidden sm:flex items-center gap-2 rounded-xl border border-border-light bg-surface-secondary px-3 py-1.5">
             <span className="text-xs text-text-muted">Plano:</span>
             <span className="text-xs font-semibold text-brand-300">
-              {subscription?.status === 'active' ? subscription.planName : 'Sem assinatura'}
+              {subscription ? formatSubscriptionBadge(subscription.planName, subscription.status) : 'Sem assinatura'}
             </span>
           </div>
           {hasActiveSubscription && subscription && (

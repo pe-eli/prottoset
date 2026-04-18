@@ -1,8 +1,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
-import { subscriptionRepository } from '../modules/subscriptions/subscription.repository';
 import { usageRepository } from '../modules/subscriptions/usage.repository';
 import { PLANS, FEATURE_LIMIT_MAP, isValidPlanId, type SubscriptionFeature } from '../config/plans';
-import { getSubscriptionOverride } from '../config/subscription-overrides';
+import { subscriptionService } from '../modules/subscriptions/subscription.service';
 
 export function requireActiveSubscription(feature?: SubscriptionFeature): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -13,11 +12,8 @@ export function requireActiveSubscription(feature?: SubscriptionFeature): Reques
         return;
       }
 
-      const override = getSubscriptionOverride(userId);
-      const sub = await subscriptionRepository.findActiveByUserId(userId);
-      const forcedStatus = override?.forceStatus;
-      const hasForcedActive = forcedStatus === 'active';
-      const isActive = hasForcedActive || (!!sub && sub.status === 'active');
+      const state = await subscriptionService.resolveAccessState(userId);
+      const isActive = state.isActive;
 
       if (!isActive) {
         res.status(402).json({
@@ -34,13 +30,12 @@ export function requireActiveSubscription(feature?: SubscriptionFeature): Reques
         return;
       }
 
-      if (override?.bypassLimits) {
+      if (state.bypassLimits) {
         next();
         return;
       }
 
-      const effectivePlanId = override?.planId ?? sub?.planId;
-      const planId = effectivePlanId && isValidPlanId(effectivePlanId) ? effectivePlanId : null;
+      const planId = state.planId;
       if (!planId) {
         res.status(402).json({
           error: 'Plano inválido. Entre em contato com o suporte.',
@@ -97,21 +92,19 @@ export function enforceFeatureLimitForActiveSubscription(feature: SubscriptionFe
         return;
       }
 
-      const override = getSubscriptionOverride(userId);
-      if (override?.bypassLimits) {
+      const state = await subscriptionService.resolveAccessState(userId);
+      if (state.bypassLimits) {
         next();
         return;
       }
 
-      const sub = await subscriptionRepository.findActiveByUserId(userId);
-      const isActive = override?.forceStatus === 'active' || (!!sub && sub.status === 'active');
+      const isActive = state.isActive;
       if (!isActive) {
         next();
         return;
       }
 
-      const effectivePlanId = override?.planId ?? sub?.planId;
-      const planId = effectivePlanId && isValidPlanId(effectivePlanId) ? effectivePlanId : null;
+      const planId = state.planId;
       if (!planId) {
         res.status(402).json({
           error: 'Plano inválido. Entre em contato com o suporte.',

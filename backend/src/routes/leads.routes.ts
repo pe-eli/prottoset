@@ -18,7 +18,6 @@ router.get('/', leadsController.getAll);
 router.post(
 	'/search',
 	leadsSearchLimiter,
-	allowLeadsSearchForFreeTier(),
 	enforceFeatureLimitForActiveSubscription('leads'),
 	enforceQuota({
 		quotaKey: 'scrape_requests_daily',
@@ -28,6 +27,7 @@ router.post(
 			return Number.isFinite(raw) ? Math.max(1, Math.min(100, Math.floor(raw))) : 50;
 		},
 	}),
+	allowLeadsSearchForFreeTier(),
 	leadsController.search,
 );
 router.get('/search-quota', leadsController.getSearchQuota);

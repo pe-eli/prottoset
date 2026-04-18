@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import { leadsService } from '../modules/leads/leads.service';
 import { leadSearchSchema, leadStatusUpdateSchema, uuidParamSchema } from '../validation/request.schemas';
-import { subscriptionRepository } from '../modules/subscriptions/subscription.repository';
-import { getSubscriptionOverride } from '../config/subscription-overrides';
+import { subscriptionService } from '../modules/subscriptions/subscription.service';
 import { quotaRepository } from '../security/quota.repository';
 
 export const leadsController = {
@@ -14,9 +13,8 @@ export const leadsController = {
         return;
       }
 
-      const override = getSubscriptionOverride(tenantId);
-      const sub = await subscriptionRepository.findActiveByUserId(tenantId);
-      const hasActiveSubscription = override?.forceStatus === 'active' || (!!sub && sub.status === 'active');
+      const state = await subscriptionService.resolveAccessState(tenantId);
+      const hasActiveSubscription = state.isActive;
 
       if (hasActiveSubscription) {
         res.json({
@@ -54,10 +52,23 @@ export const leadsController = {
   },
 
   async search(req: Request, res: Response): Promise<void> {
+    const locals = res.locals as { freeTierLeadsReservedCost?: number };
+    const releaseFreeTierReservation = async (amount: number): Promise<void> => {
+      const normalizedAmount = Math.max(0, Math.floor(amount));
+      if (normalizedAmount <= 0) return;
+
+      const tenantId = req.tenantId;
+      if (!tenantId) return;
+
+      await quotaRepository.releaseAtomic(tenantId, 'free_leads_daily', normalizedAmount);
+    };
+
     try {
       const tenantId = req.tenantId!;
       const parsed = leadSearchSchema.safeParse(req.body);
       if (!parsed.success) {
+        await releaseFreeTierReservation(locals.freeTierLeadsReservedCost ?? 0);
+        locals.freeTierLeadsReservedCost = undefined;
         res.status(400).json({ error: parsed.error.issues[0].message });
         return;
       }
@@ -68,8 +79,29 @@ export const leadsController = {
         city: parsed.data.city,
         maxResults: safeMaxResults,
       });
+
+      const reservedCost = locals.freeTierLeadsReservedCost ?? 0;
+      if (reservedCost > 0) {
+        const delivered = Math.max(0, Math.min(reservedCost, result.saved.length));
+        const refund = reservedCost - delivered;
+        if (refund > 0) {
+          await releaseFreeTierReservation(refund);
+        }
+        locals.freeTierLeadsReservedCost = undefined;
+      }
+
       res.json(result);
     } catch (err: any) {
+      try {
+        const reservedCost = locals.freeTierLeadsReservedCost ?? 0;
+        if (reservedCost > 0) {
+          await releaseFreeTierReservation(reservedCost);
+          locals.freeTierLeadsReservedCost = undefined;
+        }
+      } catch (refundErr: any) {
+        console.error('[Leads] search refund error:', refundErr.message);
+      }
+
       console.error('[Leads] search error:', err.message);
       res.status(500).json({ error: 'Erro ao buscar leads' });
     }

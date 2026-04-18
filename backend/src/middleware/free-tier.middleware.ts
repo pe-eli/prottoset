@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { quotaRepository } from '../security/quota.repository';
-import { subscriptionRepository } from '../modules/subscriptions/subscription.repository';
-import { getSubscriptionOverride } from '../config/subscription-overrides';
+import { subscriptionService } from '../modules/subscriptions/subscription.service';
 
 function normalizeCost(rawCost: unknown): number {
   const parsed = Number(rawCost);
@@ -18,9 +17,8 @@ export function allowLeadsSearchForFreeTier(): RequestHandler {
         return;
       }
 
-      const override = getSubscriptionOverride(userId);
-      const sub = await subscriptionRepository.findActiveByUserId(userId);
-      const isActive = override?.forceStatus === 'active' || (!!sub && sub.status === 'active');
+      const state = await subscriptionService.resolveAccessState(userId);
+      const isActive = state.isActive;
       if (isActive) {
         next();
         return;
@@ -40,6 +38,9 @@ export function allowLeadsSearchForFreeTier(): RequestHandler {
         });
         return;
       }
+
+      const locals = res.locals as { freeTierLeadsReservedCost?: number };
+      locals.freeTierLeadsReservedCost = cost;
 
       next();
     } catch (err) {

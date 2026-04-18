@@ -103,4 +103,8 @@ export const waInstanceRepository = {
       [tenantId],
     );
   },
+
+  async deleteByTenant(tenantId: string): Promise<void> {
+    await query('DELETE FROM whatsapp_instances WHERE tenant_id = $1', [tenantId]);
+  },
 };

@@ -2,6 +2,12 @@ import { Request, Response } from 'express';
 import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
 import { evolutionService } from '../services/evolution.service';
 
+function isAlreadyInUseError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const message = err.message.toLowerCase();
+  return message.includes('already in use') || message.includes('name') && message.includes('in use');
+}
+
 export const waInstanceController = {
   /** GET /whatsapp/instance — status da instância do tenant */
   async getStatus(req: Request, res: Response) {
@@ -51,9 +57,19 @@ export const waInstanceController = {
       let qrCode: string | undefined;
 
       if (!instance) {
-        // First time: create instance on Evolution API
-        const result = await evolutionService.createInstance(instanceName);
-        qrCode = result.qrCode;
+        // First time: create instance on Evolution API.
+        // If name is already in use remotely, fallback to connect existing instance.
+        try {
+          const result = await evolutionService.createInstance(instanceName);
+          qrCode = result.qrCode;
+        } catch (err: unknown) {
+          if (!isAlreadyInUseError(err)) {
+            throw err;
+          }
+
+          const result = await evolutionService.connectInstance(instanceName);
+          qrCode = result.qrCode;
+        }
         instance = await waInstanceRepository.upsert(tenantId, { status: 'connecting' });
       } else if (instance.status === 'connected') {
         return res.json({ status: 'already_connected', phone: instance.phone });
@@ -98,8 +114,8 @@ export const waInstanceController = {
         // Instance might already be gone on Evolution — that's fine
       }
 
-      await waInstanceRepository.updateStatus(instance.instanceName, 'disconnected');
-      await waInstanceRepository.clearQrCode(tenantId);
+      // Remove local record to avoid stale local-vs-remote conflicts.
+      await waInstanceRepository.deleteByTenant(tenantId);
 
       return res.json({ status: 'disconnected' });
     } catch (err: unknown) {

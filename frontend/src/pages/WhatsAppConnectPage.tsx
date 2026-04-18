@@ -117,7 +117,7 @@ export function WhatsAppConnectPage() {
           </svg>
         </Link>
         <div>
-          <h2 className="text-2xl font-bold text-text-primary">Conexao WhatsApp</h2>
+          <h2 className="text-2xl font-bold text-text-primary">Conexão WhatsApp</h2>
           <p className="text-sm text-text-secondary">Conecte seu WhatsApp para enviar mensagens</p>
         </div>
       </div>
@@ -200,7 +200,7 @@ export function WhatsAppConnectPage() {
               <div>
                 <p className="text-sm font-semibold text-text-primary">Conecte seu WhatsApp</p>
                 <p className="text-xs text-text-muted mt-1">
-                  Um QR Code sera gerado para voce escanear com seu celular
+                  Um QR Code será gerado para você escanear com seu celular
                 </p>
               </div>
               <Button onClick={handleConnect} disabled={connecting}>

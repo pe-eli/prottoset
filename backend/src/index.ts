@@ -77,6 +77,7 @@ app.post('/api/webhooks/mercadopago', webhookLimiter, express.raw({ type: '*/*',
 
 // Evolution API webhook — public endpoint (identified by instanceName)
 app.post('/api/webhooks/evolution', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), evolutionWebhookController.handle);
+app.post('/api/webhooks/evolution/:event', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), evolutionWebhookController.handle);
 
 app.use(express.json({ limit: '200kb' }));
 

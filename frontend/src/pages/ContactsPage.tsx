@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -97,6 +97,8 @@ export function ContactsPage() {
   const [filter, setFilter] = useState<ContactStatus | 'all'>('all');
   const [channelTab, setChannelTab] = useState<ContactChannel | 'all'>('all');
   const [messagesByContact, setMessagesByContact] = useState<Record<string, ContactMessage[]>>({});
+  const [messagesPollingDisabled, setMessagesPollingDisabled] = useState(false);
+  const consecutiveMessagesFetchFailuresRef = useRef(0);
 
   const [replyGroup, setReplyGroup] = useState<ContactGroup | null>(null);
   const [detailGroup, setDetailGroup] = useState<ContactGroup | null>(null);
@@ -140,13 +142,27 @@ export function ContactsPage() {
   }, [detailGroup, markGroupAsRead]);
 
   const fetchMessages = useCallback(async (list: Contact[]) => {
-    const candidates = list.filter((c) => getChannel(c) === 'whatsapp');
-    if (candidates.length === 0) {
+    if (messagesPollingDisabled) {
       return;
     }
 
+    const candidates = list.filter((c) => getChannel(c) === 'whatsapp');
+    if (candidates.length === 0) {
+      consecutiveMessagesFetchFailuresRef.current = 0;
+      return;
+    }
+
+    // Limit aggressive polling by fetching only the most recent WhatsApp contacts.
+    const recentCandidates = [...candidates]
+      .sort((a, b) => {
+        const aDate = new Date(a.lastMessageAt || a.updatedAt).getTime();
+        const bDate = new Date(b.lastMessageAt || b.updatedAt).getTime();
+        return bDate - aDate;
+      })
+      .slice(0, 8);
+
     const results = await Promise.allSettled(
-      candidates.map(async (contact) => {
+      recentCandidates.map(async (contact) => {
         const { data } = await contactsAPI.getMessages(contact.id);
         return { contactId: contact.id, messages: Array.isArray(data) ? data : [] };
       }),
@@ -159,8 +175,20 @@ export function ContactsPage() {
       }
     }
 
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    if (failed === 0) {
+      consecutiveMessagesFetchFailuresRef.current = 0;
+    } else if (failed === results.length) {
+      consecutiveMessagesFetchFailuresRef.current += 1;
+      if (consecutiveMessagesFetchFailuresRef.current >= 2) {
+        setMessagesPollingDisabled(true);
+      }
+    } else {
+      consecutiveMessagesFetchFailuresRef.current = 0;
+    }
+
     setMessagesByContact((prev) => ({ ...prev, ...next }));
-  }, []);
+  }, [messagesPollingDisabled]);
 
   useEffect(() => {
     fetchContacts();
@@ -172,8 +200,11 @@ export function ContactsPage() {
 
   useEffect(() => {
     const id = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
       fetchMessages(contacts);
-    }, 7000);
+    }, 15000);
     return () => window.clearInterval(id);
   }, [contacts, fetchMessages]);
 
@@ -335,6 +366,12 @@ export function ContactsPage() {
           </button>
         ))}
       </div>
+
+      {messagesPollingDisabled && (
+        <div className="text-xs px-3 py-2 rounded-xl border border-amber-400/25 bg-amber-500/10 text-amber-200">
+          Atualização automática das conversas pausada por instabilidade no servidor. Recarregue a página após estabilizar o backend.
+        </div>
+      )}
 
       <div className="flex items-center gap-1.5 bg-surface-secondary border border-border rounded-xl p-1 w-fit">
         <FilterButton active={filter === 'all'} onClick={() => setFilter('all')} label="Todos" />

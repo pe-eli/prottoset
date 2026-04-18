@@ -45,8 +45,18 @@ export const subscriptionRepository = {
   async findActiveByUserId(userId: string): Promise<Subscription | null> {
     const { rows } = await query<SubscriptionRow>(
       `SELECT * FROM subscriptions
-       WHERE user_id = $1 AND status IN ('active', 'pending')
-       ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END
+       WHERE user_id = $1
+         AND lower(status) IN (
+           'active',
+           'authorized',
+           'approved',
+           'trialing',
+           'in_trial',
+           'pending',
+           'in_process'
+         )
+       ORDER BY CASE WHEN lower(status) IN ('active', 'authorized', 'approved', 'trialing', 'in_trial') THEN 0 ELSE 1 END,
+                updated_at DESC
        LIMIT 1`,
       [userId],
     );

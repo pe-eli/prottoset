@@ -26,11 +26,13 @@ export interface SubscriptionInfo {
 
 export interface SubscriptionAccessState {
   subscription: Subscription | null;
-  effectiveStatus: string;
+  effectiveStatus: CanonicalSubscriptionStatus;
   isActive: boolean;
   planId: PlanId | null;
   bypassLimits: boolean;
 }
+
+type CanonicalSubscriptionStatus = 'active' | 'pending' | 'paused' | 'cancelled' | 'inactive';
 
 export const subscriptionService = {
   getPublicPlans(): PublicPlan[] {
@@ -51,10 +53,11 @@ export const subscriptionService = {
     // - active: block creating a new checkout
     // - pending: cancel stale pending and create a fresh checkout
     const existing = await subscriptionRepository.findActiveByUserId(userId);
-    if (existing?.status === 'active') {
+    const existingStatus = normalizeSubscriptionStatus(existing?.status);
+    if (existingStatus === 'active') {
       throw new Error('Você já possui uma assinatura ativa');
     }
-    if (existing?.status === 'pending') {
+    if (existing && existingStatus === 'pending') {
       await subscriptionRepository.updateStatus(existing.id, 'cancelled');
     }
 
@@ -141,12 +144,15 @@ export const subscriptionService = {
   async resolveAccessState(userId: string): Promise<SubscriptionAccessState> {
     const override = getSubscriptionOverride(userId);
     let sub = await subscriptionRepository.findActiveByUserId(userId);
+    const normalizedSubStatus = normalizeSubscriptionStatus(sub?.status);
 
-    if (sub && sub.status === 'pending' && sub.mpSubscriptionId && !override?.forceStatus) {
+    if (sub && normalizedSubStatus === 'pending' && sub.mpSubscriptionId && !override?.forceStatus) {
       sub = await reconcilePendingSubscriptionStatus(sub);
     }
 
-    const effectiveStatus = override?.forceStatus ?? sub?.status ?? 'inactive';
+    const effectiveStatus = override?.forceStatus
+      ? normalizeSubscriptionStatus(override.forceStatus)
+      : normalizeSubscriptionStatus(sub?.status);
     const isActive = effectiveStatus === 'active';
 
     const effectivePlanId = override?.planId ?? sub?.planId ?? (isActive ? 'pro' : null);
@@ -446,8 +452,31 @@ function parseExternalReference(value: unknown): { userId: string; planId: PlanI
 }
 
 function mapMpStatusToLocal(mpStatus: unknown): 'active' | 'pending' | 'paused' | 'cancelled' {
-  if (mpStatus === 'authorized') return 'active';
-  if (mpStatus === 'paused') return 'paused';
-  if (mpStatus === 'cancelled') return 'cancelled';
+  const status = typeof mpStatus === 'string' ? mpStatus.toLowerCase() : '';
+  if (status === 'authorized' || status === 'active' || status === 'approved') return 'active';
+  if (status === 'paused') return 'paused';
+  if (status === 'cancelled' || status === 'canceled') return 'cancelled';
   return 'pending';
+}
+
+function normalizeSubscriptionStatus(rawStatus: unknown): CanonicalSubscriptionStatus {
+  const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : '';
+
+  if (status === 'active' || status === 'authorized' || status === 'approved' || status === 'trialing' || status === 'in_trial') {
+    return 'active';
+  }
+
+  if (status === 'pending' || status === 'in_process') {
+    return 'pending';
+  }
+
+  if (status === 'paused' || status === 'suspended') {
+    return 'paused';
+  }
+
+  if (status === 'cancelled' || status === 'canceled' || status === 'expired' || status === 'ended') {
+    return 'cancelled';
+  }
+
+  return 'inactive';
 }

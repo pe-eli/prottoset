@@ -10,6 +10,7 @@ export interface SubscriptionUserOverride {
 }
 
 let cachedOverrides: SubscriptionUserOverride[] | null = null;
+let cachedRawOverrides: string | null = null;
 
 function parseOverrides(): SubscriptionUserOverride[] {
   const raw = process.env.SUBSCRIPTION_USER_OVERRIDES?.trim();
@@ -47,8 +48,11 @@ function isOverrideStatus(value: string | undefined): value is OverrideStatus {
 }
 
 export function getSubscriptionOverride(userId: string): SubscriptionUserOverride | null {
-  if (!cachedOverrides) {
+  const currentRaw = process.env.SUBSCRIPTION_USER_OVERRIDES?.trim() ?? '';
+
+  if (!cachedOverrides || cachedRawOverrides !== currentRaw) {
     cachedOverrides = parseOverrides();
+    cachedRawOverrides = currentRaw;
   }
 
   return cachedOverrides.find((item) => item.userId === userId) ?? null;
@@ -56,4 +60,5 @@ export function getSubscriptionOverride(userId: string): SubscriptionUserOverrid
 
 export function clearSubscriptionOverrideCache(): void {
   cachedOverrides = null;
+  cachedRawOverrides = null;
 }

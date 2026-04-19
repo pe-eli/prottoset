@@ -1,4 +1,5 @@
 import { enqueueWebhookEventJob } from '../../jobs/queues';
+import crypto from 'crypto';
 import { fraudService } from '../../security/fraud.service';
 import { webhookEventsRepository, type WebhookProvider } from './webhook-events.repository';
 import { webhookSecurityService } from './webhook-security.service';
@@ -107,6 +108,7 @@ export const webhookIntakeService = {
     timestampHeader?: string;
     nonceHeader?: string;
     sourceIp: string;
+    tokenValidated?: boolean;
   }): Promise<{ accepted: boolean; duplicate: boolean; webhookEventId: string }> {
     const allowListRaw = process.env.EVOLUTION_WEBHOOK_ALLOWED_IPS?.trim();
     if (allowListRaw) {
@@ -121,41 +123,49 @@ export const webhookIntakeService = {
       }
     }
 
-    const validation = webhookSecurityService.validateEvolutionSignature({
-      rawBody: params.rawBody,
-      signatureHeader: params.signatureHeader,
-      timestampHeader: params.timestampHeader,
-      nonceHeader: params.nonceHeader,
-      secret: process.env.EVOLUTION_WEBHOOK_SECRET,
-    });
-
-    if (!validation.valid || !validation.nonce) {
-      await fraudService.recordEvent({
-        eventType: 'webhook_invalid_signature',
-        severity: 'high',
-        details: {
-          provider: 'evolution',
-          sourceIp: params.sourceIp,
-          reason: validation.reason,
-        },
-      });
-      await fraudService.detectInvalidWebhookBurst('evolution');
-      throw new WebhookAuthError('Assinatura de webhook inválida', 401);
-    }
-
-    const nonceStored = await webhookEventsRepository.reserveNonce('evolution', validation.nonce, 10 * 60);
-    if (!nonceStored) {
-      await fraudService.recordEvent({
-        eventType: 'webhook_replay_detected',
-        severity: 'high',
-        details: { provider: 'evolution', nonce: validation.nonce, sourceIp: params.sourceIp },
-      });
-      throw new WebhookAuthError('Webhook replay detectado', 409);
-    }
-
     const payload = parseJsonPayload(params.rawBody);
     const eventType = typeof payload.event === 'string' ? payload.event : 'unknown';
-    const eventId = `evolution:${validation.nonce}`;
+
+    let eventId: string;
+    if (params.tokenValidated) {
+      const raw = Buffer.isBuffer(params.rawBody) ? params.rawBody : Buffer.from(params.rawBody);
+      const digest = crypto.createHash('sha256').update(raw).digest('hex').slice(0, 24);
+      eventId = `evolution:token:${digest}`;
+    } else {
+      const validation = webhookSecurityService.validateEvolutionSignature({
+        rawBody: params.rawBody,
+        signatureHeader: params.signatureHeader,
+        timestampHeader: params.timestampHeader,
+        nonceHeader: params.nonceHeader,
+        secret: process.env.EVOLUTION_WEBHOOK_SECRET,
+      });
+
+      if (!validation.valid || !validation.nonce) {
+        await fraudService.recordEvent({
+          eventType: 'webhook_invalid_signature',
+          severity: 'high',
+          details: {
+            provider: 'evolution',
+            sourceIp: params.sourceIp,
+            reason: validation.reason,
+          },
+        });
+        await fraudService.detectInvalidWebhookBurst('evolution');
+        throw new WebhookAuthError('Assinatura de webhook inválida', 401);
+      }
+
+      const nonceStored = await webhookEventsRepository.reserveNonce('evolution', validation.nonce, 10 * 60);
+      if (!nonceStored) {
+        await fraudService.recordEvent({
+          eventType: 'webhook_replay_detected',
+          severity: 'high',
+          details: { provider: 'evolution', nonce: validation.nonce, sourceIp: params.sourceIp },
+        });
+        throw new WebhookAuthError('Webhook replay detectado', 409);
+      }
+
+      eventId = `evolution:${validation.nonce}`;
+    }
 
     const { created, event } = await webhookEventsRepository.createPending({
       provider: 'evolution',

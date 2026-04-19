@@ -388,6 +388,14 @@ DO $$ BEGIN
   CREATE TYPE wa_instance_status AS ENUM ('connecting','connected','disconnected');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+DO $$ BEGIN
+  ALTER TYPE wa_instance_status ADD VALUE IF NOT EXISTS 'created';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TYPE wa_instance_status ADD VALUE IF NOT EXISTS 'webhook_pending';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 CREATE TABLE IF NOT EXISTS whatsapp_instances (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

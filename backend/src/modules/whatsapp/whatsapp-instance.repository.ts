@@ -4,7 +4,7 @@ export interface WhatsAppInstance {
   id: string;
   tenantId: string;
   instanceName: string;
-  status: 'connecting' | 'connected' | 'disconnected';
+  status: 'created' | 'connecting' | 'connected' | 'disconnected' | 'webhook_pending';
   phone: string | null;
   qrCode: string | null;
   qrExpiresAt: string | null;
@@ -16,7 +16,7 @@ interface InstanceRow {
   id: string;
   tenant_id: string;
   instance_name: string;
-  status: 'connecting' | 'connected' | 'disconnected';
+  status: 'created' | 'connecting' | 'connected' | 'disconnected' | 'webhook_pending';
   phone: string | null;
   qr_code: string | null;
   qr_expires_at: string | null;
@@ -57,13 +57,14 @@ export const waInstanceRepository = {
 
   async upsert(
     tenantId: string,
-    data: { status?: WhatsAppInstance['status']; phone?: string | null },
+    data: { instanceName?: string; status?: WhatsAppInstance['status']; phone?: string | null },
   ): Promise<WhatsAppInstance> {
-    const instanceName = `user_${tenantId}`;
+    const instanceName = data.instanceName || `user_${tenantId}`;
     const { rows } = await query<InstanceRow>(
       `INSERT INTO whatsapp_instances (tenant_id, instance_name, status, phone)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (tenant_id) DO UPDATE SET
+         instance_name = COALESCE(EXCLUDED.instance_name, whatsapp_instances.instance_name),
          status = COALESCE(EXCLUDED.status, whatsapp_instances.status),
          phone = COALESCE(EXCLUDED.phone, whatsapp_instances.phone),
          updated_at = now()

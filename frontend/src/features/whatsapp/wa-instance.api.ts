@@ -10,6 +10,7 @@ export interface WaConnectResponse {
   status: 'connecting' | 'already_connected';
   qrCode?: string;
   phone?: string;
+  webhookConfigured?: boolean;
 }
 
 export const waInstanceAPI = {

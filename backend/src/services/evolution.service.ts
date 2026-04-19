@@ -181,66 +181,56 @@ export const evolutionService = {
 
   async createInstance(instanceName: string): Promise<{ qrCode?: string }> {
     const { apiUrl, apiKey } = getApiConfig();
-    const webhookBaseUrl = normalizeApiUrl(process.env.EVOLUTION_WEBHOOK_URL);
-    const webhookEndpoint = webhookBaseUrl ? `${webhookBaseUrl}/api/webhooks/evolution` : null;
-    const webhookEvents = ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'QRCODE_UPDATED'];
-
-    const baseBody: Record<string, unknown> = {
+    const body: Record<string, unknown> = {
       instanceName,
       integration: 'WHATSAPP-BAILEYS',
       qrcode: true,
     };
 
-    const payloads: Array<Record<string, unknown>> = [];
+    const response = await fetch(`${apiUrl}/instance/create`, {
+      method: 'POST',
+      headers: buildEvolutionHeaders(apiKey),
+      body: JSON.stringify(body),
+    });
 
-    if (webhookEndpoint) {
-      // Different Evolution versions expect different webhook field names.
-      payloads.push({
-        ...baseBody,
-        webhook: webhookEndpoint,
-        webhookByEvents: true,
-        webhookEvents,
-      });
-      payloads.push({
-        ...baseBody,
-        webhook: webhookEndpoint,
-        webhook_by_events: true,
-        webhook_events: webhookEvents,
-      });
-      payloads.push({
-        ...baseBody,
-        webhook: {
-          url: webhookEndpoint,
-          byEvents: true,
-          events: webhookEvents,
-        },
-      });
-    } else {
-      payloads.push(baseBody);
-    }
-
-    let lastError = '';
-    for (const body of payloads) {
-      const response = await fetch(`${apiUrl}/instance/create`, {
-        method: 'POST',
-        headers: buildEvolutionHeaders(apiKey),
-        body: JSON.stringify(body),
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as Record<string, any>;
-        return { qrCode: data.qrcode?.base64 ?? data.base64 };
-      }
-
+    if (!response.ok) {
       const text = await response.text().catch(() => '');
-      lastError = formatEvolutionHttpError(response.status, text);
+      throw new Error(formatEvolutionHttpError(response.status, text));
     }
 
-    if (webhookEndpoint) {
-      throw new Error(`${lastError} | Verifique EVOLUTION_WEBHOOK_URL com https:// e compatibilidade de payload da sua versão da Evolution.`);
+    const data = (await response.json()) as Record<string, any>;
+    return { qrCode: data.qrcode?.base64 ?? data.base64 };
+  },
+
+  async setWebhook(instanceName: string): Promise<void> {
+    const { apiUrl, apiKey } = getApiConfig();
+    const webhookBaseUrl = normalizeApiUrl(process.env.EVOLUTION_WEBHOOK_URL);
+    const webhookToken = process.env.WEBHOOK_TOKEN?.trim();
+
+    if (!webhookBaseUrl) {
+      throw new Error('EVOLUTION_WEBHOOK_URL não configurada para setWebhook');
+    }
+    if (!webhookToken) {
+      throw new Error('WEBHOOK_TOKEN não configurado para setWebhook');
     }
 
-    throw new Error(lastError || 'Falha ao criar instância na Evolution API');
+    const webhookUrl = `${webhookBaseUrl}/api/webhooks/evolution?token=${encodeURIComponent(webhookToken)}`;
+    const body = {
+      url: webhookUrl,
+      events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
+      byEvents: true,
+    };
+
+    const response = await fetch(`${apiUrl}/webhook/set/${instanceName}`, {
+      method: 'POST',
+      headers: buildEvolutionHeaders(apiKey),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(formatEvolutionHttpError(response.status, text));
+    }
   },
 
   async connectInstance(instanceName: string): Promise<{ qrCode?: string }> {

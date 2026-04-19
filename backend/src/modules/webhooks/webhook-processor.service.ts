@@ -122,6 +122,21 @@ function extractTextFromMessage(msg: Record<string, unknown>): string {
   return text;
 }
 
+function pickBestRemoteJid(item: Record<string, unknown>, key: Record<string, unknown>): string {
+  const jidCandidates = [
+    typeof key.remoteJidAlt === 'string' ? key.remoteJidAlt : '',
+    typeof item.remoteJidAlt === 'string' ? item.remoteJidAlt : '',
+    typeof key.remoteJid === 'string' ? key.remoteJid : '',
+    typeof item.remoteJid === 'string' ? item.remoteJid : '',
+  ].filter(Boolean);
+
+  // Prefer canonical WhatsApp jid when Evolution sends LID + alternate jid.
+  const canonicalJid = jidCandidates.find((jid) => jid.endsWith('@s.whatsapp.net'));
+  if (canonicalJid) return canonicalJid;
+
+  return jidCandidates.find((jid) => !jid.endsWith('@g.us')) || '';
+}
+
 function extractMessages(data: unknown): Array<{
   phone: string;
   content: string;
@@ -149,7 +164,7 @@ function extractMessages(data: unknown): Array<{
   const out: Array<{ phone: string; content: string; fromMe: boolean; sentAt: string; externalId: string }> = [];
   for (const item of candidates) {
     const key = (item.key as Record<string, unknown> | undefined) ?? item;
-    const remoteJidRaw = typeof key.remoteJid === 'string' ? key.remoteJid : (typeof item.remoteJid === 'string' ? item.remoteJid : '');
+    const remoteJidRaw = pickBestRemoteJid(item, key);
     if (!remoteJidRaw || remoteJidRaw.endsWith('@g.us')) continue;
 
     const phone = normalizePhone(remoteJidRaw.replace(/@.*$/, ''));

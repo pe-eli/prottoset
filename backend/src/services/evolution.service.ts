@@ -215,22 +215,74 @@ export const evolutionService = {
     }
 
     const webhookUrl = `${webhookBaseUrl}/api/webhooks/evolution?token=${encodeURIComponent(webhookToken)}`;
-    const body = {
-      url: webhookUrl,
-      events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
-      byEvents: true,
+    const events = ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'];
+    const byEvents = true;
+
+    // 1. { webhook: { url, events, byEvents } }
+    const payloadWebhook = {
+      webhook: {
+        url: webhookUrl,
+        events,
+        byEvents,
+      },
     };
+    // 2. { url, events, byEvents }
+    const payloadFlat = {
+      url: webhookUrl,
+      events,
+      byEvents,
+    };
+    // 3. { url }
+    const payloadUrlOnly = { url: webhookUrl };
 
-    const response = await fetch(`${apiUrl}/webhook/set/${instanceName}`, {
-      method: 'POST',
-      headers: buildEvolutionHeaders(apiKey),
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
+    let lastError;
+    // 1. Tenta formato recomendado (Evolution >=2.3.7)
+    try {
+      const response = await fetch(`${apiUrl}/webhook/set/${instanceName}`, {
+        method: 'POST',
+        headers: buildEvolutionHeaders(apiKey),
+        body: JSON.stringify(payloadWebhook),
+      });
+      if (response.ok) return;
       const text = await response.text().catch(() => '');
-      throw new Error(formatEvolutionHttpError(response.status, text));
+      if (!(response.status === 400 || response.status === 422)) {
+        throw new Error(formatEvolutionHttpError(response.status, text));
+      }
+      lastError = new Error(formatEvolutionHttpError(response.status, text));
+    } catch (err: any) {
+      lastError = err;
     }
+    // 2. Tenta formato flat (Evolution <=2.3.6)
+    try {
+      const response = await fetch(`${apiUrl}/webhook/set/${instanceName}`, {
+        method: 'POST',
+        headers: buildEvolutionHeaders(apiKey),
+        body: JSON.stringify(payloadFlat),
+      });
+      if (response.ok) return;
+      const text = await response.text().catch(() => '');
+      if (!(response.status === 400 || response.status === 422)) {
+        throw new Error(formatEvolutionHttpError(response.status, text));
+      }
+      lastError = new Error(formatEvolutionHttpError(response.status, text));
+    } catch (err: any) {
+      lastError = err;
+    }
+    // 3. Tenta formato mínimo
+    try {
+      const response = await fetch(`${apiUrl}/webhook/set/${instanceName}`, {
+        method: 'POST',
+        headers: buildEvolutionHeaders(apiKey),
+        body: JSON.stringify(payloadUrlOnly),
+      });
+      if (response.ok) return;
+      const text = await response.text().catch(() => '');
+      lastError = new Error(formatEvolutionHttpError(response.status, text));
+    } catch (err: any) {
+      lastError = err;
+    }
+    // Se todos falharem, lança o último erro
+    throw lastError;
   },
 
   async connectInstance(instanceName: string): Promise<{ qrCode?: string }> {

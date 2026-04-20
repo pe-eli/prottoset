@@ -118,15 +118,15 @@ function buildPromptWithMemory(
     : '';
 
   const parts = [
-    `PROMPT DO USUARIO:\n${prompt}`,
+    `PROMPT DO USUÁRIO:\n${prompt}`,
   ];
 
   if (memoryBlock) {
-    parts.push(`HISTORICO RECENTE (evite repetir frases identicas):\n${memoryBlock}`);
+    parts.push(`HISTÓRICO RECENTE (evite repetir frases idênticas):\n${memoryBlock}`);
   }
 
   if (generatedBlock) {
-    parts.push(`JA GERADAS NESTE TESTE (crie variacao real):\n${generatedBlock}`);
+    parts.push(`JÁ GERADAS NESTE TESTE (crie variação real):\n${generatedBlock}`);
   }
 
   return parts.join('\n\n');
@@ -183,7 +183,7 @@ async function callDeepSeek(
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.9,
-          max_tokens: 500,
+          max_tokens: 1500,
         }),
       });
     } catch (error) {

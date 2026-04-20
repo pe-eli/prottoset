@@ -102,6 +102,10 @@ export const whatsappBlastSchema = z.object({
   manualMessage: z.string().trim().max(1000).optional(),
 });
 
+export const whatsappPromptTestSchema = z.object({
+  promptBase: z.string().trim().min(1, 'Prompt da IA é obrigatório.').max(1000),
+});
+
 export const contactWhatsappReplySchema = z.object({
   messageMode: z.enum(['ai', 'manual']),
   promptBase: z.string().trim().max(1000).optional(),

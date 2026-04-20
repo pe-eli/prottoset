@@ -27,6 +27,16 @@ interface Filters {
   email: EmailFilter;
 }
 
+function titleCasePtBr(value: string): string {
+  return value
+    .trim()
+    .toLocaleLowerCase('pt-BR')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toLocaleUpperCase('pt-BR') + word.slice(1))
+    .join(' ');
+}
+
 export function LeadsDashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,9 +64,10 @@ export function LeadsDashboard() {
     safeLeads.forEach((l) => {
       const niche = typeof l.niche === 'string' ? l.niche : '';
       if (niche) {
-        const key = niche.toLowerCase();
+        const normalized = titleCasePtBr(niche);
+        const key = normalized.toLocaleLowerCase('pt-BR');
         if (!map.has(key)) {
-          map.set(key, niche.replace(/\b\w/g, (c) => c.toUpperCase()));
+          map.set(key, normalized);
         }
       }
     });
@@ -71,9 +82,10 @@ export function LeadsDashboard() {
     safeLeads.forEach((l) => {
       const city = typeof l.city === 'string' ? l.city : '';
       if (city) {
-        const key = city.toLowerCase();
+        const normalized = titleCasePtBr(city);
+        const key = normalized.toLocaleLowerCase('pt-BR');
         if (!map.has(key)) {
-          map.set(key, city.replace(/\b\w/g, (c) => c.toUpperCase()));
+          map.set(key, normalized);
         }
       }
     });

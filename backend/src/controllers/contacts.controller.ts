@@ -176,7 +176,10 @@ export const contactsController = {
           return res.status(400).json({ error: 'Mensagem fixa é obrigatória no modo manual.' });
         }
       } else {
-        const generated = await deepseekService.generateWhatsAppMessage(promptBase);
+        const generated = await deepseekService.generateWhatsAppMessage(promptBase, {
+          tenantId,
+          source: 'reply',
+        });
         message = (generated.message || '').trim();
         if (!message) {
           return res.status(500).json({ error: 'Não foi possível gerar uma mensagem de resposta.' });

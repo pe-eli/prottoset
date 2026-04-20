@@ -22,6 +22,13 @@ router.post('/disconnect', waInstanceController.disconnect);
 
 // ─── Blast routes ───
 router.post(
+	'/prompt/test',
+	blastLimiter,
+	requireActiveSubscription('whatsapp'),
+	whatsappController.testPrompt,
+);
+
+router.post(
 	'/blast',
 	blastLimiter,
 	requireActiveSubscription('whatsapp'),

@@ -10,7 +10,7 @@ export function SearchLoadingOverlay() {
 
       {/* Animated text with steps */}
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-semibold text-brand-950">Gerando leads...</p>
+        <p className="text-sm font-semibold text-brand-100">Gerando leads...</p>
         <div className="space-y-0.5">
           <p className="text-xs text-brand-400">1. Mapeando bairros da cidade</p>
           <p className="text-xs text-brand-400">2. Buscando no Google Maps</p>

@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
-import { blastParamSchema, whatsappBlastSchema } from '../validation/request.schemas';
+import { blastParamSchema, whatsappBlastSchema, whatsappPromptTestSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
 import { enqueueWhatsAppBlastJob } from '../jobs/queues';
+import { deepseekService } from '../services/deepseek.service';
 
 function openSse(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -14,6 +15,28 @@ function openSse(res: Response): void {
 }
 
 export const whatsappController = {
+  /** POST /whatsapp/prompt/test — gera 3 variações para validar prompt */
+  async testPrompt(req: Request, res: Response) {
+    try {
+      const parsed = whatsappPromptTestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+
+      const generated = await deepseekService.generateWhatsAppMessages(parsed.data.promptBase, 3, {
+        tenantId: req.tenantId,
+        source: 'test',
+      });
+
+      res.json({ messages: generated.messages.slice(0, 3) });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[WhatsApp] testPrompt error:', message);
+      res.status(500).json({ error: 'Erro ao testar prompt com IA' });
+    }
+  },
+
   /** POST /whatsapp/blast — valida, salva contatos e inicia a fila */
   async sendBlast(req: Request, res: Response) {
     try {

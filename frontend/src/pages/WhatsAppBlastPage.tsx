@@ -111,6 +111,9 @@ export function WhatsAppBlastPage() {
   const [promptName, setPromptName] = useState('');
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState('');
+  const [testingPrompt, setTestingPrompt] = useState(false);
+  const [promptTestMessages, setPromptTestMessages] = useState<string[]>([]);
+  const [promptTestError, setPromptTestError] = useState<string | null>(null);
 
   const [phoneQueues, setPhoneQueues] = useState<PhoneQueue[]>([]);
   const [showQueuePicker, setShowQueuePicker] = useState(false);
@@ -221,6 +224,26 @@ export function WhatsAppBlastPage() {
     if (!selectedPromptId) return;
     setSavedPrompts((prev) => prev.filter((prompt) => prompt.id !== selectedPromptId));
     setSelectedPromptId('');
+  };
+
+  const handleTestPrompt = async () => {
+    const normalizedPrompt = promptBase.trim();
+    if (!normalizedPrompt) {
+      alert('Digite um prompt antes de testar.');
+      return;
+    }
+
+    setTestingPrompt(true);
+    setPromptTestError(null);
+    try {
+      const { data } = await whatsappAPI.testPrompt(normalizedPrompt);
+      setPromptTestMessages(Array.isArray(data.messages) ? data.messages.slice(0, 3) : []);
+    } catch (err: unknown) {
+      setPromptTestMessages([]);
+      setPromptTestError(getAxiosErrorMessage(err, 'Falha ao testar o prompt.'));
+    } finally {
+      setTestingPrompt(false);
+    }
   };
 
   const addPhones = () => {
@@ -676,6 +699,11 @@ export function WhatsAppBlastPage() {
 
               {messageMode === 'ai' ? (
                 <>
+                  <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-violet-400/20 bg-violet-500/10 px-2.5 py-1">
+                    <SparkleIcon className="w-3 h-3 text-violet-300" />
+                    <span className="text-[11px] font-semibold text-violet-200">Modelo: DeepSeek Reasoner</span>
+                  </div>
+
                   <div className="mt-3 rounded-xl border border-violet-400/20 bg-surface-secondary/80 px-3 py-3">
                     <p className="text-[11px] font-semibold text-violet-300 uppercase tracking-wider">Dicas para o prompt</p>
                     <ul className="mt-2 space-y-1 text-xs text-violet-100">
@@ -729,6 +757,28 @@ export function WhatsAppBlastPage() {
                     className="mt-3 w-full px-3 py-2 bg-surface border border-violet-400/20 rounded-xl text-sm text-text-primary resize-none
                       placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
                   />
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button type="button" onClick={handleTestPrompt} variant="secondary" disabled={testingPrompt || !promptBase.trim()}>
+                      {testingPrompt ? 'Testando...' : 'Testar prompt'}
+                    </Button>
+                    <span className="text-[11px] text-violet-200/90">Gera 3 variações antes de iniciar o disparo</span>
+                  </div>
+
+                  {promptTestError && (
+                    <p className="mt-2 text-xs text-red-300">{promptTestError}</p>
+                  )}
+
+                  {promptTestMessages.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {promptTestMessages.map((message, index) => (
+                        <div key={`${index}-${message.slice(0, 24)}`} className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3 py-2.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-300">Mensagem {index + 1}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-violet-100 whitespace-pre-wrap">{message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : (
                 <textarea

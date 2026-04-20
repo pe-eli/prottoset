@@ -1,3 +1,7 @@
+import { existsSync } from 'fs';
+import { mkdir, readFile, writeFile } from 'fs/promises';
+import path from 'path';
+
 const WA_SYSTEM_PROMPT = `Gere UMA mensagem para iniciar uma 
 conversa no WhatsApp. O objetivo é exclusivamente criar uma mensagem de abordagem. A mensagem deve ser curta, amigável e direta, como um dos exemplos abaixo:
 
@@ -16,6 +20,10 @@ Instruções:
 Responda APENAS com o texto da mensagem.`;
 
 const DEFAULT_WA_PROMPT = 'iniciar conversa';
+const DEEPSEEK_MODEL = 'deepseek-reasoner';
+const AI_MEMORY_FILE_NAME = 'whatsapp-ai-memory.json';
+const AI_MEMORY_MAX_ENTRIES = 120;
+const AI_MEMORY_CONTEXT_ENTRIES = 8;
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -33,6 +41,106 @@ interface DeepSeekResponse {
 export interface AiGenerationResult {
   message: string;
   tokensUsed: number;
+}
+
+interface AiMemoryEntry {
+  timestamp: string;
+  tenantId?: string;
+  source: 'blast' | 'reply' | 'test';
+  prompt: string;
+  message: string;
+}
+
+interface AiMemoryStore {
+  version: number;
+  updatedAt: string | null;
+  entries: AiMemoryEntry[];
+}
+
+interface GenerationOptions {
+  tenantId?: string;
+  source?: 'blast' | 'reply' | 'test';
+}
+
+function resolveMemoryFilePath(): string {
+  const backendPath = path.resolve(process.cwd(), 'data', AI_MEMORY_FILE_NAME);
+  const rootPath = path.resolve(process.cwd(), 'backend', 'data', AI_MEMORY_FILE_NAME);
+  return existsSync(backendPath) || !existsSync(rootPath) ? backendPath : rootPath;
+}
+
+async function readMemoryStore(): Promise<AiMemoryStore> {
+  const filePath = resolveMemoryFilePath();
+  try {
+    const raw = await readFile(filePath, 'utf-8');
+    const parsed = JSON.parse(raw) as Partial<AiMemoryStore>;
+    const rawEntries: unknown[] = Array.isArray(parsed.entries) ? parsed.entries : [];
+    const entries = rawEntries
+      .filter((entry): entry is AiMemoryEntry => {
+        if (!entry || typeof entry !== 'object') return false;
+        const candidate = entry as Record<string, unknown>;
+        return typeof candidate.timestamp === 'string'
+          && typeof candidate.prompt === 'string'
+          && typeof candidate.message === 'string'
+          && typeof candidate.source === 'string';
+      });
+
+    return {
+      version: typeof parsed.version === 'number' ? parsed.version : 1,
+      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null,
+      entries,
+    };
+  } catch {
+    return {
+      version: 1,
+      updatedAt: null,
+      entries: [],
+    };
+  }
+}
+
+async function writeMemoryStore(store: AiMemoryStore): Promise<void> {
+  const filePath = resolveMemoryFilePath();
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, JSON.stringify(store, null, 2), 'utf-8');
+}
+
+function buildPromptWithMemory(
+  prompt: string,
+  memory: AiMemoryEntry[],
+  generatedInThisRequest: string[],
+): string {
+  const memoryBlock = memory.length > 0
+    ? memory.map((entry, index) => `${index + 1}. ${entry.message}`).join('\n')
+    : '';
+
+  const generatedBlock = generatedInThisRequest.length > 0
+    ? generatedInThisRequest.map((message, index) => `${index + 1}. ${message}`).join('\n')
+    : '';
+
+  const parts = [
+    `PROMPT DO USUARIO:\n${prompt}`,
+  ];
+
+  if (memoryBlock) {
+    parts.push(`HISTORICO RECENTE (evite repetir frases identicas):\n${memoryBlock}`);
+  }
+
+  if (generatedBlock) {
+    parts.push(`JA GERADAS NESTE TESTE (crie variacao real):\n${generatedBlock}`);
+  }
+
+  return parts.join('\n\n');
+}
+
+async function appendMemoryEntries(entries: AiMemoryEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  const store = await readMemoryStore();
+  const nextEntries = [...store.entries, ...entries].slice(-AI_MEMORY_MAX_ENTRIES);
+  await writeMemoryStore({
+    version: store.version || 1,
+    updatedAt: new Date().toISOString(),
+    entries: nextEntries,
+  });
 }
 
 async function callDeepSeek(
@@ -69,7 +177,7 @@ async function callDeepSeek(
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: DEEPSEEK_MODEL,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
@@ -124,7 +232,11 @@ async function callDeepSeek(
 }
 
 export const deepseekService = {
-  async generateWhatsAppMessage(promptBase?: string): Promise<AiGenerationResult> {
+  async generateWhatsAppMessages(
+    promptBase?: string,
+    count = 1,
+    options: GenerationOptions = {},
+  ): Promise<{ messages: string[]; tokensUsed: number }> {
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
       throw new Error('DEEPSEEK_API_KEY not configured');
@@ -134,9 +246,48 @@ export const deepseekService = {
       ? promptBase.trim()
       : DEFAULT_WA_PROMPT;
 
-    return callDeepSeek(
-      WA_SYSTEM_PROMPT,
+    const safeCount = Math.max(1, Math.min(5, Math.floor(Number(count) || 1)));
+    const store = await readMemoryStore();
+    const memoryContext = store.entries.slice(-AI_MEMORY_CONTEXT_ENTRIES);
+    const messages: string[] = [];
+    let totalTokens = 0;
+
+    for (let index = 0; index < safeCount; index++) {
+      const result = await callDeepSeek(
+        WA_SYSTEM_PROMPT,
+        buildPromptWithMemory(prompt, memoryContext, messages),
+      );
+      const message = result.message.trim();
+      if (!message) {
+        throw new Error('DeepSeek não retornou uma mensagem válida');
+      }
+      messages.push(message);
+      totalTokens += result.tokensUsed;
+    }
+
+    await appendMemoryEntries(messages.map((message) => ({
+      timestamp: new Date().toISOString(),
+      tenantId: options.tenantId,
+      source: options.source || 'blast',
       prompt,
-    );
+      message,
+    })));
+
+    return { messages, tokensUsed: totalTokens };
+  },
+
+  async generateWhatsAppMessage(promptBase?: string, options: GenerationOptions = {}): Promise<AiGenerationResult> {
+    const generated = await this.generateWhatsAppMessages(promptBase, 1, options);
+
+    return {
+      message: generated.messages[0] || '',
+      tokensUsed: generated.tokensUsed,
+    };
+  },
+
+  async getRecentWhatsAppMemory(limit = 20): Promise<AiMemoryEntry[]> {
+    const store = await readMemoryStore();
+    const safeLimit = Math.max(1, Math.min(200, Math.floor(Number(limit) || 20)));
+    return store.entries.slice(-safeLimit);
   },
 };

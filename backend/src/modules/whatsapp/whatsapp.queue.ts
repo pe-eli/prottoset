@@ -178,7 +178,10 @@ async function processBlast(blastId: string) {
     let batchMessage: string;
     let creditsUsed = 0;
     try {
-      const result = await deepseekService.generateWhatsAppMessage(promptBase);
+      const result = await deepseekService.generateWhatsAppMessage(promptBase, {
+        tenantId: entry.tenantId,
+        source: 'blast',
+      });
       batchMessage = result.message;
       creditsUsed = result.tokensUsed > 0
         ? calculateCreditsFromTokens(result.tokensUsed)

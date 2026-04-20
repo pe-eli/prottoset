@@ -22,6 +22,9 @@ export const whatsappAPI = {
   statusBlast: (blastId: string) =>
     api.get<{ phase: string; sent: number; total: number }>(`/whatsapp/blast/${blastId}/status`),
 
+  testPrompt: (promptBase: string) =>
+    api.post<{ messages: string[] }>('/whatsapp/prompt/test', { promptBase }),
+
   blastStreamUrl: (blastId: string): string =>
     `${API_BASE_URL}/whatsapp/blast/${blastId}/stream`,
 };

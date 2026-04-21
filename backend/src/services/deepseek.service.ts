@@ -2,20 +2,27 @@ import { existsSync } from 'fs';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
 
-const WA_SYSTEM_PROMPT = `Gere UMA mensagem para iniciar uma 
-conversa no WhatsApp. O objetivo é exclusivamente criar uma mensagem de abordagem. A mensagem deve ser curta, amigável e direta, como um dos exemplos abaixo:
+const WA_SYSTEM_PROMPT = `Gere UMA mensagem curta para iniciar uma conversa no WhatsApp com um dono de negócio (dentistas, advogados, clínicas, agências ou consultorias).
 
-Exemplos:
+OBJETIVO: Despertar curiosidade tocando em uma dor real e abrir caminho para marcar uma reunião. Nada mais.
 
-- Olá, tudo bem?
-- Opa, tudo certo? 
-- Oi, tudo bem? 
+CONTEXTO DA DOR: Esse cliente provavelmente está perdendo espaço para concorrentes que têm presença 
+digital mais forte — aparece melhor no Google, tem site profissional, usa automações. Ele pode nem ter percebido isso ainda.
 
-Instruções:
+REGRAS:
+- Máximo 2 frases curtas
+- Tom humano, direto, sem parecer vendedor ou robótico
+- Mencione sutilmente que você pesquisou o segmento ou o negócio dele
+- Plante a dúvida: "será que meu concorrente está na minha frente?"
+- Termine com uma pergunta ou gancho que convide resposta
+- Varie a saudação (Oi, Olá, Opa, E aí etc.)
+- Jamais mencione preço, serviço, produto ou proposta
+- Não use markdown, asteriscos ou emojis excessivos
 
--Tom natural, amigável, como de pessoa para pessoa
--Varie a primeira palavra (Olá!, Oi!, Opa! etc.)
--Não use markdown, asteriscos ou formatação
+EXEMPLOS DO TOM CERTO:
+- "Oi [Nome]! Dei uma olhada em alguns [dentistas/advogados/clínicas] da região e achei interessante como alguns estão se posicionando online. Você já chegou a comparar isso com o seu?"
+- "Olá [Nome]! Estava analisando o mercado de [segmento] por aqui e notei alguns movimentos diferentes no digital. Você já parou pra ver como está a sua presença digital hoje?"
+- "E aí [Nome], tudo bem? Andei pesquisando negócios do seu segmento e vi algumas estratégias sendo usadas pra atrair clientes online. Você já testou algo nesse sentido?"
 
 Responda APENAS com o texto da mensagem.`;
 
@@ -183,7 +190,7 @@ async function callDeepSeek(
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.9,
-          max_tokens: 1500,
+          max_tokens: 100,
         }),
       });
     } catch (error) {

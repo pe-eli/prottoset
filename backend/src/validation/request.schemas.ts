@@ -131,6 +131,34 @@ export const whatsappBlastSchema = z.object({
 
 export const whatsappPromptTestSchema = z.object({
   promptBase: z.string().trim().min(1, 'Prompt da IA é obrigatório.').max(1000),
+  phones: z.array(z.union([z.string(), z.number()]).transform((value) => String(value))).max(1000).optional(),
+  personalizationEnabled: z.coerce.boolean().optional(),
+  personalizationFields: z.array(z.enum(['name', 'city', 'niche', 'pain_points'])).max(4).optional(),
+  painPoints: z.array(z.string().trim().min(1).max(160)).max(20).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.personalizationEnabled) return;
+
+  const fields = Array.isArray(value.personalizationFields) ? value.personalizationFields : [];
+  if (fields.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['personalizationFields'],
+      message: 'Selecione ao menos um campo de personalização.',
+    });
+  }
+
+  if (fields.includes('pain_points')) {
+    const painPoints = Array.isArray(value.painPoints)
+      ? value.painPoints.map((item) => item.trim()).filter(Boolean)
+      : [];
+    if (painPoints.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['painPoints'],
+        message: 'Informe ao menos uma dor quando este campo estiver selecionado.',
+      });
+    }
+  }
 });
 
 export const contactWhatsappReplySchema = z.object({

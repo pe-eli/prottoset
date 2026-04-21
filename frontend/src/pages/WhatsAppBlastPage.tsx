@@ -245,10 +245,37 @@ export function WhatsAppBlastPage() {
       return;
     }
 
+    const normalizedPainPoints = painPointsInput
+      .split(/\r?\n|,|;/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (personalizationEnabled && personalizationFields.length === 0) {
+      alert('Selecione ao menos um campo para personalização por lead.');
+      return;
+    }
+
+    if (
+      personalizationEnabled
+      && personalizationFields.includes('pain_points')
+      && normalizedPainPoints.length === 0
+    ) {
+      alert('Digite ao menos uma dor para incluir na personalização.');
+      return;
+    }
+
     setTestingPrompt(true);
     setPromptTestError(null);
     try {
-      const { data } = await whatsappAPI.testPrompt(normalizedPrompt);
+      const { data } = await whatsappAPI.testPrompt({
+        promptBase: normalizedPrompt,
+        phones,
+        personalizationEnabled,
+        personalizationFields,
+        painPoints: personalizationEnabled && personalizationFields.includes('pain_points')
+          ? normalizedPainPoints
+          : [],
+      });
       setPromptTestMessages(Array.isArray(data.messages) ? data.messages.slice(0, 3) : []);
     } catch (err: unknown) {
       setPromptTestMessages([]);

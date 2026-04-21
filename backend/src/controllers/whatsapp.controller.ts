@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
+import { leadsRepository } from '../modules/leads/leads.repository';
 import { blastParamSchema, whatsappBlastSchema, whatsappPromptTestSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
 import { enqueueWhatsAppBlastJob } from '../jobs/queues';
 import { deepseekService } from '../services/deepseek.service';
+import type { Lead } from '../types/leads.types';
 
 function openSse(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -12,6 +14,77 @@ function openSse(res: Response): void {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
+}
+
+type PersonalizationField = 'name' | 'city' | 'niche' | 'pain_points';
+
+function normalizePhone(value: string): string {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  return digits;
+}
+
+function buildPhoneKeys(value: string): string[] {
+  const normalized = normalizePhone(value);
+  return normalized.startsWith('55') && normalized.length > 11 ? [normalized, normalized.slice(2)] : [normalized];
+}
+
+function parsePersonalizationFields(fields: string[]): PersonalizationField[] {
+  const valid = fields.filter((field): field is PersonalizationField => (
+    field === 'name' || field === 'city' || field === 'niche' || field === 'pain_points'
+  ));
+  return Array.from(new Set(valid));
+}
+
+function resolveLeadByPhone(phone: string, leadMap: Map<string, Lead>): Lead | null {
+  for (const key of buildPhoneKeys(phone)) {
+    const lead = leadMap.get(key);
+    if (lead) return lead;
+  }
+  return null;
+}
+
+function buildPersonalizedPrompt(params: {
+  basePrompt: string;
+  fields: PersonalizationField[];
+  lead: Lead | null;
+  painPoint: string | null;
+}): string {
+  const basePrompt = params.basePrompt.trim();
+  const lead = params.lead;
+  const blocks: string[] = [];
+
+  if (params.fields.includes('name')) {
+    if (lead?.name) {
+      blocks.push(`NOME_BRUTO_MAPS: ${lead.name}`);
+      blocks.push('REGRA_DE_SAUDACAO: Se for nome de pessoa, cumprimente com "Olá, <primeiro_nome>". Se for empresa/marca, use "Olá, Equipe da <nome>".');
+    } else {
+      blocks.push('REGRA_DE_SAUDACAO: Sem nome confiável. Use saudação neutra e curta.');
+    }
+  }
+
+  if (params.fields.includes('city') && lead?.city) {
+    blocks.push(`CIDADE: ${lead.city}`);
+  }
+
+  if (params.fields.includes('niche') && lead?.niche) {
+    blocks.push(`NICHO: ${lead.niche}`);
+  }
+
+  if (params.fields.includes('pain_points') && params.painPoint) {
+    blocks.push(`DOR_PRINCIPAL_DO_LEAD: ${params.painPoint}`);
+  }
+
+  if (blocks.length === 0) {
+    return basePrompt;
+  }
+
+  return [
+    basePrompt,
+    'CONTEXTUALIZACAO_POR_LEAD:',
+    ...blocks,
+    'INSTRUCAO_FINAL: Consolide os dados acima em uma mensagem curta de primeira abordagem para WhatsApp. Responda apenas com a mensagem final.',
+  ].join('\n');
 }
 
 export const whatsappController = {
@@ -24,12 +97,65 @@ export const whatsappController = {
         return;
       }
 
-      const generated = await deepseekService.generateWhatsAppMessages(parsed.data.promptBase, 3, {
-        tenantId: req.tenantId,
-        source: 'test',
+      const {
+        promptBase,
+        phones = [],
+        personalizationEnabled = false,
+        personalizationFields = [],
+        painPoints = [],
+      } = parsed.data;
+
+      const normalizedPhones = Array.from(new Set(
+        (Array.isArray(phones) ? phones : [])
+          .map((phone) => normalizePhone(phone))
+          .filter((phone) => phone.length >= 8),
+      ));
+
+      const fields = parsePersonalizationFields(Array.isArray(personalizationFields) ? personalizationFields : []);
+      const safePainPoints = Array.from(new Set(
+        (Array.isArray(painPoints) ? painPoints : [])
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ));
+
+      const testCount = 3;
+      if (!personalizationEnabled || fields.length === 0) {
+        const generated = await deepseekService.generateWhatsAppMessages(promptBase, testCount, {
+          tenantId: req.tenantId,
+          source: 'test',
+        });
+        res.json({ messages: generated.messages.slice(0, testCount) });
+        return;
+      }
+
+      const leadMap = normalizedPhones.length > 0
+        ? await leadsRepository.getByNormalizedPhones(req.tenantId!, normalizedPhones)
+        : new Map<string, Lead>();
+
+      const prompts: string[] = Array.from({ length: testCount }).map((_, index) => {
+        const phone = normalizedPhones[index] || normalizedPhones[0] || '';
+        const lead = phone ? resolveLeadByPhone(phone, leadMap) : null;
+        const painPoint = fields.includes('pain_points') && safePainPoints.length > 0
+          ? safePainPoints[index % safePainPoints.length]
+          : null;
+        return buildPersonalizedPrompt({
+          basePrompt: promptBase,
+          fields,
+          lead,
+          painPoint,
+        });
       });
 
-      res.json({ messages: generated.messages.slice(0, 3) });
+      const messages: string[] = [];
+      for (const prompt of prompts) {
+        const generated = await deepseekService.generateWhatsAppMessage(prompt, {
+          tenantId: req.tenantId,
+          source: 'test',
+        });
+        messages.push(generated.message);
+      }
+
+      res.json({ messages: messages.slice(0, testCount) });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('[WhatsApp] testPrompt error:', message);

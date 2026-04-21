@@ -338,7 +338,8 @@ export function EmailBlastPage() {
                     value={batchSize}
                     onChange={(e) => setBatchSize(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
                     className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
-                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all
+                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <span className="text-xs text-brand-400">máx. 50</span>
                 </div>
@@ -359,7 +360,8 @@ export function EmailBlastPage() {
                       if (v > intervalMax) setIntervalMax(v);
                     }}
                     className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
-                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all
+                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <span className="text-xs text-brand-400">seg</span>
                 </div>
@@ -379,7 +381,8 @@ export function EmailBlastPage() {
                       setIntervalMax(v);
                     }}
                     className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
-                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all
+                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <span className="text-xs text-brand-400">seg</span>
                 </div>

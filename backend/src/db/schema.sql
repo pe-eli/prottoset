@@ -142,6 +142,9 @@ CREATE TABLE IF NOT EXISTS outbound_runs (
   prompt_base TEXT,
   message_mode TEXT NOT NULL DEFAULT 'ai' CHECK (message_mode IN ('ai', 'manual')),
   manual_message TEXT,
+  personalization_enabled BOOLEAN NOT NULL DEFAULT false,
+  personalization_fields TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  pain_points TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   batch_size INTEGER NOT NULL CHECK (batch_size > 0 AND batch_size <= 50),
   interval_min_seconds INTEGER NOT NULL CHECK (interval_min_seconds >= 5),
   interval_max_seconds INTEGER NOT NULL CHECK (interval_max_seconds >= interval_min_seconds),
@@ -163,6 +166,9 @@ CREATE TABLE IF NOT EXISTS outbound_runs (
 
 ALTER TABLE outbound_runs ADD COLUMN IF NOT EXISTS message_mode TEXT NOT NULL DEFAULT 'ai';
 ALTER TABLE outbound_runs ADD COLUMN IF NOT EXISTS manual_message TEXT;
+ALTER TABLE outbound_runs ADD COLUMN IF NOT EXISTS personalization_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE outbound_runs ADD COLUMN IF NOT EXISTS personalization_fields TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE outbound_runs ADD COLUMN IF NOT EXISTS pain_points TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 DO $$
 BEGIN
   IF NOT EXISTS (

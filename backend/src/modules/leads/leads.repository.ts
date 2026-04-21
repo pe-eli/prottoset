@@ -53,6 +53,54 @@ export const leadsRepository = {
     return rows[0] ? toLead(rows[0]) : null;
   },
 
+  async getByNormalizedPhones(tenantId: string, phones: string[]): Promise<Map<string, Lead>> {
+    const keySet = new Set<string>();
+    for (const rawPhone of phones) {
+      const digits = String(rawPhone || '').replace(/\D/g, '');
+      if (!digits) continue;
+      keySet.add(digits);
+      if ((digits.length === 10 || digits.length === 11) && !digits.startsWith('55')) {
+        keySet.add(`55${digits}`);
+      }
+      if (digits.startsWith('55') && digits.length > 11) {
+        keySet.add(digits.slice(2));
+      }
+    }
+
+    const keys = Array.from(keySet);
+    if (keys.length === 0) return new Map();
+
+    const { rows } = await tenantQuery<LeadRow>(
+      tenantId,
+      `SELECT *
+         FROM leads
+        WHERE regexp_replace(phone, '\\D', '', 'g') = ANY($1::text[])
+        ORDER BY created_at DESC`,
+      [keys],
+    );
+
+    const map = new Map<string, Lead>();
+    for (const row of rows) {
+      const lead = toLead(row);
+      const digits = lead.phone.replace(/\D/g, '');
+      const candidates = new Set<string>([digits]);
+      if ((digits.length === 10 || digits.length === 11) && !digits.startsWith('55')) {
+        candidates.add(`55${digits}`);
+      }
+      if (digits.startsWith('55') && digits.length > 11) {
+        candidates.add(digits.slice(2));
+      }
+
+      for (const key of candidates) {
+        if (key && !map.has(key)) {
+          map.set(key, lead);
+        }
+      }
+    }
+
+    return map;
+  },
+
   async saveMany(tenantId: string, newLeads: Lead[]): Promise<Lead[]> {
     if (newLeads.length === 0) return [];
 

@@ -23,7 +23,13 @@ const PRIORITY_SURFACE: Record<LeadPriority, string> = {
 };
 
 function titleCase(str: string): string {
-  return str.replace(/\b\w/g, (c) => c.toUpperCase());
+  return str
+    .trim()
+    .toLocaleLowerCase('pt-BR')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toLocaleUpperCase('pt-BR') + word.slice(1))
+    .join(' ');
 }
 
 function normalizeWebsite(url: string): string {

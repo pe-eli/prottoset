@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { leadsController } from '../controllers/leads.controller';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
-import { enforceQuota } from '../middleware/quota.middleware';
+import { enforceQuotaForInactiveSubscription } from '../middleware/quota.middleware';
 import { allowLeadsSearchForFreeTier } from '../middleware/free-tier.middleware';
 import { enforceFeatureLimitForActiveSubscription } from '../middleware/subscription.middleware';
 
@@ -19,7 +19,7 @@ router.post(
 	'/search',
 	leadsSearchLimiter,
 	enforceFeatureLimitForActiveSubscription('leads'),
-	enforceQuota({
+	enforceQuotaForInactiveSubscription({
 		quotaKey: 'scrape_requests_daily',
 		message: 'Cota diária de scraping atingida.',
 		cost: (req) => {

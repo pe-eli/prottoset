@@ -15,6 +15,9 @@ interface OutboundRunRow {
   prompt_base: string | null;
   message_mode: 'ai' | 'manual';
   manual_message: string | null;
+  personalization_enabled: boolean;
+  personalization_fields: string[];
+  pain_points: string[];
   batch_size: number;
   interval_min_seconds: number;
   interval_max_seconds: number;
@@ -63,6 +66,9 @@ export interface OutboundRun {
   messageMode: 'ai' | 'manual';
   promptBase?: string;
   manualMessage?: string;
+  personalizationEnabled: boolean;
+  personalizationFields: string[];
+  painPoints: string[];
   batchSize: number;
   intervalMinSeconds: number;
   intervalMaxSeconds: number;
@@ -104,6 +110,9 @@ function toRun(row: OutboundRunRow): OutboundRun {
     messageMode: row.message_mode,
     promptBase: row.prompt_base || undefined,
     manualMessage: row.manual_message || undefined,
+    personalizationEnabled: row.personalization_enabled,
+    personalizationFields: Array.isArray(row.personalization_fields) ? row.personalization_fields : [],
+    painPoints: Array.isArray(row.pain_points) ? row.pain_points : [],
     batchSize: row.batch_size,
     intervalMinSeconds: row.interval_min_seconds,
     intervalMaxSeconds: row.interval_max_seconds,
@@ -177,6 +186,9 @@ export const outboundRunsRepository = {
     messageMode: 'ai' | 'manual';
     promptBase?: string;
     manualMessage?: string;
+    personalizationEnabled?: boolean;
+    personalizationFields?: string[];
+    painPoints?: string[];
     batchSize: number;
     intervalMinSeconds: number;
     intervalMaxSeconds: number;
@@ -185,15 +197,19 @@ export const outboundRunsRepository = {
       tenantId,
       `INSERT INTO outbound_runs (
         id, tenant_id, channel, status, phase, prompt_base, message_mode, manual_message,
+        personalization_enabled, personalization_fields, pain_points,
         batch_size, interval_min_seconds, interval_max_seconds, total, total_batches
       )
-       VALUES ($1, $2, 'whatsapp', 'queued', 'queued', $3, $4, $5, $6, $7, $8, $9, $10)`,
+       VALUES ($1, $2, 'whatsapp', 'queued', 'queued', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         input.runId,
         tenantId,
         input.promptBase || null,
         input.messageMode,
         input.manualMessage || null,
+        Boolean(input.personalizationEnabled),
+        input.personalizationFields || [],
+        input.painPoints || [],
         input.batchSize,
         input.intervalMinSeconds,
         input.intervalMaxSeconds,

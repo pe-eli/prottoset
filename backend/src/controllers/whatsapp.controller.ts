@@ -55,6 +55,9 @@ export const whatsappController = {
         messageMode = 'ai',
         promptBase,
         manualMessage,
+        personalizationEnabled = false,
+        personalizationFields = [],
+        painPoints = [],
       } = parsed.data;
 
       if (!phones || phones.length === 0) {
@@ -79,6 +82,17 @@ export const whatsappController = {
       const safeMax = Math.max(safeMin, Math.min(3600, Number(intervalMaxSeconds) || 60));
       const safePromptBase = typeof promptBase === 'string' ? promptBase.trim() : '';
       const safeManualMessage = typeof manualMessage === 'string' ? manualMessage.trim() : '';
+      const safePersonalizationEnabled = Boolean(personalizationEnabled);
+      const safePersonalizationFields = Array.from(new Set(
+        (Array.isArray(personalizationFields) ? personalizationFields : [])
+          .filter((field): field is 'name' | 'city' | 'niche' | 'pain_points' =>
+            field === 'name' || field === 'city' || field === 'niche' || field === 'pain_points'),
+      ));
+      const safePainPoints = Array.from(new Set(
+        (Array.isArray(painPoints) ? painPoints : [])
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean),
+      ));
 
       if (messageMode === 'ai' && !safePromptBase) {
         res.status(400).json({ error: 'Prompt da IA é obrigatório no modo IA.' });
@@ -87,6 +101,21 @@ export const whatsappController = {
 
       if (messageMode === 'manual' && !safeManualMessage) {
         res.status(400).json({ error: 'Mensagem fixa é obrigatória no modo manual.' });
+        return;
+      }
+
+      if (messageMode === 'manual' && safePersonalizationEnabled) {
+        res.status(400).json({ error: 'Personalização por lead está disponível apenas no modo IA.' });
+        return;
+      }
+
+      if (safePersonalizationEnabled && safePersonalizationFields.length === 0) {
+        res.status(400).json({ error: 'Selecione ao menos um campo de personalização.' });
+        return;
+      }
+
+      if (safePersonalizationEnabled && safePersonalizationFields.includes('pain_points') && safePainPoints.length === 0) {
+        res.status(400).json({ error: 'Informe ao menos uma dor para incluir no prompt.' });
         return;
       }
 
@@ -111,6 +140,9 @@ export const whatsappController = {
         intervalMaxSeconds: safeMax,
         promptBase: messageMode === 'ai' ? safePromptBase : undefined,
         manualMessage: messageMode === 'manual' ? safeManualMessage : undefined,
+        personalizationEnabled: messageMode === 'ai' ? safePersonalizationEnabled : false,
+        personalizationFields: messageMode === 'ai' ? safePersonalizationFields : [],
+        painPoints: messageMode === 'ai' ? safePainPoints : [],
       });
 
       await enqueueWhatsAppBlastJob({ tenantId, runId: blastId });

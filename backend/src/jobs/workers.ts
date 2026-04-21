@@ -7,9 +7,11 @@ import { evolutionService } from '../services/evolution.service';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { contactMessagesRepository } from '../modules/contacts/contact-messages.repository';
 import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
+import { leadsRepository } from '../modules/leads/leads.repository';
 import { subscriptionService } from '../modules/subscriptions/subscription.service';
 import { billingService } from '../modules/subscriptions/billing.service';
 import { calculateCreditsFromTokens, calculateCreditsFromChars } from '../modules/subscriptions/ai-credits';
+import type { Lead } from '../types/leads.types';
 import type { WebhookJobPayload } from './queues';
 import { webhookEventsRepository } from '../modules/webhooks/webhook-events.repository';
 import { webhookProcessorService } from '../modules/webhooks/webhook-processor.service';
@@ -122,6 +124,72 @@ function buildPhoneKeys(value: string): string[] {
   return normalized.startsWith('55') && normalized.length > 11 ? [normalized, normalized.slice(2)] : [normalized];
 }
 
+type PersonalizationField = 'name' | 'city' | 'niche' | 'pain_points';
+
+function parsePersonalizationFields(fields: string[]): PersonalizationField[] {
+  const valid = fields.filter((field): field is PersonalizationField => (
+    field === 'name' || field === 'city' || field === 'niche' || field === 'pain_points'
+  ));
+  return Array.from(new Set(valid));
+}
+
+function resolveLeadByItem(item: OutboundRunItem, leadMap: Map<string, Lead>): Lead | null {
+  const keys = buildPhoneKeys(item.target);
+  for (const key of keys) {
+    const lead = leadMap.get(key);
+    if (lead) return lead;
+  }
+  return null;
+}
+
+function pickPainPoint(painPoints: string[], batchIndex: number, itemIndex: number): string | null {
+  if (painPoints.length === 0) return null;
+  return painPoints[(batchIndex + itemIndex) % painPoints.length] || null;
+}
+
+function buildPersonalizedPrompt(params: {
+  basePrompt: string;
+  fields: PersonalizationField[];
+  lead: Lead | null;
+  painPoint: string | null;
+}): string {
+  const basePrompt = params.basePrompt.trim();
+  const lead = params.lead;
+  const blocks: string[] = [];
+
+  if (params.fields.includes('name')) {
+    if (lead?.name) {
+      blocks.push(`NOME_BRUTO_MAPS: ${lead.name}`);
+      blocks.push('REGRA_DE_SAUDACAO: Se for nome de pessoa, cumprimente com "Olá, <primeiro_nome>". Se for empresa/marca, use "Olá, Equipe da <nome>".');
+    } else {
+      blocks.push('REGRA_DE_SAUDACAO: Sem nome confiável. Use saudação neutra e curta.');
+    }
+  }
+
+  if (params.fields.includes('city') && lead?.city) {
+    blocks.push(`CIDADE: ${lead.city}`);
+  }
+
+  if (params.fields.includes('niche') && lead?.niche) {
+    blocks.push(`NICHO: ${lead.niche}`);
+  }
+
+  if (params.fields.includes('pain_points') && params.painPoint) {
+    blocks.push(`DOR_PRINCIPAL_DO_LEAD: ${params.painPoint}`);
+  }
+
+  if (blocks.length === 0) {
+    return basePrompt;
+  }
+
+  return [
+    basePrompt,
+    'CONTEXTUALIZACAO_POR_LEAD:',
+    ...blocks,
+    'INSTRUCAO_FINAL: Consolide os dados acima em uma mensagem curta de primeira abordagem para WhatsApp. Responda apenas com a mensagem final.',
+  ].join('\n');
+}
+
 async function updateContactMessage(tenantId: string, item: OutboundRunItem): Promise<void> {
   if (!item.message) return;
   const sentAt = new Date().toISOString();
@@ -206,6 +274,9 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
 
   const messageMode = run.messageMode === 'manual' ? 'manual' : 'ai';
   const manualMessage = (run.manualMessage || '').trim();
+  const personalizationEnabled = messageMode === 'ai' && Boolean(run.personalizationEnabled);
+  const personalizationFields = parsePersonalizationFields(run.personalizationFields || []);
+  const painPoints = (run.painPoints || []).map((item) => item.trim()).filter(Boolean);
 
   if (messageMode === 'manual' && !manualMessage) {
     await outboundRunsRepository.setFailure(tenantId, runId, 'Mensagem manual inválida para disparo.');
@@ -222,6 +293,10 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
     }
   }
 
+  const leadMap = personalizationEnabled
+    ? await leadsRepository.getByNormalizedPhones(tenantId, eligibleItems.map((item) => item.target))
+    : new Map<string, Lead>();
+
   const totalBatches = Math.ceil(eligibleItems.length / run.batchSize);
   for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
     if (await outboundRunsRepository.isCancelRequested(tenantId, runId)) {
@@ -231,70 +306,82 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
 
     const batch = eligibleItems.slice(batchIndex * run.batchSize, batchIndex * run.batchSize + run.batchSize);
 
-    let batchMessage = '';
-    if (messageMode === 'ai') {
-      // Check credits before each DeepSeek call (prevents over-spend during long blasts)
-      const batchCreditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
-      if (!batchCreditCheck.allowed) {
-        await outboundRunsRepository.setFailure(tenantId, runId,
-          'Créditos de IA insuficientes para continuar o disparo.');
-        return;
-      }
-
-      let creditsUsed = 0;
-      try {
-        const result = await deepseekService.generateWhatsAppMessage(run.promptBase, {
-          tenantId,
-          source: 'blast',
-        });
-        batchMessage = result.message;
-        creditsUsed = result.tokensUsed > 0
-          ? calculateCreditsFromTokens(result.tokensUsed)
-          : calculateCreditsFromChars(run.promptBase?.length ?? 0, batchMessage.length);
-      } catch (err: any) {
-        // AI failed — do NOT deduct credits
-        await outboundRunsRepository.setFailure(tenantId, runId, err.message || 'Erro ao gerar mensagem');
-        return;
-      }
-
-      const aiConsumption = await billingService.consume({
-        tenantId,
-        type: 'AI',
-        amount: creditsUsed,
-        idempotencyKey: `billing:ai:${tenantId}:${runId}:batch:${batchIndex + 1}`,
-        metadata: {
-          runId,
-          batch: batchIndex + 1,
-          creditsUsed,
-        },
-      });
-
-      if (!aiConsumption.consumed) {
-        await outboundRunsRepository.setFailure(tenantId, runId,
-          'Créditos de IA insuficientes para continuar o disparo.');
-        return;
-      }
-    } else {
-      batchMessage = manualMessage;
-    }
-
-    await outboundRunsRepository.setCurrentBatch(tenantId, runId, batchIndex + 1, batchMessage);
+    await outboundRunsRepository.setCurrentBatch(tenantId, runId, batchIndex + 1);
 
     for (let index = 0; index < batch.length; index++) {
       const item = batch[index];
+      let messageForItem = manualMessage;
       if (await outboundRunsRepository.isCancelRequested(tenantId, runId)) {
         await outboundRunsRepository.finalize(tenantId, runId, 'cancelled');
         return;
       }
 
-      await outboundRunsRepository.updateItem(tenantId, runId, item.target, 'sending', { message: batchMessage });
-      const result = await evolutionService.sendMessage(instanceName, item.target, batchMessage);
+      if (messageMode === 'ai') {
+        const batchCreditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
+        if (!batchCreditCheck.allowed) {
+          await outboundRunsRepository.setFailure(tenantId, runId,
+            'Créditos de IA insuficientes para continuar o disparo.');
+          return;
+        }
+
+        const lead = personalizationEnabled ? resolveLeadByItem(item, leadMap) : null;
+        const painPoint = personalizationEnabled && personalizationFields.includes('pain_points')
+          ? pickPainPoint(painPoints, batchIndex, index)
+          : null;
+        const promptForItem = personalizationEnabled
+          ? buildPersonalizedPrompt({
+            basePrompt: run.promptBase || '',
+            fields: personalizationFields,
+            lead,
+            painPoint,
+          })
+          : (run.promptBase || '');
+
+        let creditsUsed = 0;
+        try {
+          const result = await deepseekService.generateWhatsAppMessage(promptForItem, {
+            tenantId,
+            source: 'blast',
+          });
+          messageForItem = result.message;
+          creditsUsed = result.tokensUsed > 0
+            ? calculateCreditsFromTokens(result.tokensUsed)
+            : calculateCreditsFromChars(promptForItem.length, messageForItem.length);
+        } catch (err: any) {
+          await outboundRunsRepository.setFailure(tenantId, runId, err.message || 'Erro ao gerar mensagem');
+          return;
+        }
+
+        const aiConsumption = await billingService.consume({
+          tenantId,
+          type: 'AI',
+          amount: creditsUsed,
+          idempotencyKey: `billing:ai:${tenantId}:${runId}:batch:${batchIndex + 1}:item:${item.id}`,
+          metadata: {
+            runId,
+            batch: batchIndex + 1,
+            itemId: item.id,
+            creditsUsed,
+          },
+        });
+
+        if (!aiConsumption.consumed) {
+          await outboundRunsRepository.setFailure(tenantId, runId,
+            'Créditos de IA insuficientes para continuar o disparo.');
+          return;
+        }
+
+        await outboundRunsRepository.setCurrentBatch(tenantId, runId, batchIndex + 1, messageForItem);
+      }
+
+      await outboundRunsRepository.updateItem(tenantId, runId, item.target, 'sending', { message: messageForItem });
+      const result = await evolutionService.sendMessage(instanceName, item.target, messageForItem);
       await outboundRunsRepository.updateItem(
         tenantId,
         runId,
         item.target,
         result.success ? 'sent' : 'failed',
-        { error: result.error, message: batchMessage },
+        { error: result.error, message: messageForItem },
       );
 
       if (result.success) {
@@ -314,7 +401,7 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
       await outboundRunsRepository.refreshSummary(tenantId, runId);
 
       if (result.success) {
-        await updateContactMessage(tenantId, { ...item, message: batchMessage, status: 'sent', updatedAt: new Date().toISOString() });
+        await updateContactMessage(tenantId, { ...item, message: messageForItem, status: 'sent', updatedAt: new Date().toISOString() });
       } else if (result.error?.includes('401')) {
         // Instance disconnected mid-blast
         await waInstanceRepository.updateStatus(instanceName, 'disconnected');

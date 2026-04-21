@@ -7,6 +7,9 @@ export interface WaBlastConfig {
   messageMode: 'ai' | 'manual';
   promptBase?: string;
   manualMessage?: string;
+  personalizationEnabled?: boolean;
+  personalizationFields?: Array<'name' | 'city' | 'niche' | 'pain_points'>;
+  painPoints?: string[];
 }
 
 export const whatsappAPI = {

@@ -21,6 +21,7 @@ interface BlastSummary { sent: number; failed: number; total: number }
 interface Countdown { remaining: number; total: number }
 interface BatchInfo { current: number; total: number; count: number }
 interface SavedPrompt { id: string; name: string; content: string }
+type PersonalizationField = 'name' | 'city' | 'niche' | 'pain_points';
 const DEFAULT_PROMPT_BASE = 'Crie uma primeira mensagem curta e cordial para prospecção no WhatsApp.';
 
 const STATUS_STYLE: Record<JobStatus, { badge: string; text: string; label: string; icon: React.ReactNode }> = {
@@ -111,6 +112,9 @@ export function WhatsAppBlastPage() {
   const [promptName, setPromptName] = useState('');
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState('');
+  const [personalizationEnabled, setPersonalizationEnabled] = useState(false);
+  const [personalizationFields, setPersonalizationFields] = useState<PersonalizationField[]>([]);
+  const [painPointsInput, setPainPointsInput] = useState('');
   const [testingPrompt, setTestingPrompt] = useState(false);
   const [promptTestMessages, setPromptTestMessages] = useState<string[]>([]);
   const [promptTestError, setPromptTestError] = useState<string | null>(null);
@@ -224,6 +228,14 @@ export function WhatsAppBlastPage() {
     if (!selectedPromptId) return;
     setSavedPrompts((prev) => prev.filter((prompt) => prompt.id !== selectedPromptId));
     setSelectedPromptId('');
+  };
+
+  const togglePersonalizationField = (field: PersonalizationField) => {
+    setPersonalizationFields((prev) => (
+      prev.includes(field)
+        ? prev.filter((item) => item !== field)
+        : [...prev, field]
+    ));
   };
 
   const handleTestPrompt = async () => {
@@ -399,6 +411,26 @@ export function WhatsAppBlastPage() {
       return;
     }
 
+    const normalizedPainPoints = painPointsInput
+      .split(/\r?\n|,|;/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (messageMode === 'ai' && personalizationEnabled && personalizationFields.length === 0) {
+      alert('Selecione ao menos um campo para personalização por lead.');
+      return;
+    }
+
+    if (
+      messageMode === 'ai'
+      && personalizationEnabled
+      && personalizationFields.includes('pain_points')
+      && normalizedPainPoints.length === 0
+    ) {
+      alert('Digite ao menos uma dor para incluir na personalização.');
+      return;
+    }
+
     startRequestRef.current = true;
     setStarting(true);
     try {
@@ -409,6 +441,11 @@ export function WhatsAppBlastPage() {
         messageMode,
         promptBase: messageMode === 'ai' ? normalizedPromptBase : undefined,
         manualMessage: messageMode === 'manual' ? normalizedManualMessage : undefined,
+        personalizationEnabled: messageMode === 'ai' ? personalizationEnabled : false,
+        personalizationFields: messageMode === 'ai' ? personalizationFields : [],
+        painPoints: messageMode === 'ai' && personalizationEnabled && personalizationFields.includes('pain_points')
+          ? normalizedPainPoints
+          : [],
       });
       const { blastId } = data;
       setQueue(phones.map((phone) => ({ phone, status: 'pending' })));
@@ -758,6 +795,80 @@ export function WhatsAppBlastPage() {
                       placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
                   />
 
+                  <div className="mt-3 rounded-xl border border-violet-400/20 bg-surface-secondary/70 px-3 py-3 space-y-3">
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold text-violet-200 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={personalizationEnabled}
+                        onChange={(e) => {
+                          const enabled = e.target.checked;
+                          setPersonalizationEnabled(enabled);
+                          if (!enabled) {
+                            setPersonalizationFields([]);
+                            setPainPointsInput('');
+                          }
+                        }}
+                        className="rounded border-violet-300/40 bg-surface-secondary"
+                      />
+                      Personalização por lead
+                    </label>
+
+                    {personalizationEnabled && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] text-violet-200/90">Selecione o que incluir no prompt:</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <label className="inline-flex items-center gap-2 text-xs text-violet-100 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={personalizationFields.includes('niche')}
+                              onChange={() => togglePersonalizationField('niche')}
+                              className="rounded border-violet-300/40 bg-surface-secondary"
+                            />
+                            Nicho
+                          </label>
+                          <label className="inline-flex items-center gap-2 text-xs text-violet-100 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={personalizationFields.includes('city')}
+                              onChange={() => togglePersonalizationField('city')}
+                              className="rounded border-violet-300/40 bg-surface-secondary"
+                            />
+                            Cidade
+                          </label>
+                          <label className="inline-flex items-center gap-2 text-xs text-violet-100 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={personalizationFields.includes('name')}
+                              onChange={() => togglePersonalizationField('name')}
+                              className="rounded border-violet-300/40 bg-surface-secondary"
+                            />
+                            Nome da empresa/pessoa
+                          </label>
+                          <label className="inline-flex items-center gap-2 text-xs text-violet-100 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={personalizationFields.includes('pain_points')}
+                              onChange={() => togglePersonalizationField('pain_points')}
+                              className="rounded border-violet-300/40 bg-surface-secondary"
+                            />
+                            Dores
+                          </label>
+                        </div>
+
+                        {personalizationFields.includes('pain_points') && (
+                          <textarea
+                            rows={3}
+                            value={painPointsInput}
+                            onChange={(e) => setPainPointsInput(e.target.value)}
+                            placeholder="Digite as dores (uma por linha ou separadas por vírgula)"
+                            className="w-full px-3 py-2 bg-surface border border-violet-400/20 rounded-xl text-sm text-text-primary resize-none
+                              placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-violet-300/50 focus:border-violet-400 transition-all"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Button type="button" onClick={handleTestPrompt} variant="secondary" disabled={testingPrompt || !promptBase.trim()}>
                       {testingPrompt ? 'Testando...' : 'Testar prompt'}
@@ -800,7 +911,8 @@ export function WhatsAppBlastPage() {
                       type="number" min={1} max={50} value={batchSize}
                       onChange={(e) => setBatchSize(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
                       className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
-                        focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                        focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all
+                        [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     <span className="text-xs text-brand-400">máx. 50</span>
                   </div>
@@ -816,7 +928,8 @@ export function WhatsAppBlastPage() {
                       if (v > intervalMax) setIntervalMax(v);
                     }}
                     className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
-                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all
+                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <span className="text-xs text-brand-400">seg</span>
                 </div>
@@ -831,7 +944,8 @@ export function WhatsAppBlastPage() {
                       setIntervalMax(v);
                     }}
                     className="w-24 px-4 py-2.5 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
-                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                      focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all
+                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <span className="text-xs text-brand-400">seg</span>
                 </div>

@@ -7,8 +7,9 @@ import type { AuthUser } from '../features/auth/auth.api';
 export function HomePage() {
   const navigate = useNavigate();
   const { user } = useOutletContext<{ user: AuthUser }>();
-  const { subscription } = useSubscription();
+  const { subscription, loading } = useSubscription();
   const hasActiveSubscription = subscription?.status === 'active';
+  const subscriptionResolved = !loading;
   const firstName = useMemo(() => user.displayName.trim().split(/\s+/)[0] || 'Usuário', [user.displayName]);
 
   const cards = [
@@ -77,7 +78,7 @@ export function HomePage() {
         <section className="overflow-x-auto pt-3 pb-3">
           <div className="min-w-[1020px] grid grid-cols-4 gap-4 px-1">
             {cards.map((card) => {
-              const isLocked = card.requiresSubscription && !hasActiveSubscription;
+              const isLocked = card.requiresSubscription && subscriptionResolved && !hasActiveSubscription;
 
               return (
                 <div

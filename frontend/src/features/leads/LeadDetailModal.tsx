@@ -69,7 +69,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
                 </span>
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-text-primary">{lead.name}</h3>
+                <h3 className="text-lg font-bold text-slate-100">{lead.name}</h3>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold border ${STATUS_COLORS[lead.status] ?? STATUS_COLORS['new']}`}>
                     {STATUS_LABELS[lead.status] ?? STATUS_LABELS['new']}
@@ -105,8 +105,8 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
           {/* Address */}
           {lead.address && (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest">Endereço</h4>
-              <p className="text-sm text-text-primary bg-surface-secondary rounded-xl px-3 py-2 border border-border-light leading-relaxed">
+              <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-widest">Endereço</h4>
+              <p className="text-sm text-slate-100 bg-slate-800/70 rounded-xl px-3 py-2 border border-slate-600/35 leading-relaxed">
                 {lead.address}
               </p>
             </div>
@@ -115,7 +115,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
           {/* Links */}
           {lead.website && (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest">Website</h4>
+              <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-widest">Website</h4>
               <div className="space-y-1.5">
                 <LinkRow label={safeHostname(lead.website)} href={lead.website} />
               </div>
@@ -125,7 +125,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
           {/* Contact info */}
           {(lead.phone || lead.email1 || lead.email2) && (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest">Contato</h4>
+              <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-widest">Contato</h4>
               <div className="space-y-1.5">
                 {lead.phone && (
                   <div className="flex items-center gap-2.5 bg-green-50 rounded-xl px-3 py-2">
@@ -211,9 +211,9 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
 
 function InfoField({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-xl px-3 py-2 border ${highlight ? 'bg-red-500/12 border-red-400/35' : 'bg-surface-secondary border-border-light'}`}>
-      <p className="text-[10px] text-text-secondary uppercase tracking-wide font-semibold">{label}</p>
-      <p className={`text-sm font-medium mt-0.5 ${highlight ? 'text-red-200' : 'text-text-primary'}`}>{value || '—'}</p>
+    <div className={`rounded-xl px-3 py-2 border ${highlight ? 'bg-red-500/12 border-red-400/35' : 'bg-slate-800/70 border-slate-600/35'}`}>
+      <p className="text-[10px] text-slate-300 uppercase tracking-wide font-semibold">{label}</p>
+      <p className={`text-sm font-medium mt-0.5 ${highlight ? 'text-red-200' : 'text-slate-100'}`}>{value || '—'}</p>
     </div>
   );
 }

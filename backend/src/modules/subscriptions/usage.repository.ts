@@ -90,4 +90,20 @@ export const usageRepository = {
   async deductAiCredits(userId: string, amount: number, limit: number | null): Promise<boolean> {
     return this.consumeFeatureUsage(userId, 'ai_credits_used', amount, limit);
   },
+
+  /**
+   * Refund previously reserved/consumed usage atomically.
+   * This is used by orchestrators to rollback failed actions.
+   */
+  async releaseFeatureUsage(userId: string, column: UsageColumn, amount: number): Promise<void> {
+    if (amount <= 0) return;
+
+    await query(
+      `UPDATE subscription_usage
+       SET ${column} = GREATEST(0, ${column} - $2)
+       WHERE user_id = $1
+         AND month = date_trunc('month', CURRENT_DATE)::date`,
+      [userId, amount],
+    );
+  },
 };

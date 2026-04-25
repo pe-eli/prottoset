@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { subscriptionsAPI, type PublicPlan } from '../features/subscriptions/subscriptions.api';
-import { useSubscription } from '../contexts/SubscriptionContext';
+import { useSubscription } from '../contexts/useSubscription';
+
+interface ApiErrorPayload {
+  error?: string;
+}
 
 const CheckIcon = () => (
   <svg className="w-4 h-4 text-mint flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -62,9 +67,10 @@ export function PricingPage() {
       setCheckoutLoading(planId);
       setError(null);
       const { data } = await subscriptionsAPI.checkout(planId);
-      window.location.href = data.url;
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao iniciar checkout');
+      window.location.assign(data.url);
+    } catch (err: unknown) {
+      const apiError = isAxiosError<ApiErrorPayload>(err) ? err.response?.data?.error : undefined;
+      setError(apiError || 'Erro ao iniciar checkout');
       setCheckoutLoading(null);
     }
   };

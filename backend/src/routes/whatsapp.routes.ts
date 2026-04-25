@@ -5,6 +5,7 @@ import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
 import { enforceQuota } from '../middleware/quota.middleware';
 import { requireActiveSubscription } from '../middleware/subscription.middleware';
 import { requireConnectedWhatsApp } from '../middleware/whatsapp-connected.middleware';
+import { requireVerifiedAccount } from '../middleware/verified-account.middleware';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.post('/disconnect', waInstanceController.disconnect);
 router.post(
 	'/prompt/test',
 	blastLimiter,
+	requireVerifiedAccount(),
 	requireActiveSubscription('whatsapp'),
 	whatsappController.testPrompt,
 );
@@ -31,6 +33,7 @@ router.post(
 router.post(
 	'/blast',
 	blastLimiter,
+	requireVerifiedAccount(),
 	requireActiveSubscription('whatsapp'),
 	enforceQuota({ quotaKey: 'whatsapp_blasts_daily', message: 'Cota diária de blasts WhatsApp atingida.', cost: 1 }),
 	requireConnectedWhatsApp(),

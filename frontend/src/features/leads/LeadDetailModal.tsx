@@ -52,9 +52,9 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
       <div className="relative bg-surface rounded-2xl shadow-2xl shadow-brand-500/10 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slide-up border border-border-light">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+          className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-surface-elevated hover:bg-brand-700/60 border border-border-light flex items-center justify-center transition-colors"
         >
-          <svg className="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -69,7 +69,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
                 </span>
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-brand-950">{lead.name}</h3>
+                <h3 className="text-lg font-bold text-text-primary">{lead.name}</h3>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold border ${STATUS_COLORS[lead.status] ?? STATUS_COLORS['new']}`}>
                     {STATUS_LABELS[lead.status] ?? STATUS_LABELS['new']}
@@ -78,7 +78,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
                     {priority.label}
                   </span>
                   {lead.rating > 0 && (
-                    <span className="inline-flex items-center gap-0.5 text-xs text-amber-500 font-medium">
+                    <span className="inline-flex items-center gap-0.5 text-xs text-amber-300 font-medium">
                       <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
@@ -105,8 +105,8 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
           {/* Address */}
           {lead.address && (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Endereço</h4>
-              <p className="text-sm text-brand-900 bg-surface-secondary rounded-xl px-3 py-2 border border-border-light">
+              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest">Endereço</h4>
+              <p className="text-sm text-text-primary bg-surface-secondary rounded-xl px-3 py-2 border border-border-light leading-relaxed">
                 {lead.address}
               </p>
             </div>
@@ -115,7 +115,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
           {/* Links */}
           {lead.website && (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Website</h4>
+              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest">Website</h4>
               <div className="space-y-1.5">
                 <LinkRow label={safeHostname(lead.website)} href={lead.website} />
               </div>
@@ -125,7 +125,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
           {/* Contact info */}
           {(lead.phone || lead.email1 || lead.email2) && (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-brand-400 uppercase tracking-widest">Contato</h4>
+              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest">Contato</h4>
               <div className="space-y-1.5">
                 {lead.phone && (
                   <div className="flex items-center gap-2.5 bg-green-50 rounded-xl px-3 py-2">
@@ -181,7 +181,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
             {lead.status !== 'ignored' && lead.status !== 'converted' && (
               <button
                 onClick={() => onStatusChange(lead.id, 'ignored')}
-                className="text-sm px-4 py-2.5 rounded-xl border border-border text-brand-400 hover:bg-brand-50 transition-colors font-medium"
+                className="text-sm px-4 py-2.5 rounded-xl border border-border-light text-text-secondary hover:bg-surface-secondary transition-colors font-medium"
               >
                 Ignorar
               </button>
@@ -191,7 +191,7 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
                 onDelete(lead.id);
                 onClose();
               }}
-              className="text-sm px-4 py-2.5 rounded-xl border border-red-200 text-red-400 hover:bg-red-50 transition-colors font-medium"
+              className="text-sm px-4 py-2.5 rounded-xl border border-red-400/40 text-red-300 hover:bg-red-500/12 transition-colors font-medium"
             >
               Excluir
             </button>
@@ -211,9 +211,9 @@ export function LeadDetailModal({ lead, onClose, onStatusChange, onDelete }: Lea
 
 function InfoField({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-xl px-3 py-2 border ${highlight ? 'bg-red-50/50 border-red-200' : 'bg-surface-secondary border-border-light'}`}>
-      <p className="text-[10px] text-brand-300 uppercase tracking-wide font-semibold">{label}</p>
-      <p className={`text-sm font-medium mt-0.5 ${highlight ? 'text-red-600' : 'text-brand-900'}`}>{value || '—'}</p>
+    <div className={`rounded-xl px-3 py-2 border ${highlight ? 'bg-red-500/12 border-red-400/35' : 'bg-surface-secondary border-border-light'}`}>
+      <p className="text-[10px] text-text-secondary uppercase tracking-wide font-semibold">{label}</p>
+      <p className={`text-sm font-medium mt-0.5 ${highlight ? 'text-red-200' : 'text-text-primary'}`}>{value || '—'}</p>
     </div>
   );
 }
@@ -232,13 +232,13 @@ function LinkRow({ label, href }: { label: string; href: string }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-2.5 bg-surface-secondary hover:bg-brand-50/50 rounded-xl px-3 py-2 transition-colors group border border-border-light"
+      className="flex items-center gap-2.5 bg-surface-secondary hover:bg-surface-elevated rounded-xl px-3 py-2 transition-colors group border border-border-light"
     >
-      <svg className="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 text-blue-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
       </svg>
-      <span className="text-sm font-medium text-blue-600 group-hover:underline truncate">{label}</span>
-      <svg className="w-3 h-3 text-brand-300 ml-auto shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <span className="text-sm font-medium text-blue-200 group-hover:underline truncate">{label}</span>
+      <svg className="w-3 h-3 text-text-secondary ml-auto shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
       </svg>
     </a>

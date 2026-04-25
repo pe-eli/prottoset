@@ -46,7 +46,7 @@ export const webhookSecurityService = {
   }): SignatureValidationResult {
     const secret = params.secret?.trim();
     if (!secret) {
-      return { valid: true };
+      return { valid: false, reason: 'missing_webhook_secret' };
     }
 
     if (!params.signatureHeader) {

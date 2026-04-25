@@ -33,8 +33,8 @@ export interface BlastConfig {
   batchSize: number;
   intervalMinSeconds: number;
   intervalMaxSeconds: number;
-  resendApiKey: string;
-  resendFrom: string;
+  resendApiKey?: string;
+  resendFrom?: string;
 }
 
 export const contactsAPI = {

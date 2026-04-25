@@ -53,6 +53,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
+  ALTER TYPE outbound_run_status ADD VALUE IF NOT EXISTS 'retrying';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
   CREATE TYPE outbound_item_status AS ENUM ('pending','sending','sent','failed','skipped');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
@@ -473,6 +477,17 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 CREATE INDEX IF NOT EXISTS idx_webhook_events_provider_status
   ON webhook_events (provider, status, received_at DESC);
 
+CREATE TABLE IF NOT EXISTS processed_webhooks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (provider, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_processed_webhooks_provider_processed
+  ON processed_webhooks (provider, processed_at DESC);
+
 CREATE TABLE IF NOT EXISTS webhook_nonces (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   provider TEXT NOT NULL,
@@ -505,6 +520,80 @@ CREATE INDEX IF NOT EXISTS idx_billing_consumptions_tenant_created
 
 CREATE INDEX IF NOT EXISTS idx_billing_consumptions_status
   ON billing_consumptions (status, created_at DESC);
+
+-- ─── CREDIT LEDGER (transactional reservations/commits/refunds) ───
+CREATE TABLE IF NOT EXISTS credit_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  feature TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  status TEXT NOT NULL CHECK (status IN ('PENDING', 'COMMITTED', 'FAILED', 'REFUNDED')),
+  idempotency_key TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  failure_reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  committed_at TIMESTAMPTZ,
+  refunded_at TIMESTAMPTZ,
+  UNIQUE (idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_tenant_created
+  ON credit_transactions (tenant_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_status
+  ON credit_transactions (status, created_at DESC);
+
+-- ─── INTEGRATION VAULT ───
+CREATE TABLE IF NOT EXISTS tenant_integrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  encrypted_secret TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, provider)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_integrations_provider
+  ON tenant_integrations (provider, updated_at DESC);
+
+-- ─── OUTBOX (transactional dispatch) ───
+CREATE TABLE IF NOT EXISTS outbox_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  topic TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'dispatched', 'failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  dispatched_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_events_status_available
+  ON outbox_events (status, available_at, created_at);
+
+-- ─── AUDIT LOGS ───
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id TEXT,
+  correlation_id TEXT,
+  status TEXT NOT NULL,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_created
+  ON audit_logs (tenant_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created
+  ON audit_logs (action, created_at DESC);
 
 -- ─── ANTI-FRAUD EVENTS / BLOCKS ───
 CREATE TABLE IF NOT EXISTS fraud_events (

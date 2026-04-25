@@ -205,16 +205,12 @@ export const evolutionService = {
   async setWebhook(instanceName: string): Promise<void> {
     const { apiUrl, apiKey } = getApiConfig();
     const webhookBaseUrl = normalizeApiUrl(process.env.EVOLUTION_WEBHOOK_URL);
-    const webhookToken = process.env.WEBHOOK_TOKEN?.trim();
 
     if (!webhookBaseUrl) {
       throw new Error('EVOLUTION_WEBHOOK_URL não configurada para setWebhook');
     }
-    if (!webhookToken) {
-      throw new Error('WEBHOOK_TOKEN não configurado para setWebhook');
-    }
 
-    const webhookUrl = `${webhookBaseUrl}/api/webhooks/evolution?token=${encodeURIComponent(webhookToken)}`;
+    const webhookUrl = `${webhookBaseUrl}/api/webhooks/evolution`;
     const events = ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'];
     const byEvents = true;
 

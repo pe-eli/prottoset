@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
+import { authConfig } from '../auth/auth.config';
 
 /**
  * Middleware to allow expensive operations (email blasts, WhatsApp blasts, etc.)
@@ -8,6 +9,11 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
  */
 export function requireVerifiedAccount(): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!authConfig.requireVerifiedAccountsForExpensiveActions()) {
+      next();
+      return;
+    }
+
     const authUser = req.authUser;
     if (!authUser) {
       res.status(401).json({ error: 'Não autenticado' });

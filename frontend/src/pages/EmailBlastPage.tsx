@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { TextArea } from '../components/ui/TextArea';
 import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
-import { useSubscription } from '../contexts/SubscriptionContext';
+import { useSubscription } from '../contexts/useSubscription';
 import { contactsAPI } from '../features/contacts/contacts.api';
 
 const DEFAULT_SUBJECT = 'Transforme sua presença digital — Closr';
@@ -48,6 +49,10 @@ interface BatchInfo {
   count: number;
 }
 
+interface ApiErrorPayload {
+  error?: string;
+}
+
 const STATUS_STYLE: Record<JobStatus, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
   pending: {
     bg: 'bg-brand-50 border-brand-100',
@@ -86,15 +91,12 @@ export function EmailBlastPage() {
   const { subscription } = useSubscription();
   const hasActiveSubscription = subscription?.status === 'active';
 
-  const savedResendApiKey = typeof window !== 'undefined' ? localStorage.getItem('closr.emailBlast.resendApiKey') || '' : '';
-  const savedResendFrom = typeof window !== 'undefined' ? localStorage.getItem('closr.emailBlast.resendFrom') || '' : '';
-
   const [emailInput, setEmailInput] = useState('');
   const [emails, setEmails] = useState<string[]>([]);
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
-  const [resendApiKey, setResendApiKey] = useState(savedResendApiKey);
-  const [resendFrom, setResendFrom] = useState(savedResendFrom);
+  const [resendApiKey, setResendApiKey] = useState('');
+  const [resendFrom, setResendFrom] = useState('');
 
   // Batch config
   const [batchSize, setBatchSize] = useState(10);
@@ -115,16 +117,6 @@ export function EmailBlastPage() {
   useEffect(() => {
     return () => { esRef.current?.close(); };
   }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('closr.emailBlast.resendApiKey', resendApiKey);
-  }, [resendApiKey]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('closr.emailBlast.resendFrom', resendFrom);
-  }, [resendFrom]);
 
   const totalBatches = Math.ceil(emails.length / batchSize);
 
@@ -148,23 +140,14 @@ export function EmailBlastPage() {
     const normalizedApiKey = resendApiKey.trim();
     const normalizedFrom = resendFrom.trim();
 
-    if (!normalizedApiKey) {
-      alert('Informe sua RESEND_API_KEY para iniciar o disparo.');
-      return;
-    }
-    if (!normalizedFrom) {
-      alert('Informe seu RESEND_FROM para iniciar o disparo.');
-      return;
-    }
-
     setStarting(true);
     try {
       const { data } = await contactsAPI.startBlast(emails, subject, body, {
         batchSize,
         intervalMinSeconds: intervalMin,
         intervalMaxSeconds: intervalMax,
-        resendApiKey: normalizedApiKey,
-        resendFrom: normalizedFrom,
+        resendApiKey: normalizedApiKey || undefined,
+        resendFrom: normalizedFrom || undefined,
       });
       const { blastId } = data;
 
@@ -219,8 +202,9 @@ export function EmailBlastPage() {
         es.close();
         esRef.current = null;
       };
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Erro ao iniciar disparo');
+    } catch (err: unknown) {
+      const apiError = isAxiosError<ApiErrorPayload>(err) ? err.response?.data?.error : undefined;
+      alert(apiError || 'Erro ao iniciar disparo');
     } finally {
       setStarting(false);
     }
@@ -418,7 +402,7 @@ export function EmailBlastPage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-text-primary">Credenciais do seu envio</h3>
-                <p className="text-xs text-text-secondary">Cada usuário envia com a própria conta do Resend</p>
+                <p className="text-xs text-text-secondary">Cada usuário envia com a própria conta do Resend. Campos vazios reutilizam o último valor salvo com segurança no servidor.</p>
               </div>
             </div>
 
@@ -462,7 +446,7 @@ export function EmailBlastPage() {
 
           <Button
             onClick={handleSend}
-            disabled={emails.length === 0 || !subject.trim() || !body.trim() || !resendApiKey.trim() || !resendFrom.trim() || starting}
+            disabled={emails.length === 0 || !subject.trim() || !body.trim() || starting}
             size="lg"
           >
             {starting ? (

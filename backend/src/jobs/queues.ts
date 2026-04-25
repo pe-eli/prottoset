@@ -4,7 +4,6 @@ import { getRedisClient } from '../infrastructure/redis';
 export interface BlastJobPayload {
   tenantId: string;
   runId: string;
-  resendApiKey?: string;
   resendFrom?: string;
 }
 

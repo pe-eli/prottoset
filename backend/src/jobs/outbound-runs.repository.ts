@@ -1,7 +1,9 @@
 import { tenantQuery } from '../db/pool';
+import { tenantTransaction } from '../db/pool';
+import { outboxRepository } from '../modules/outbox/outbox.repository';
 
 export type OutboundChannel = 'email' | 'whatsapp';
-export type OutboundRunStatus = 'queued' | 'validating' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type OutboundRunStatus = 'queued' | 'validating' | 'running' | 'retrying' | 'completed' | 'failed' | 'cancelled';
 export type OutboundItemStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'skipped';
 
 interface OutboundRunRow {
@@ -163,21 +165,40 @@ async function updateRun(tenantId: string, runId: string, updates: Record<string
 }
 
 export const outboundRunsRepository = {
-  async createEmailRun(tenantId: string, input: { runId: string; targets: string[]; subject: string; body: string; batchSize: number; intervalMinSeconds: number; intervalMaxSeconds: number }): Promise<void> {
-    await tenantQuery(
-      tenantId,
-      `INSERT INTO outbound_runs (id, tenant_id, channel, status, phase, subject, body, batch_size, interval_min_seconds, interval_max_seconds, total, total_batches)
-       VALUES ($1, $2, 'email', 'queued', 'queued', $3, $4, $5, $6, $7, $8, $9)`,
-      [input.runId, tenantId, input.subject, input.body, input.batchSize, input.intervalMinSeconds, input.intervalMaxSeconds, input.targets.length, Math.ceil(input.targets.length / input.batchSize)],
-    );
+  async createEmailRun(tenantId: string, input: {
+    runId: string;
+    targets: string[];
+    subject: string;
+    body: string;
+    resendFrom?: string;
+    batchSize: number;
+    intervalMinSeconds: number;
+    intervalMaxSeconds: number;
+  }): Promise<void> {
+    await tenantTransaction(tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO outbound_runs (id, tenant_id, channel, status, phase, subject, body, batch_size, interval_min_seconds, interval_max_seconds, total, total_batches)
+         VALUES ($1, $2, 'email', 'queued', 'queued', $3, $4, $5, $6, $7, $8, $9)`,
+        [input.runId, tenantId, input.subject, input.body, input.batchSize, input.intervalMinSeconds, input.intervalMaxSeconds, input.targets.length, Math.ceil(input.targets.length / input.batchSize)],
+      );
 
-    await Promise.all(input.targets.map((target) =>
-      tenantQuery(
+      await client.query(
+        `INSERT INTO outbound_run_items (run_id, tenant_id, target, status)
+         SELECT $1, $2, unnest($3::text[]), 'pending'::outbound_item_status
+         ON CONFLICT (run_id, target) DO NOTHING`,
+        [input.runId, tenantId, input.targets],
+      );
+
+      await outboxRepository.enqueueInTransaction(client, {
         tenantId,
-        `INSERT INTO outbound_run_items (run_id, tenant_id, target, status) VALUES ($1, $2, $3, 'pending')`,
-        [input.runId, tenantId, target],
-      ),
-    ));
+        topic: 'blast.email',
+        payload: {
+          tenantId,
+          runId: input.runId,
+          resendFrom: input.resendFrom || null,
+        },
+      });
+    });
   },
 
   async createWhatsAppRun(tenantId: string, input: {
@@ -193,38 +214,47 @@ export const outboundRunsRepository = {
     intervalMinSeconds: number;
     intervalMaxSeconds: number;
   }): Promise<void> {
-    await tenantQuery(
-      tenantId,
-      `INSERT INTO outbound_runs (
-        id, tenant_id, channel, status, phase, prompt_base, message_mode, manual_message,
-        personalization_enabled, personalization_fields, pain_points,
-        batch_size, interval_min_seconds, interval_max_seconds, total, total_batches
-      )
-       VALUES ($1, $2, 'whatsapp', 'queued', 'queued', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      [
-        input.runId,
-        tenantId,
-        input.promptBase || null,
-        input.messageMode,
-        input.manualMessage || null,
-        Boolean(input.personalizationEnabled),
-        input.personalizationFields || [],
-        input.painPoints || [],
-        input.batchSize,
-        input.intervalMinSeconds,
-        input.intervalMaxSeconds,
-        input.targets.length,
-        Math.ceil(input.targets.length / input.batchSize),
-      ],
-    );
+    await tenantTransaction(tenantId, async (client) => {
+      await client.query(
+        `INSERT INTO outbound_runs (
+          id, tenant_id, channel, status, phase, prompt_base, message_mode, manual_message,
+          personalization_enabled, personalization_fields, pain_points,
+          batch_size, interval_min_seconds, interval_max_seconds, total, total_batches
+        )
+         VALUES ($1, $2, 'whatsapp', 'queued', 'queued', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          input.runId,
+          tenantId,
+          input.promptBase || null,
+          input.messageMode,
+          input.manualMessage || null,
+          Boolean(input.personalizationEnabled),
+          input.personalizationFields || [],
+          input.painPoints || [],
+          input.batchSize,
+          input.intervalMinSeconds,
+          input.intervalMaxSeconds,
+          input.targets.length,
+          Math.ceil(input.targets.length / input.batchSize),
+        ],
+      );
 
-    await Promise.all(input.targets.map((target) =>
-      tenantQuery(
+      await client.query(
+        `INSERT INTO outbound_run_items (run_id, tenant_id, target, status)
+         SELECT $1, $2, unnest($3::text[]), 'pending'::outbound_item_status
+         ON CONFLICT (run_id, target) DO NOTHING`,
+        [input.runId, tenantId, input.targets],
+      );
+
+      await outboxRepository.enqueueInTransaction(client, {
         tenantId,
-        `INSERT INTO outbound_run_items (run_id, tenant_id, target, status) VALUES ($1, $2, $3, 'pending')`,
-        [input.runId, tenantId, target],
-      ),
-    ));
+        topic: 'blast.whatsapp',
+        payload: {
+          tenantId,
+          runId: input.runId,
+        },
+      });
+    });
   },
 
   async getRun(tenantId: string, runId: string): Promise<OutboundRun | null> {
@@ -250,8 +280,25 @@ export const outboundRunsRepository = {
   },
 
   async setPhase(tenantId: string, runId: string, phase: string, extra: Record<string, unknown> = {}): Promise<void> {
-    const status: OutboundRunStatus = phase === 'validating' ? 'validating' : 'running';
+    let status: OutboundRunStatus = 'running';
+    if (phase === 'validating') status = 'validating';
+    if (phase === 'retrying') status = 'retrying';
     await updateRun(tenantId, runId, { phase, status, ...extra });
+  },
+
+  async claimItemForSending(tenantId: string, runId: string, target: string): Promise<boolean> {
+    const { rowCount } = await tenantQuery(
+      tenantId,
+      `UPDATE outbound_run_items
+       SET status = 'sending'::outbound_item_status,
+           updated_at = now()
+       WHERE run_id = $1
+         AND target = $2
+         AND status = 'pending'::outbound_item_status`,
+      [runId, target],
+    );
+
+    return (rowCount ?? 0) > 0;
   },
 
   async setCurrentBatch(tenantId: string, runId: string, currentBatch: number, currentMessage?: string): Promise<void> {

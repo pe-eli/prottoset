@@ -58,17 +58,17 @@ export function LeadPipeline({ leads, onStatusChange }: LeadPipelineProps) {
             {/* Column header */}
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className={`w-2 h-2 rounded-full ${col.bg} border-2 ${col.color}`} />
-              <h4 className="text-xs font-semibold text-brand-500 uppercase tracking-wide">
+              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
                 {col.label}
               </h4>
-              <span className="text-xs text-brand-300 ml-auto">{columnLeads.length}</span>
+              <span className="text-xs text-text-muted ml-auto">{columnLeads.length}</span>
             </div>
 
             {/* Cards container */}
-            <div className="flex-1 space-y-2 min-h-[120px] bg-brand-50/30 rounded-2xl p-2 border border-dashed border-brand-100">
+            <div className="flex-1 space-y-2 min-h-[120px] bg-surface-secondary/50 rounded-2xl p-2 border border-dashed border-border">
               {columnLeads.length === 0 && (
                 <div className="flex items-center justify-center h-full min-h-[100px]">
-                  <p className="text-xs text-brand-200">Arraste leads aqui</p>
+                  <p className="text-xs text-text-muted">Arraste leads aqui</p>
                 </div>
               )}
               {columnLeads.map((lead) => (
@@ -87,19 +87,19 @@ export function LeadPipeline({ leads, onStatusChange }: LeadPipelineProps) {
                       href={lead.website}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm font-medium text-brand-950 hover:text-brand-600 transition-colors block truncate"
+                      className="text-sm font-medium text-text-primary hover:text-brand-300 transition-colors block truncate"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {lead.name}
                     </a>
                   ) : (
-                    <span className="text-sm font-medium text-brand-950 block truncate">
+                    <span className="text-sm font-medium text-text-primary block truncate">
                       {lead.name}
                     </span>
                   )}
                   <div className="flex items-center gap-2 mt-1.5">
                     {lead.neighborhood && (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-500 rounded-md font-medium truncate">
+                      <span className="text-[10px] px-1.5 py-0.5 bg-brand-500/15 text-brand-200 border border-brand-400/25 rounded-md font-medium truncate">
                         {lead.neighborhood}
                       </span>
                     )}

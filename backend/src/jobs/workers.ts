@@ -2,26 +2,27 @@ import { Worker } from 'bullmq';
 import { getRedisClient } from '../infrastructure/redis';
 import { outboundRunsRepository, OutboundRunItem } from './outbound-runs.repository';
 import { resendService } from '../services/resend.service';
-import { deepseekService } from '../services/deepseek.service';
 import { evolutionService } from '../services/evolution.service';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { contactMessagesRepository } from '../modules/contacts/contact-messages.repository';
 import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
 import { leadsRepository } from '../modules/leads/leads.repository';
-import { subscriptionService } from '../modules/subscriptions/subscription.service';
 import { billingService } from '../modules/subscriptions/billing.service';
-import { calculateCreditsFromTokens, calculateCreditsFromChars } from '../modules/subscriptions/ai-credits';
 import type { Lead } from '../types/leads.types';
-import type { WebhookJobPayload } from './queues';
+import type { BlastJobPayload, WebhookJobPayload } from './queues';
 import { webhookEventsRepository } from '../modules/webhooks/webhook-events.repository';
 import { webhookProcessorService } from '../modules/webhooks/webhook-processor.service';
-
-interface BlastJobPayload {
-  tenantId: string;
-  runId: string;
-  resendApiKey?: string;
-  resendFrom?: string;
-}
+import { aiOrchestrator } from '../modules/ai/ai-orchestrator.service';
+import { integrationVaultService } from '../modules/integrations/integration-vault.service';
+import { outboxDispatcherService, startOutboxDispatcherLoop } from '../modules/outbox/outbox-dispatcher.service';
+import {
+  buildPersonalizedPrompt,
+  buildPhoneKeys,
+  normalizePhone,
+  parsePersonalizationFields,
+  pickPainPoint,
+  resolveLeadByPhone,
+} from '../modules/whatsapp/personalization.utils';
 
 let workersStarted = false;
 
@@ -39,11 +40,23 @@ async function sleepWithCancel(tenantId: string, runId: string, seconds: number)
   return true;
 }
 
-async function processEmailBlast({ tenantId, runId, resendApiKey, resendFrom }: BlastJobPayload): Promise<void> {
+async function processEmailBlast({ tenantId, runId, resendFrom }: BlastJobPayload): Promise<void> {
   const run = await outboundRunsRepository.getRun(tenantId, runId);
   if (!run) return;
 
-  const items = await outboundRunsRepository.getItems(tenantId, runId);
+  const integration = await integrationVaultService.getSecret(tenantId, 'resend_api_key');
+  const integrationFrom = typeof integration?.metadata?.resendFrom === 'string'
+    ? integration.metadata.resendFrom.trim()
+    : '';
+  const runtimeResendFrom = (resendFrom || integrationFrom || '').trim() || undefined;
+  const runtimeResendApiKey = integration?.secret;
+
+  const items = (await outboundRunsRepository.getItems(tenantId, runId)).filter((item) => item.status === 'pending');
+  if (items.length === 0) {
+    await outboundRunsRepository.finalize(tenantId, runId, 'completed');
+    return;
+  }
+
   await outboundRunsRepository.markStarted(tenantId, runId, 'running');
 
   const totalBatches = Math.ceil(items.length / run.batchSize);
@@ -63,10 +76,14 @@ async function processEmailBlast({ tenantId, runId, resendApiKey, resendFrom }: 
         return;
       }
 
-      await outboundRunsRepository.updateItem(tenantId, runId, item.target, 'sending');
+      const claimed = await outboundRunsRepository.claimItemForSending(tenantId, runId, item.target);
+      if (!claimed) {
+        continue;
+      }
+
       const result = await resendService.sendEmail(item.target, run.subject || '', run.body || '', {
-        resendApiKey,
-        from: resendFrom,
+        resendApiKey: runtimeResendApiKey,
+        from: runtimeResendFrom,
       });
       await outboundRunsRepository.updateItem(
         tenantId,
@@ -90,8 +107,6 @@ async function processEmailBlast({ tenantId, runId, resendApiKey, resendFrom }: 
         });
       }
 
-      await outboundRunsRepository.refreshSummary(tenantId, runId);
-
       if (index < batch.length - 1) {
         const canContinue = await sleepWithCancel(tenantId, runId, randomDelay(run.intervalMinSeconds, run.intervalMaxSeconds));
         if (!canContinue) {
@@ -100,6 +115,8 @@ async function processEmailBlast({ tenantId, runId, resendApiKey, resendFrom }: 
         }
       }
     }
+
+    await outboundRunsRepository.refreshSummary(tenantId, runId);
 
     if (batchIndex < totalBatches - 1) {
       const canContinue = await sleepWithCancel(tenantId, runId, randomDelay(run.intervalMinSeconds, run.intervalMaxSeconds));
@@ -111,83 +128,6 @@ async function processEmailBlast({ tenantId, runId, resendApiKey, resendFrom }: 
   }
 
   await outboundRunsRepository.finalize(tenantId, runId, 'completed');
-}
-
-function normalizePhone(value: string): string {
-  const digits = value.replace(/\D/g, '');
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
-  return digits;
-}
-
-function buildPhoneKeys(value: string): string[] {
-  const normalized = normalizePhone(value);
-  return normalized.startsWith('55') && normalized.length > 11 ? [normalized, normalized.slice(2)] : [normalized];
-}
-
-type PersonalizationField = 'name' | 'city' | 'niche' | 'pain_points';
-
-function parsePersonalizationFields(fields: string[]): PersonalizationField[] {
-  const valid = fields.filter((field): field is PersonalizationField => (
-    field === 'name' || field === 'city' || field === 'niche' || field === 'pain_points'
-  ));
-  return Array.from(new Set(valid));
-}
-
-function resolveLeadByItem(item: OutboundRunItem, leadMap: Map<string, Lead>): Lead | null {
-  const keys = buildPhoneKeys(item.target);
-  for (const key of keys) {
-    const lead = leadMap.get(key);
-    if (lead) return lead;
-  }
-  return null;
-}
-
-function pickPainPoint(painPoints: string[], batchIndex: number, itemIndex: number): string | null {
-  if (painPoints.length === 0) return null;
-  return painPoints[(batchIndex + itemIndex) % painPoints.length] || null;
-}
-
-function buildPersonalizedPrompt(params: {
-  basePrompt: string;
-  fields: PersonalizationField[];
-  lead: Lead | null;
-  painPoint: string | null;
-}): string {
-  const basePrompt = params.basePrompt.trim();
-  const lead = params.lead;
-  const blocks: string[] = [];
-
-  if (params.fields.includes('name')) {
-    if (lead?.name) {
-      blocks.push(`NOME_BRUTO_MAPS: ${lead.name}`);
-      blocks.push('REGRA_DE_SAUDACAO: Se for nome de pessoa, cumprimente com "Olá, <primeiro_nome>". Se for empresa/marca, use "Olá, Equipe da <nome>".');
-    } else {
-      blocks.push('REGRA_DE_SAUDACAO: Sem nome confiável. Use saudação neutra e curta.');
-    }
-  }
-
-  if (params.fields.includes('city') && lead?.city) {
-    blocks.push(`CIDADE: ${lead.city}`);
-  }
-
-  if (params.fields.includes('niche') && lead?.niche) {
-    blocks.push(`NICHO: ${lead.niche}`);
-  }
-
-  if (params.fields.includes('pain_points') && params.painPoint) {
-    blocks.push(`DOR_PRINCIPAL_DO_LEAD: ${params.painPoint}`);
-  }
-
-  if (blocks.length === 0) {
-    return basePrompt;
-  }
-
-  return [
-    basePrompt,
-    'CONTEXTUALIZACAO_POR_LEAD:',
-    ...blocks,
-    'INSTRUCAO_FINAL: Consolide os dados acima em uma mensagem curta de primeira abordagem para WhatsApp. Responda apenas com a mensagem final.',
-  ].join('\n');
 }
 
 async function updateContactMessage(tenantId: string, item: OutboundRunItem): Promise<void> {
@@ -283,16 +223,6 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
     return;
   }
 
-  if (messageMode === 'ai') {
-    // Pre-flight: verify AI credits before starting generation
-    const creditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
-    if (!creditCheck.allowed) {
-      await outboundRunsRepository.setFailure(tenantId, runId,
-        'Créditos de IA insuficientes para iniciar o disparo.');
-      return;
-    }
-  }
-
   const leadMap = personalizationEnabled
     ? await leadsRepository.getByNormalizedPhones(tenantId, eligibleItems.map((item) => item.target))
     : new Map<string, Lead>();
@@ -316,15 +246,13 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
         return;
       }
 
-      if (messageMode === 'ai') {
-        const batchCreditCheck = await subscriptionService.checkLimit(tenantId, 'ai_credits');
-        if (!batchCreditCheck.allowed) {
-          await outboundRunsRepository.setFailure(tenantId, runId,
-            'Créditos de IA insuficientes para continuar o disparo.');
-          return;
-        }
+      const claimed = await outboundRunsRepository.claimItemForSending(tenantId, runId, item.target);
+      if (!claimed) {
+        continue;
+      }
 
-        const lead = personalizationEnabled ? resolveLeadByItem(item, leadMap) : null;
+      if (messageMode === 'ai') {
+        const lead = personalizationEnabled ? resolveLeadByPhone(item.target, leadMap) : null;
         const painPoint = personalizationEnabled && personalizationFields.includes('pain_points')
           ? pickPainPoint(painPoints, batchIndex, index)
           : null;
@@ -337,37 +265,24 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
           })
           : (run.promptBase || '');
 
-        let creditsUsed = 0;
         try {
-          const result = await deepseekService.generateWhatsAppMessage(promptForItem, {
+          const result = await aiOrchestrator.generate({
             tenantId,
+            prompt: promptForItem,
             source: 'blast',
+            idempotencyKey: `ai:${tenantId}:${runId}:batch:${batchIndex + 1}:item:${item.id}`,
+            metadata: {
+              runId,
+              itemId: item.id,
+              batch: batchIndex + 1,
+            },
           });
           messageForItem = result.message;
-          creditsUsed = result.tokensUsed > 0
-            ? calculateCreditsFromTokens(result.tokensUsed)
-            : calculateCreditsFromChars(promptForItem.length, messageForItem.length);
         } catch (err: any) {
+          await outboundRunsRepository.updateItem(tenantId, runId, item.target, 'failed', {
+            error: err.message || 'Erro ao gerar mensagem',
+          });
           await outboundRunsRepository.setFailure(tenantId, runId, err.message || 'Erro ao gerar mensagem');
-          return;
-        }
-
-        const aiConsumption = await billingService.consume({
-          tenantId,
-          type: 'AI',
-          amount: creditsUsed,
-          idempotencyKey: `billing:ai:${tenantId}:${runId}:batch:${batchIndex + 1}:item:${item.id}`,
-          metadata: {
-            runId,
-            batch: batchIndex + 1,
-            itemId: item.id,
-            creditsUsed,
-          },
-        });
-
-        if (!aiConsumption.consumed) {
-          await outboundRunsRepository.setFailure(tenantId, runId,
-            'Créditos de IA insuficientes para continuar o disparo.');
           return;
         }
 
@@ -398,8 +313,6 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
         });
       }
 
-      await outboundRunsRepository.refreshSummary(tenantId, runId);
-
       if (result.success) {
         await updateContactMessage(tenantId, { ...item, message: messageForItem, status: 'sent', updatedAt: new Date().toISOString() });
       } else if (result.error?.includes('401')) {
@@ -418,6 +331,8 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
       }
     }
 
+    await outboundRunsRepository.refreshSummary(tenantId, runId);
+
     if (batchIndex < totalBatches - 1) {
       const canContinue = await sleepWithCancel(tenantId, runId, randomDelay(run.intervalMinSeconds, run.intervalMaxSeconds));
       if (!canContinue) {
@@ -430,13 +345,18 @@ async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promi
   await outboundRunsRepository.finalize(tenantId, runId, 'completed');
 }
 
-async function processWebhookEvent(payload: WebhookJobPayload): Promise<void> {
+export async function processWebhookEvent(payload: WebhookJobPayload): Promise<void> {
   const event = await webhookEventsRepository.findById(payload.webhookEventId);
   if (!event) {
     return;
   }
 
   if (event.status === 'processed') {
+    return;
+  }
+
+  if (await webhookEventsRepository.isAlreadyProcessed(event.provider, event.eventId)) {
+    await webhookEventsRepository.markProcessed(event.id);
     return;
   }
 
@@ -459,12 +379,20 @@ export function startBackgroundWorkers(): void {
   }
 
   workersStarted = true;
+  startOutboxDispatcherLoop();
+  void outboxDispatcherService.kick(100);
 
   new Worker<BlastJobPayload>('email-blasts', async (job) => {
+    if (job.attemptsMade > 0) {
+      await outboundRunsRepository.setPhase(job.data.tenantId, job.data.runId, 'retrying');
+    }
     await processEmailBlast(job.data);
   }, { connection, concurrency: 3 });
 
   new Worker<BlastJobPayload>('whatsapp-blasts', async (job) => {
+    if (job.attemptsMade > 0) {
+      await outboundRunsRepository.setPhase(job.data.tenantId, job.data.runId, 'retrying');
+    }
     await processWhatsAppBlast(job.data);
   }, { connection, concurrency: 2 });
 

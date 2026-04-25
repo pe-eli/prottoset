@@ -1,14 +1,16 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { v4 as uuid } from 'uuid';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { contactMessagesRepository } from '../modules/contacts/contact-messages.repository';
 import { Contact } from '../types/contacts.types';
 import { blastParamSchema, contactCreateSchema, contactUpdateSchema, contactWhatsappReplySchema, emailBlastSchema, uuidParamSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
-import { enqueueEmailBlastJob } from '../jobs/queues';
 import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
-import { deepseekService } from '../services/deepseek.service';
 import { evolutionService } from '../services/evolution.service';
+import { aiOrchestrator } from '../modules/ai/ai-orchestrator.service';
+import { integrationVaultService } from '../modules/integrations/integration-vault.service';
+import { outboxDispatcherService } from '../modules/outbox/outbox-dispatcher.service';
 
 function openSse(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -176,9 +178,25 @@ export const contactsController = {
           return res.status(400).json({ error: 'Mensagem fixa é obrigatória no modo manual.' });
         }
       } else {
-        const generated = await deepseekService.generateWhatsAppMessage(promptBase, {
+        const normalizedPrompt = (promptBase || '').trim();
+        if (!normalizedPrompt) {
+          return res.status(400).json({ error: 'Prompt da IA é obrigatório no modo IA.' });
+        }
+
+        const promptHash = crypto
+          .createHash('sha256')
+          .update(`${tenantId}:${contact.id}:${normalizedPrompt}`)
+          .digest('hex')
+          .slice(0, 24);
+
+        const generated = await aiOrchestrator.generate({
           tenantId,
+          prompt: normalizedPrompt,
           source: 'reply',
+          idempotencyKey: req.header('idempotency-key')?.trim() || `reply:${contact.id}:${promptHash}`,
+          metadata: {
+            contactId: contact.id,
+          },
         });
         message = (generated.message || '').trim();
         if (!message) {
@@ -260,6 +278,31 @@ export const contactsController = {
       const safeBatchSize = Math.max(1, Math.min(50, Number(batchSize) || 10));
       const safeMin = Math.max(5, Math.min(3600, Number(intervalMinSeconds) || 15));
       const safeMax = Math.max(safeMin, Math.min(3600, Number(intervalMaxSeconds) || 60));
+      const normalizedApiKey = typeof resendApiKey === 'string' ? resendApiKey.trim() : '';
+      const normalizedFrom = typeof resendFrom === 'string' ? resendFrom.trim() : '';
+
+      const existingResend = await integrationVaultService.getSecret(tenantId, 'resend_api_key');
+      const effectiveApiKey = normalizedApiKey || existingResend?.secret || '';
+      const metadataResendFrom = typeof existingResend?.metadata?.resendFrom === 'string'
+        ? existingResend.metadata.resendFrom.trim()
+        : '';
+      const effectiveFrom = normalizedFrom || metadataResendFrom;
+
+      if (!effectiveApiKey) {
+        return res.status(400).json({ error: 'Informe sua RESEND_API_KEY para iniciar o disparo.' });
+      }
+
+      if (!effectiveFrom) {
+        return res.status(400).json({ error: 'Informe seu RESEND_FROM para iniciar o disparo.' });
+      }
+
+      if (normalizedApiKey || normalizedFrom) {
+        await integrationVaultService.upsertSecret(tenantId, 'resend_api_key', effectiveApiKey, {
+          ...(existingResend?.metadata || {}),
+          resendFrom: effectiveFrom,
+          updatedBy: tenantId,
+        });
+      }
 
       const blastId = uuid();
 
@@ -288,17 +331,13 @@ export const contactsController = {
         targets: cleanEmails,
         subject,
         body,
+        resendFrom: effectiveFrom,
         batchSize: safeBatchSize,
         intervalMinSeconds: safeMin,
         intervalMaxSeconds: safeMax,
       });
 
-      await enqueueEmailBlastJob({
-        tenantId,
-        runId: blastId,
-        resendApiKey: resendApiKey?.trim() || undefined,
-        resendFrom: resendFrom?.trim() || undefined,
-      });
+      void outboxDispatcherService.kick(50);
 
       res.json({ blastId, total: cleanEmails.length });
     } catch (err: any) {

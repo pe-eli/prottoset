@@ -1,28 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { subscriptionsAPI, type SubscriptionInfo } from '../features/subscriptions/subscriptions.api';
-
-type PaywallReason = 'subscription_required' | 'limit_exceeded';
+import { SubscriptionContext, type PaywallReason } from './subscription-context';
 const SUBSCRIPTION_REFRESH_INTERVAL_MS = 10_000;
-
-interface SubscriptionContextValue {
-  subscription: SubscriptionInfo | null;
-  loading: boolean;
-  showPaywall: boolean;
-  paywallReason: PaywallReason | null;
-  openPaywall: (reason: PaywallReason) => void;
-  closePaywall: () => void;
-  refresh: () => Promise<void>;
-}
-
-const SubscriptionContext = createContext<SubscriptionContextValue>({
-  subscription: null,
-  loading: true,
-  showPaywall: false,
-  paywallReason: null,
-  openPaywall: () => {},
-  closePaywall: () => {},
-  refresh: async () => {},
-});
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
@@ -106,8 +85,4 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       {children}
     </SubscriptionContext.Provider>
   );
-}
-
-export function useSubscription() {
-  return useContext(SubscriptionContext);
 }

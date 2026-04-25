@@ -1,12 +1,19 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { v4 as uuid } from 'uuid';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { leadsRepository } from '../modules/leads/leads.repository';
 import { blastParamSchema, whatsappBlastSchema, whatsappPromptTestSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
-import { enqueueWhatsAppBlastJob } from '../jobs/queues';
-import { deepseekService } from '../services/deepseek.service';
 import type { Lead } from '../types/leads.types';
+import { aiOrchestrator } from '../modules/ai/ai-orchestrator.service';
+import { outboxDispatcherService } from '../modules/outbox/outbox-dispatcher.service';
+import {
+  buildPersonalizedPrompt,
+  normalizePhone,
+  parsePersonalizationFields,
+  resolveLeadByPhone,
+} from '../modules/whatsapp/personalization.utils';
 
 function openSse(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -14,77 +21,6 @@ function openSse(res: Response): void {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
-}
-
-type PersonalizationField = 'name' | 'city' | 'niche' | 'pain_points';
-
-function normalizePhone(value: string): string {
-  const digits = String(value || '').replace(/\D/g, '');
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
-  return digits;
-}
-
-function buildPhoneKeys(value: string): string[] {
-  const normalized = normalizePhone(value);
-  return normalized.startsWith('55') && normalized.length > 11 ? [normalized, normalized.slice(2)] : [normalized];
-}
-
-function parsePersonalizationFields(fields: string[]): PersonalizationField[] {
-  const valid = fields.filter((field): field is PersonalizationField => (
-    field === 'name' || field === 'city' || field === 'niche' || field === 'pain_points'
-  ));
-  return Array.from(new Set(valid));
-}
-
-function resolveLeadByPhone(phone: string, leadMap: Map<string, Lead>): Lead | null {
-  for (const key of buildPhoneKeys(phone)) {
-    const lead = leadMap.get(key);
-    if (lead) return lead;
-  }
-  return null;
-}
-
-function buildPersonalizedPrompt(params: {
-  basePrompt: string;
-  fields: PersonalizationField[];
-  lead: Lead | null;
-  painPoint: string | null;
-}): string {
-  const basePrompt = params.basePrompt.trim();
-  const lead = params.lead;
-  const blocks: string[] = [];
-
-  if (params.fields.includes('name')) {
-    if (lead?.name) {
-      blocks.push(`NOME_BRUTO_MAPS: ${lead.name}`);
-      blocks.push('REGRA_DE_SAUDACAO: Se for nome de pessoa, cumprimente com "Olá, <primeiro_nome>". Se for empresa/marca, use "Olá, Equipe da <nome>".');
-    } else {
-      blocks.push('REGRA_DE_SAUDACAO: Sem nome confiável. Use saudação neutra e curta.');
-    }
-  }
-
-  if (params.fields.includes('city') && lead?.city) {
-    blocks.push(`CIDADE: ${lead.city}`);
-  }
-
-  if (params.fields.includes('niche') && lead?.niche) {
-    blocks.push(`NICHO: ${lead.niche}`);
-  }
-
-  if (params.fields.includes('pain_points') && params.painPoint) {
-    blocks.push(`DOR_PRINCIPAL_DO_LEAD: ${params.painPoint}`);
-  }
-
-  if (blocks.length === 0) {
-    return basePrompt;
-  }
-
-  return [
-    basePrompt,
-    'CONTEXTUALIZACAO_POR_LEAD:',
-    ...blocks,
-    'INSTRUCAO_FINAL: Consolide os dados acima em uma mensagem curta de primeira abordagem para WhatsApp. Responda apenas com a mensagem final.',
-  ].join('\n');
 }
 
 export const whatsappController = {
@@ -120,11 +56,23 @@ export const whatsappController = {
 
       const testCount = 3;
       if (!personalizationEnabled || fields.length === 0) {
-        const generated = await deepseekService.generateWhatsAppMessages(promptBase, testCount, {
-          tenantId: req.tenantId,
-          source: 'test',
-        });
-        res.json({ messages: generated.messages.slice(0, testCount) });
+        const messages: string[] = [];
+        for (let index = 0; index < testCount; index++) {
+          const key = `ai:test:${req.tenantId}:${crypto.randomUUID()}:${index}`;
+          const generated = await aiOrchestrator.generate({
+            tenantId: req.tenantId!,
+            prompt: promptBase,
+            source: 'test',
+            idempotencyKey: key,
+            metadata: {
+              flow: 'prompt_test',
+              sampleIndex: index,
+            },
+          });
+          messages.push(generated.message);
+        }
+
+        res.json({ messages: messages.slice(0, testCount) });
         return;
       }
 
@@ -148,9 +96,14 @@ export const whatsappController = {
 
       const messages: string[] = [];
       for (const prompt of prompts) {
-        const generated = await deepseekService.generateWhatsAppMessage(prompt, {
-          tenantId: req.tenantId,
+        const generated = await aiOrchestrator.generate({
+          tenantId: req.tenantId!,
+          prompt,
           source: 'test',
+          idempotencyKey: `ai:test:${req.tenantId}:${crypto.randomUUID()}`,
+          metadata: {
+            flow: 'prompt_test_personalized',
+          },
         });
         messages.push(generated.message);
       }
@@ -209,11 +162,9 @@ export const whatsappController = {
       const safePromptBase = typeof promptBase === 'string' ? promptBase.trim() : '';
       const safeManualMessage = typeof manualMessage === 'string' ? manualMessage.trim() : '';
       const safePersonalizationEnabled = Boolean(personalizationEnabled);
-      const safePersonalizationFields = Array.from(new Set(
-        (Array.isArray(personalizationFields) ? personalizationFields : [])
-          .filter((field): field is 'name' | 'city' | 'niche' | 'pain_points' =>
-            field === 'name' || field === 'city' || field === 'niche' || field === 'pain_points'),
-      ));
+      const safePersonalizationFields = parsePersonalizationFields(
+        Array.isArray(personalizationFields) ? personalizationFields : [],
+      );
       const safePainPoints = Array.from(new Set(
         (Array.isArray(painPoints) ? painPoints : [])
           .map((item) => (typeof item === 'string' ? item.trim() : ''))
@@ -271,7 +222,7 @@ export const whatsappController = {
         painPoints: messageMode === 'ai' ? safePainPoints : [],
       });
 
-      await enqueueWhatsAppBlastJob({ tenantId, runId: blastId });
+      void outboxDispatcherService.kick(50);
 
       res.json({ blastId, total: cleanPhones.length });
     } catch (err: unknown) {

@@ -1,25 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-
-export interface WaBlastState {
-  blastId: string;
-  sent: number;
-  total: number;
-  phase: 'sending' | 'done' | 'cancelled';
-}
-
-interface WaBlastContextValue {
-  active: WaBlastState | null;
-  setActive: (blastId: string, total: number) => void;
-  updateProgress: (sent: number, total: number, phase: WaBlastState['phase']) => void;
-  clearActive: () => void;
-}
-
-const WaBlastContext = createContext<WaBlastContextValue>({
-  active: null,
-  setActive: () => {},
-  updateProgress: () => {},
-  clearActive: () => {},
-});
+import { useState, useCallback } from 'react';
+import { WaBlastContext, type WaBlastState } from './wa-blast-context';
 
 export function WaBlastProvider({ children }: { children: React.ReactNode }) {
   const [active, setActiveState] = useState<WaBlastState | null>(null);
@@ -46,8 +26,4 @@ export function WaBlastProvider({ children }: { children: React.ReactNode }) {
       {children}
     </WaBlastContext.Provider>
   );
-}
-
-export function useWaBlast() {
-  return useContext(WaBlastContext);
 }

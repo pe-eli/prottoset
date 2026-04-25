@@ -255,7 +255,11 @@ export const deepseekService = {
 
     const safeCount = Math.max(1, Math.min(5, Math.floor(Number(count) || 1)));
     const store = await readMemoryStore();
-    const memoryContext = store.entries.slice(-AI_MEMORY_CONTEXT_ENTRIES);
+    const memoryContext = options.tenantId
+      ? store.entries
+        .filter((entry) => entry.tenantId === options.tenantId)
+        .slice(-AI_MEMORY_CONTEXT_ENTRIES)
+      : [];
     const messages: string[] = [];
     let totalTokens = 0;
 
@@ -272,13 +276,15 @@ export const deepseekService = {
       totalTokens += result.tokensUsed;
     }
 
-    await appendMemoryEntries(messages.map((message) => ({
-      timestamp: new Date().toISOString(),
-      tenantId: options.tenantId,
-      source: options.source || 'blast',
-      prompt,
-      message,
-    })));
+    if (options.tenantId) {
+      await appendMemoryEntries(messages.map((message) => ({
+        timestamp: new Date().toISOString(),
+        tenantId: options.tenantId,
+        source: options.source || 'blast',
+        prompt,
+        message,
+      })));
+    }
 
     return { messages, tokensUsed: totalTokens };
   },
@@ -292,9 +298,12 @@ export const deepseekService = {
     };
   },
 
-  async getRecentWhatsAppMemory(limit = 20): Promise<AiMemoryEntry[]> {
+  async getRecentWhatsAppMemory(limit = 20, tenantId?: string): Promise<AiMemoryEntry[]> {
     const store = await readMemoryStore();
     const safeLimit = Math.max(1, Math.min(200, Math.floor(Number(limit) || 20)));
-    return store.entries.slice(-safeLimit);
+    const scoped = tenantId
+      ? store.entries.filter((entry) => entry.tenantId === tenantId)
+      : store.entries.filter((entry) => !entry.tenantId);
+    return scoped.slice(-safeLimit);
   },
 };

@@ -5,14 +5,14 @@ import { isAxiosError } from 'axios';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
-import { useSubscription } from '../contexts/SubscriptionContext';
+import { useSubscription } from '../contexts/useSubscription';
 import { whatsappAPI } from '../features/whatsapp/whatsapp.api';
 import { waInstanceAPI } from '../features/whatsapp/wa-instance.api';
 import type { WaInstanceStatus } from '../features/whatsapp/wa-instance.api';
 import { queuesAPI } from '../features/queues/queues.api';
 import type { PhoneQueue } from '../features/queues/queues.types';
 import { QueueManagerModal } from '../features/queues/QueueManagerModal';
-import { useWaBlast } from '../contexts/WaBlastContext';
+import { useWaBlast } from '../contexts/useWaBlast';
 
 type JobStatus = 'pending' | 'sending' | 'sent' | 'failed';
 

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
-import { useSubscription } from '../contexts/SubscriptionContext';
+import { useSubscription } from '../contexts/useSubscription';
 import type { AuthUser } from '../features/auth/auth.api';
 
 export function HomePage() {

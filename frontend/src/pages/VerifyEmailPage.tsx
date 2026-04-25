@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -16,6 +17,15 @@ function maskEmail(email: string): string {
 }
 
 type VerifyStatus = 'idle' | 'error';
+
+interface ApiErrorPayload {
+  error?: string;
+}
+
+function getApiErrorMessage(err: unknown): string | undefined {
+  if (!isAxiosError<ApiErrorPayload>(err)) return undefined;
+  return err.response?.data?.error;
+}
 
 export function VerifyEmailPage() {
   const [params] = useSearchParams();
@@ -108,11 +118,11 @@ export function VerifyEmailPage() {
 
     try {
       await authAPI.verifyCode(email, normalizedCode, verificationId);
-      window.location.href = '/home';
+      window.location.assign('/home');
       return;
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('error');
-      setErrorMessage(err?.response?.data?.error || 'Código inválido ou expirado. Solicite um novo código.');
+      setErrorMessage(getApiErrorMessage(err) || 'Código inválido ou expirado. Solicite um novo código.');
     } finally {
       setLoading(false);
     }
@@ -130,9 +140,9 @@ export function VerifyEmailPage() {
       if (data.verificationId) {
         setVerificationId(data.verificationId);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('error');
-      setErrorMessage(err?.response?.data?.error || 'Não foi possível reenviar o código agora.');
+      setErrorMessage(getApiErrorMessage(err) || 'Não foi possível reenviar o código agora.');
     }
   };
 

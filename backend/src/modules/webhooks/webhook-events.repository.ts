@@ -92,6 +92,15 @@ export const webhookEventsRepository = {
 
   async markProcessed(id: string): Promise<void> {
     await query(
+      `INSERT INTO processed_webhooks (provider, event_id)
+       SELECT provider, event_id
+       FROM webhook_events
+       WHERE id = $1
+       ON CONFLICT (provider, event_id) DO NOTHING`,
+      [id],
+    );
+
+    await query(
       `UPDATE webhook_events
        SET status = 'processed',
            processed_at = now(),
@@ -99,6 +108,18 @@ export const webhookEventsRepository = {
        WHERE id = $1`,
       [id],
     );
+  },
+
+  async isAlreadyProcessed(provider: WebhookProvider, eventId: string): Promise<boolean> {
+    const { rowCount } = await query(
+      `SELECT 1
+       FROM processed_webhooks
+       WHERE provider = $1 AND event_id = $2
+       LIMIT 1`,
+      [provider, eventId],
+    );
+
+    return (rowCount ?? 0) > 0;
   },
 
   async markFailed(id: string, reason: string): Promise<void> {

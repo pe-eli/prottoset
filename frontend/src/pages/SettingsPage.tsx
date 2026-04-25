@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import type { AuthUser } from '../features/auth/auth.api';
 import { authAPI } from '../features/auth/auth.api';
-import { useSubscription } from '../contexts/SubscriptionContext';
+import { isAxiosError } from 'axios';
+import { useSubscription } from '../contexts/useSubscription';
 import { Card } from '../components/ui/Card';
 
 function formatLimit(limit: number | null, suffix: string): string {
@@ -24,6 +25,10 @@ function estimateRemainingMessages(creditsRemaining: number): number {
   return Math.floor(creditsRemaining / avgCreditsPerMessage);
 }
 
+interface ApiErrorPayload {
+  error?: string;
+}
+
 export function SettingsPage() {
   const navigate = useNavigate();
   const { user } = useOutletContext<{ user: AuthUser }>();
@@ -41,8 +46,9 @@ export function SettingsPage() {
     navigate(`/verify-email?${query.toString()}`);
   };
 
-  const getRetryAfterSeconds = (err: any): number => {
-    const rawHeader = err?.response?.headers?.['retry-after'];
+  const getRetryAfterSeconds = (err: unknown): number => {
+    if (!isAxiosError(err)) return 60;
+    const rawHeader = err.response?.headers?.['retry-after'];
     const retryAfter = Number(rawHeader);
     return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60;
   };
@@ -57,14 +63,15 @@ export function SettingsPage() {
       setVerificationNotice('Código enviado. Redirecionando para a confirmação...');
       navigateToVerifyEmail(data.verificationId, 60);
       return;
-    } catch (err: any) {
-      if (err?.response?.status === 429) {
+    } catch (err: unknown) {
+      if (isAxiosError(err) && err.response?.status === 429) {
         setVerificationNotice('Você já solicitou recentemente. Vamos abrir a tela de confirmação com o contador.');
         navigateToVerifyEmail(undefined, getRetryAfterSeconds(err));
         return;
       }
 
-      setVerificationError(err?.response?.data?.error || 'Não foi possível iniciar a verificação agora.');
+      const apiError = isAxiosError<ApiErrorPayload>(err) ? err.response?.data?.error : undefined;
+      setVerificationError(apiError || 'Não foi possível iniciar a verificação agora.');
     } finally {
       setVerificationLoading(false);
     }

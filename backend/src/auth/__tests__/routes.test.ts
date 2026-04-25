@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { withTransaction } from '../../db/pool';
 
 // Set env vars before any auth imports
 process.env.AUTH_JWT_SECRET = 'test-secret-that-is-at-least-thirty-two-characters-long-ok';
@@ -15,6 +16,7 @@ vi.mock('../../db/pool', () => ({
   query: vi.fn(),
   tenantQuery: vi.fn(),
   tenantTransaction: vi.fn(),
+  withTransaction: vi.fn(),
 }));
 
 // In-memory stores for the mock repositories
@@ -151,6 +153,77 @@ function extractCookies(res: request.Response): string[] {
   return Array.isArray(raw) ? raw : [raw];
 }
 
+async function queryWithTransactionMock(sqlText: string, params: unknown[] = []): Promise<{ rows: any[]; rowCount: number }> {
+  const sql = sqlText.replace(/\s+/g, ' ').trim().toUpperCase();
+
+  if (sql.startsWith('SELECT ID, USER_ID, FAMILY, EXPIRES_AT, REVOKED FROM REFRESH_TOKENS')) {
+    const tokenHash = String(params[0] ?? '');
+    const token = Object.values(refreshTokensStore).find((t: any) => t.tokenHash === tokenHash) as any;
+    if (!token) {
+      return { rows: [], rowCount: 0 };
+    }
+
+    return {
+      rows: [{
+        id: token.id,
+        user_id: token.userId,
+        family: token.family,
+        expires_at: new Date(token.expiresAt),
+        revoked: Boolean(token.revoked),
+      }],
+      rowCount: 1,
+    };
+  }
+
+  if (sql.startsWith('UPDATE REFRESH_TOKENS SET REVOKED = TRUE WHERE FAMILY = $1')) {
+    const family = String(params[0] ?? '');
+    let updated = 0;
+    for (const token of Object.values(refreshTokensStore) as any[]) {
+      if (token.family === family && !token.revoked) {
+        token.revoked = true;
+        updated += 1;
+      }
+    }
+    return { rows: [], rowCount: updated };
+  }
+
+  if (sql.startsWith('SELECT ID, EMAIL, DISPLAY_NAME, ROLE, EMAIL_VERIFIED FROM USERS')) {
+    const userId = String(params[0] ?? '');
+    const user = usersStore[userId];
+    if (!user) {
+      return { rows: [], rowCount: 0 };
+    }
+
+    return {
+      rows: [{
+        id: user.id,
+        email: user.email,
+        display_name: user.displayName,
+        role: user.role,
+        email_verified: Boolean(user.emailVerified),
+      }],
+      rowCount: 1,
+    };
+  }
+
+  if (sql.startsWith('INSERT INTO REFRESH_TOKENS')) {
+    const [tokenHash, userId, family, expiresAt] = params as [string, string, string, string];
+    const id = `rt-${++idCounter}`;
+    refreshTokensStore[id] = {
+      id,
+      tokenHash,
+      userId,
+      family,
+      expiresAt,
+      revoked: false,
+      createdAt: new Date().toISOString(),
+    };
+    return { rows: [], rowCount: 1 };
+  }
+
+  return { rows: [], rowCount: 0 };
+}
+
 async function fetchCsrfToken(app: express.Application): Promise<string> {
   const res = await request(app).get('/api/auth/csrf');
   return res.body.csrfToken;
@@ -161,6 +234,8 @@ describe('auth routes', () => {
 
   beforeEach(() => {
     resetStores();
+    vi.mocked(withTransaction).mockImplementation(async (fn: any) =>
+      fn({ query: queryWithTransactionMock } as any));
     app = createApp();
   });
 
@@ -201,7 +276,7 @@ describe('auth routes', () => {
 
       const res = await request(app)
         .post('/api/auth/register')
-        .send({ email: 'existing@example.com', password: 'StrongPass123', name: 'Dupl', acceptedTerms: true });
+        .send({ email: 'existing@example.com', password: 'StrongPass123', name: 'Dupl User', acceptedTerms: true });
 
       expect(res.status).toBe(202);
       expect(Object.values(usersStore)).toHaveLength(1);

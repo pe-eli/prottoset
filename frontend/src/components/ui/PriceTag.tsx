@@ -1,6 +1,4 @@
-export function formatBRL(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+import { formatBRL } from './price.utils';
 
 interface PriceTagProps {
   value: number;

@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { authAPI } from '../features/auth/auth.api';
 import type { AuthUser } from '../features/auth/auth.api';
 
 interface LoginPageProps {
   onAuthenticated: (user: AuthUser) => void;
+}
+
+interface ApiErrorPayload {
+  error?: string;
+}
+
+function getApiErrorMessage(err: unknown): string | undefined {
+  if (!isAxiosError<ApiErrorPayload>(err)) return undefined;
+  return err.response?.data?.error;
 }
 
 export function LoginPage({ onAuthenticated }: LoginPageProps) {
@@ -33,8 +43,9 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     navigate(`/verify-email?${query.toString()}`);
   };
 
-  const getRetryAfterSeconds = (err: any): number => {
-    const rawHeader = err?.response?.headers?.['retry-after'];
+  const getRetryAfterSeconds = (err: unknown): number => {
+    if (!isAxiosError(err)) return 60;
+    const rawHeader = err.response?.headers?.['retry-after'];
     const retryAfter = Number(rawHeader);
     return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60;
   };
@@ -54,14 +65,14 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       const { data } = await authAPI.resendCode(targetEmail);
       navigateToVerifyEmail(targetEmail, data.verificationId, 60);
       return;
-    } catch (err: any) {
-      const status = err?.response?.status;
+    } catch (err: unknown) {
+      const status = isAxiosError(err) ? err.response?.status : undefined;
       if (status === 429) {
         navigateToVerifyEmail(targetEmail, undefined, getRetryAfterSeconds(err));
         return;
       }
 
-      const msg = err?.response?.data?.error;
+      const msg = getApiErrorMessage(err);
       setError(msg || 'Não foi possível reenviar o código agora. Tente novamente em instantes.');
     } finally {
       setResendingVerification(false);
@@ -111,9 +122,9 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
             }
             return;
           }
-        } catch (checkError: any) {
-          const status = checkError?.response?.status;
-          const message = checkError?.response?.data?.error;
+        } catch (checkError: unknown) {
+          const status = isAxiosError(checkError) ? checkError.response?.status : undefined;
+          const message = getApiErrorMessage(checkError);
 
           if (status === 400) {
             setError(message || 'E-mail inválido.');
@@ -129,8 +140,8 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
         navigateToVerifyEmail(verificationEmail, verificationId, 60);
         return;
       }
-    } catch (err: any) {
-      const msg = err?.response?.data?.error;
+    } catch (err: unknown) {
+      const msg = getApiErrorMessage(err);
       if (mode === 'login' && typeof msg === 'string' && msg.toLowerCase().includes('confirme seu e-mail')) {
         setError('Seu e-mail ainda está pendente de confirmação.');
         setNotice('Clique em "Verificar e-mail novamente" para receber/validar o código de 6 dígitos.');

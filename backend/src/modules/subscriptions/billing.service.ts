@@ -1,8 +1,7 @@
 import { query } from '../../db/pool';
 import { FEATURE_LIMIT_MAP, FEATURE_USAGE_COLUMN, type SubscriptionFeature } from '../../config/plans';
 import { fraudService } from '../../security/fraud.service';
-import { subscriptionService } from './subscription.service';
-import { usageRepository } from './usage.repository';
+import { billingEngine } from '../billing/billing-engine.service';
 
 export type BillingType = 'AI' | 'EMAIL' | 'WHATSAPP' | 'PDF';
 
@@ -81,48 +80,49 @@ export const billingService = {
 
     const billingId = rows[0].id;
     const feature = FEATURE_BY_BILLING_TYPE[input.type];
-    const limitCheck = await subscriptionService.checkLimit(input.tenantId, feature);
+    const consumption = await billingEngine.consumeImmediate({
+      tenantId: input.tenantId,
+      feature,
+      amount,
+      idempotencyKey,
+      metadata: {
+        ...(metadata ?? {}),
+        source: 'billing.service.consume',
+        billingType: input.type,
+      },
+    });
 
-    if (!limitCheck.allowed) {
+    if (!consumption.consumed) {
       await query(
         `UPDATE billing_consumptions
          SET status = 'failed',
              failure_reason = $2,
              processed_at = now()
          WHERE id = $1`,
-        [billingId, 'limit_exceeded'],
+        [billingId, consumption.reason ?? 'billing_engine_rejected'],
       );
-      return { consumed: false, reason: 'limit_exceeded', idempotentReplay: false };
-    }
-
-    const column = getUsageColumnForType(input.type);
-    const consumed = await usageRepository.consumeFeatureUsage(input.tenantId, column, amount, limitCheck.limit);
-    if (!consumed) {
-      await query(
-        `UPDATE billing_consumptions
-         SET status = 'failed',
-             failure_reason = $2,
-             processed_at = now()
-         WHERE id = $1`,
-        [billingId, 'atomic_limit_check_failed'],
-      );
-      return { consumed: false, reason: 'limit_exceeded', idempotentReplay: false };
+      return {
+        consumed: false,
+        reason: consumption.reason ?? 'limit_exceeded',
+        idempotentReplay: consumption.idempotentReplay,
+      };
     }
 
     await query(
       `UPDATE billing_consumptions
        SET status = 'processed',
            processed_at = now(),
-           failure_reason = NULL
+           failure_reason = NULL,
+           metadata = metadata || $2::jsonb
        WHERE id = $1`,
-      [billingId],
+      [billingId, JSON.stringify({ creditTransactionId: consumption.transactionId ?? null })],
     );
 
     if (input.type === 'AI') {
       await fraudService.detectAiSpikeAndBlock(input.tenantId);
     }
 
-    return { consumed: true, idempotentReplay: false };
+    return { consumed: true, idempotentReplay: consumption.idempotentReplay };
   },
 
   getFeatureForType(type: BillingType): SubscriptionFeature {

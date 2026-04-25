@@ -5,14 +5,10 @@ import { webhookIntakeService } from '../modules/webhooks/webhook-intake.service
 export const evolutionWebhookController = {
   async handle(req: Request, res: Response) {
     try {
-      const token = typeof req.query.token === 'string' ? req.query.token : '';
-      if (token !== process.env.WEBHOOK_TOKEN) {
-        return res.sendStatus(401);
-      }
-
-      const incomingRawBody = Buffer.isBuffer(req.body)
-        ? req.body.toString('utf8')
-        : JSON.stringify(req.body || {});
+      const rawBody = Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from(JSON.stringify(req.body || {}));
+      const incomingRawBody = rawBody.toString('utf8');
 
       let payload: Record<string, unknown>;
       try {
@@ -21,11 +17,9 @@ export const evolutionWebhookController = {
         return res.sendStatus(400);
       }
 
-      if (!payload.event && typeof req.params.event === 'string' && req.params.event.trim()) {
-        payload.event = req.params.event.trim().replace(/-/g, '_').toUpperCase();
-      }
-
-      const rawBody = Buffer.from(JSON.stringify(payload));
+      const eventOverride = typeof req.params.event === 'string' && req.params.event.trim()
+        ? req.params.event.trim().replace(/-/g, '_').toUpperCase()
+        : undefined;
       const signatureHeader = req.header('x-signature') || req.header('x-webhook-signature') || undefined;
       const timestampHeader = req.header('x-timestamp') || undefined;
       const nonceHeader = req.header('x-nonce') || undefined;
@@ -50,7 +44,7 @@ export const evolutionWebhookController = {
         timestampHeader,
         nonceHeader,
         sourceIp,
-        tokenValidated: true,
+        eventOverride,
       });
 
       return res.sendStatus(200);

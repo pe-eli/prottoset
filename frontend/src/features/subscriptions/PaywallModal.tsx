@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useSubscription } from '../../contexts/SubscriptionContext';
+import { useSubscription } from '../../contexts/useSubscription';
 
 export function PaywallModal() {
   const navigate = useNavigate();

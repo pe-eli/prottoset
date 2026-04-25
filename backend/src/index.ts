@@ -24,6 +24,9 @@ import { startBackgroundWorkers } from './jobs/workers';
 import { createSecurityRateLimit } from './middleware/rate-limit.middleware';
 import { requireTenantNotBlocked } from './middleware/tenant-block.middleware';
 import { webhookEventsRepository } from './modules/webhooks/webhook-events.repository';
+import { assertProductionSecurityConfig } from './config/runtime-security';
+
+assertProductionSecurityConfig();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

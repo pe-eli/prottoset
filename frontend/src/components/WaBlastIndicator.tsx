@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useWaBlast } from '../contexts/WaBlastContext';
+import { useWaBlast } from '../contexts/useWaBlast';
 
 export function WaBlastIndicator() {
   const { active } = useWaBlast();

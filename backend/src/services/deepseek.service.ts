@@ -190,7 +190,7 @@ async function callDeepSeek(
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.9,
-          max_tokens: 500,
+          max_tokens: 1000,
         }),
       });
     } catch (error) {

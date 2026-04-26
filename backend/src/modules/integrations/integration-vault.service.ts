@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { query } from '../../db/pool';
+import { tenantQuery } from '../../db/pool';
 import { structuredLogger } from '../../observability/structured-logger';
 
 interface TenantIntegrationRow {
@@ -94,7 +94,8 @@ export const integrationVaultService = {
     const normalizedProvider = provider.trim().toLowerCase();
     const encrypted = encryptSecret(secret);
 
-    await query(
+    await tenantQuery(
+      tenantId,
       `INSERT INTO tenant_integrations (tenant_id, provider, encrypted_secret, metadata)
        VALUES ($1, $2, $3, $4::jsonb)
        ON CONFLICT (tenant_id, provider)
@@ -113,7 +114,8 @@ export const integrationVaultService = {
 
   async getSecret(tenantId: string, provider: string): Promise<TenantIntegrationSecret | null> {
     const normalizedProvider = provider.trim().toLowerCase();
-    const { rows } = await query<TenantIntegrationRow>(
+    const { rows } = await tenantQuery<TenantIntegrationRow>(
+      tenantId,
       `SELECT provider, encrypted_secret, metadata, updated_at
        FROM tenant_integrations
        WHERE tenant_id = $1 AND provider = $2
@@ -139,6 +141,6 @@ export const integrationVaultService = {
 
   async deleteSecret(tenantId: string, provider: string): Promise<void> {
     const normalizedProvider = provider.trim().toLowerCase();
-    await query('DELETE FROM tenant_integrations WHERE tenant_id = $1 AND provider = $2', [tenantId, normalizedProvider]);
+    await tenantQuery(tenantId, 'DELETE FROM tenant_integrations WHERE tenant_id = $1 AND provider = $2', [tenantId, normalizedProvider]);
   },
 };

@@ -512,8 +512,12 @@ CREATE TABLE IF NOT EXISTS billing_consumptions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   processed_at TIMESTAMPTZ,
   failure_reason TEXT,
-  UNIQUE (idempotency_key)
+  UNIQUE (tenant_id, idempotency_key)
 );
+
+ALTER TABLE billing_consumptions DROP CONSTRAINT IF EXISTS billing_consumptions_idempotency_key_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_consumptions_tenant_idempotency
+  ON billing_consumptions (tenant_id, idempotency_key);
 
 CREATE INDEX IF NOT EXISTS idx_billing_consumptions_tenant_created
   ON billing_consumptions (tenant_id, created_at DESC);
@@ -534,8 +538,12 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   committed_at TIMESTAMPTZ,
   refunded_at TIMESTAMPTZ,
-  UNIQUE (idempotency_key)
+  UNIQUE (tenant_id, idempotency_key)
 );
+
+ALTER TABLE credit_transactions DROP CONSTRAINT IF EXISTS credit_transactions_idempotency_key_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_transactions_tenant_idempotency
+  ON credit_transactions (tenant_id, idempotency_key);
 
 CREATE INDEX IF NOT EXISTS idx_credit_transactions_tenant_created
   ON credit_transactions (tenant_id, created_at DESC);
@@ -618,3 +626,181 @@ CREATE TABLE IF NOT EXISTS tenant_security_blocks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============================================================
+-- HARDENED RLS POLICIES (tenant/user isolation + explicit system bypass)
+-- ============================================================
+
+-- Force RLS on already tenant-scoped tables.
+ALTER TABLE outbound_runs FORCE ROW LEVEL SECURITY;
+ALTER TABLE outbound_run_items FORCE ROW LEVEL SECURITY;
+ALTER TABLE leads FORCE ROW LEVEL SECURITY;
+ALTER TABLE lead_folders FORCE ROW LEVEL SECURITY;
+ALTER TABLE lead_folder_leads FORCE ROW LEVEL SECURITY;
+ALTER TABLE contacts FORCE ROW LEVEL SECURITY;
+ALTER TABLE contact_messages FORCE ROW LEVEL SECURITY;
+ALTER TABLE queues FORCE ROW LEVEL SECURITY;
+ALTER TABLE queue_phones FORCE ROW LEVEL SECURITY;
+ALTER TABLE quotes FORCE ROW LEVEL SECURITY;
+
+-- Quotas.
+ALTER TABLE quota_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quota_limits FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS quota_limits_tenant ON quota_limits;
+CREATE POLICY quota_limits_tenant ON quota_limits
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR tenant_id IS NULL
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+ALTER TABLE quota_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quota_usage FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS quota_usage_tenant ON quota_usage;
+CREATE POLICY quota_usage_tenant ON quota_usage
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+-- WhatsApp instances.
+ALTER TABLE whatsapp_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE whatsapp_instances FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS whatsapp_instances_tenant ON whatsapp_instances;
+CREATE POLICY whatsapp_instances_tenant ON whatsapp_instances
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+-- Subscriptions.
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS subscriptions_user_scope ON subscriptions;
+CREATE POLICY subscriptions_user_scope ON subscriptions
+  USING (
+    user_id = current_setting('app.current_user', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    user_id = current_setting('app.current_user', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+ALTER TABLE subscription_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscription_usage FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS subscription_usage_user_scope ON subscription_usage;
+CREATE POLICY subscription_usage_user_scope ON subscription_usage
+  USING (
+    user_id = current_setting('app.current_user', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    user_id = current_setting('app.current_user', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+-- Billing and integration tables.
+ALTER TABLE billing_consumptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE billing_consumptions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS billing_consumptions_tenant ON billing_consumptions;
+CREATE POLICY billing_consumptions_tenant ON billing_consumptions
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+ALTER TABLE credit_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_transactions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS credit_transactions_tenant ON credit_transactions;
+CREATE POLICY credit_transactions_tenant ON credit_transactions
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+ALTER TABLE tenant_integrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_integrations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_integrations_tenant ON tenant_integrations;
+CREATE POLICY tenant_integrations_tenant ON tenant_integrations
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+ALTER TABLE outbox_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE outbox_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS outbox_events_tenant ON outbox_events;
+CREATE POLICY outbox_events_tenant ON outbox_events
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+-- Security/audit telemetry.
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS audit_logs_tenant ON audit_logs;
+CREATE POLICY audit_logs_tenant ON audit_logs
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+ALTER TABLE fraud_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fraud_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS fraud_events_tenant ON fraud_events;
+CREATE POLICY fraud_events_tenant ON fraud_events
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+ALTER TABLE tenant_security_blocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_security_blocks FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_security_blocks_tenant ON tenant_security_blocks;
+CREATE POLICY tenant_security_blocks_tenant ON tenant_security_blocks
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );

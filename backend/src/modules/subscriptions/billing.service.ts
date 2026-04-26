@@ -1,4 +1,4 @@
-import { query } from '../../db/pool';
+import { tenantQuery } from '../../db/pool';
 import { FEATURE_LIMIT_MAP, FEATURE_USAGE_COLUMN, type SubscriptionFeature } from '../../config/plans';
 import { fraudService } from '../../security/fraud.service';
 import { billingEngine } from '../billing/billing-engine.service';
@@ -32,13 +32,15 @@ function getUsageColumnForType(type: BillingType): 'leads_used' | 'whatsapp_used
   return column as 'leads_used' | 'whatsapp_used' | 'emails_used' | 'quotes_used' | 'ai_credits_used';
 }
 
-async function getExistingByIdempotencyKey(idempotencyKey: string): Promise<BillingRow | null> {
-  const { rows } = await query<BillingRow>(
+async function getExistingByIdempotencyKey(tenantId: string, idempotencyKey: string): Promise<BillingRow | null> {
+  const { rows } = await tenantQuery<BillingRow>(
+    tenantId,
     `SELECT id, status, failure_reason
      FROM billing_consumptions
-     WHERE idempotency_key = $1
+     WHERE tenant_id = $1
+       AND idempotency_key = $2
      LIMIT 1`,
-    [idempotencyKey],
+    [tenantId, idempotencyKey],
   );
   return rows[0] ?? null;
 }
@@ -54,7 +56,7 @@ export const billingService = {
     const metadata = input.metadata ?? {};
 
     // Fast idempotency path.
-    const existing = await getExistingByIdempotencyKey(idempotencyKey);
+    const existing = await getExistingByIdempotencyKey(input.tenantId, idempotencyKey);
     if (existing?.status === 'processed') {
       return { consumed: true, idempotentReplay: true };
     }
@@ -62,16 +64,17 @@ export const billingService = {
       return { consumed: false, reason: existing.failure_reason ?? 'consumo_falhou', idempotentReplay: true };
     }
 
-    const { rows } = await query<{ id: string }>(
+    const { rows } = await tenantQuery<{ id: string }>(
+      input.tenantId,
       `INSERT INTO billing_consumptions (tenant_id, idempotency_key, consumption_type, amount, status, metadata)
        VALUES ($1, $2, $3, $4, 'pending', $5::jsonb)
-       ON CONFLICT (idempotency_key) DO NOTHING
+       ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
        RETURNING id`,
       [input.tenantId, idempotencyKey, input.type, amount, JSON.stringify(metadata)],
     );
 
     if (!rows[0]) {
-      const replay = await getExistingByIdempotencyKey(idempotencyKey);
+      const replay = await getExistingByIdempotencyKey(input.tenantId, idempotencyKey);
       if (replay?.status === 'processed') {
         return { consumed: true, idempotentReplay: true };
       }
@@ -93,13 +96,14 @@ export const billingService = {
     });
 
     if (!consumption.consumed) {
-      await query(
+      await tenantQuery(
+        input.tenantId,
         `UPDATE billing_consumptions
          SET status = 'failed',
              failure_reason = $2,
              processed_at = now()
-         WHERE id = $1`,
-        [billingId, consumption.reason ?? 'billing_engine_rejected'],
+         WHERE id = $1 AND tenant_id = $3`,
+        [billingId, consumption.reason ?? 'billing_engine_rejected', input.tenantId],
       );
       return {
         consumed: false,
@@ -108,14 +112,15 @@ export const billingService = {
       };
     }
 
-    await query(
+    await tenantQuery(
+      input.tenantId,
       `UPDATE billing_consumptions
        SET status = 'processed',
            processed_at = now(),
            failure_reason = NULL,
            metadata = metadata || $2::jsonb
-       WHERE id = $1`,
-      [billingId, JSON.stringify({ creditTransactionId: consumption.transactionId ?? null })],
+       WHERE id = $1 AND tenant_id = $3`,
+      [billingId, JSON.stringify({ creditTransactionId: consumption.transactionId ?? null }), input.tenantId],
     );
 
     if (input.type === 'AI') {

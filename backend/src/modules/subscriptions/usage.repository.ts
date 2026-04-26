@@ -1,4 +1,4 @@
-import { query } from '../../db/pool';
+import { userQuery } from '../../db/pool';
 
 type UsageColumn = 'leads_used' | 'whatsapp_used' | 'emails_used' | 'quotes_used' | 'ai_credits_used';
 
@@ -33,7 +33,8 @@ function toUsage(row: UsageRow | undefined): Usage {
 
 export const usageRepository = {
   async getUsageForMonth(userId: string): Promise<Usage> {
-    const { rows } = await query<UsageRow>(
+    const { rows } = await userQuery<UsageRow>(
+      userId,
       `SELECT * FROM subscription_usage
        WHERE user_id = $1 AND month = date_trunc('month', CURRENT_DATE)::date
        LIMIT 1`,
@@ -43,7 +44,8 @@ export const usageRepository = {
   },
 
   async incrementUsage(userId: string, column: UsageColumn, amount = 1): Promise<void> {
-    await query(
+    await userQuery(
+      userId,
       `INSERT INTO subscription_usage (user_id, month, ${column})
        VALUES ($1, date_trunc('month', CURRENT_DATE)::date, $2)
        ON CONFLICT (user_id, month)
@@ -69,7 +71,8 @@ export const usageRepository = {
       return false;
     }
 
-    const { rowCount } = await query(
+    const { rowCount } = await userQuery(
+      userId,
       `INSERT INTO subscription_usage (user_id, month, ${column})
        VALUES ($1, date_trunc('month', CURRENT_DATE)::date, $2)
        ON CONFLICT (user_id, month)
@@ -98,7 +101,8 @@ export const usageRepository = {
   async releaseFeatureUsage(userId: string, column: UsageColumn, amount: number): Promise<void> {
     if (amount <= 0) return;
 
-    await query(
+    await userQuery(
+      userId,
       `UPDATE subscription_usage
        SET ${column} = GREATEST(0, ${column} - $2)
        WHERE user_id = $1

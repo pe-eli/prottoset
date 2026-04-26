@@ -89,7 +89,7 @@ describe('billingEngine idempotency', () => {
   it('commit is idempotent when transaction is already committed', async () => {
     vi.mocked(creditLedgerRepository.getById).mockResolvedValue(makeTransaction('COMMITTED'));
 
-    const result = await billingEngine.commit('tx-1');
+    const result = await billingEngine.commit('tenant-1', 'tx-1');
 
     expect(result).toEqual({ ok: true, idempotentReplay: true });
     expect(creditLedgerRepository.markCommitted).not.toHaveBeenCalled();
@@ -98,7 +98,7 @@ describe('billingEngine idempotency', () => {
   it('refund is idempotent when transaction is already refunded', async () => {
     vi.mocked(creditLedgerRepository.getById).mockResolvedValue(makeTransaction('REFUNDED'));
 
-    const result = await billingEngine.refund('tx-1', 'duplicate_call');
+    const result = await billingEngine.refund('tenant-1', 'tx-1', 'duplicate_call');
 
     expect(result).toEqual({ ok: true, idempotentReplay: true });
     expect(creditLedgerRepository.markRefunded).not.toHaveBeenCalled();

@@ -1,4 +1,4 @@
-import { query } from '../../db/pool';
+import { tenantQuery } from '../../db/pool';
 import type { SubscriptionFeature } from '../../config/plans';
 
 export type CreditTransactionStatus = 'PENDING' | 'COMMITTED' | 'FAILED' | 'REFUNDED';
@@ -48,24 +48,28 @@ function mapRow(row: CreditTransactionRow): CreditTransaction {
 }
 
 export const creditLedgerRepository = {
-  async getById(transactionId: string): Promise<CreditTransaction | null> {
-    const { rows } = await query<CreditTransactionRow>(
+  async getById(tenantId: string, transactionId: string): Promise<CreditTransaction | null> {
+    const { rows } = await tenantQuery<CreditTransactionRow>(
+      tenantId,
       `SELECT *
        FROM credit_transactions
-       WHERE id = $1
+       WHERE tenant_id = $1
+         AND id = $2
        LIMIT 1`,
-      [transactionId],
+      [tenantId, transactionId],
     );
     return rows[0] ? mapRow(rows[0]) : null;
   },
 
-  async getByIdempotencyKey(idempotencyKey: string): Promise<CreditTransaction | null> {
-    const { rows } = await query<CreditTransactionRow>(
+  async getByIdempotencyKey(tenantId: string, idempotencyKey: string): Promise<CreditTransaction | null> {
+    const { rows } = await tenantQuery<CreditTransactionRow>(
+      tenantId,
       `SELECT *
        FROM credit_transactions
-       WHERE idempotency_key = $1
+       WHERE tenant_id = $1
+         AND idempotency_key = $2
        LIMIT 1`,
-      [idempotencyKey],
+      [tenantId, idempotencyKey],
     );
     return rows[0] ? mapRow(rows[0]) : null;
   },
@@ -77,7 +81,8 @@ export const creditLedgerRepository = {
     idempotencyKey: string;
     metadata?: Record<string, unknown>;
   }): Promise<CreditTransaction | null> {
-    const { rows } = await query<CreditTransactionRow>(
+    const { rows } = await tenantQuery<CreditTransactionRow>(
+      input.tenantId,
       `INSERT INTO credit_transactions (
          tenant_id,
          feature,
@@ -87,7 +92,7 @@ export const creditLedgerRepository = {
          metadata
        )
        VALUES ($1, $2, $3, 'PENDING', $4, $5::jsonb)
-       ON CONFLICT (idempotency_key) DO NOTHING
+       ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
        RETURNING *`,
       [
         input.tenantId,
@@ -101,38 +106,41 @@ export const creditLedgerRepository = {
     return rows[0] ? mapRow(rows[0]) : null;
   },
 
-  async markCommitted(transactionId: string, metadata?: Record<string, unknown>): Promise<void> {
-    await query(
+  async markCommitted(tenantId: string, transactionId: string, metadata?: Record<string, unknown>): Promise<void> {
+    await tenantQuery(
+      tenantId,
       `UPDATE credit_transactions
        SET status = 'COMMITTED',
            committed_at = COALESCE(committed_at, now()),
            failure_reason = NULL,
            metadata = metadata || $2::jsonb
-       WHERE id = $1`,
-      [transactionId, JSON.stringify(metadata ?? {})],
+       WHERE id = $1 AND tenant_id = $3`,
+      [transactionId, JSON.stringify(metadata ?? {}), tenantId],
     );
   },
 
-  async markFailed(transactionId: string, reason: string, metadata?: Record<string, unknown>): Promise<void> {
-    await query(
+  async markFailed(tenantId: string, transactionId: string, reason: string, metadata?: Record<string, unknown>): Promise<void> {
+    await tenantQuery(
+      tenantId,
       `UPDATE credit_transactions
        SET status = 'FAILED',
            failure_reason = $2,
            metadata = metadata || $3::jsonb
-       WHERE id = $1`,
-      [transactionId, reason.slice(0, 300), JSON.stringify(metadata ?? {})],
+       WHERE id = $1 AND tenant_id = $4`,
+      [transactionId, reason.slice(0, 300), JSON.stringify(metadata ?? {}), tenantId],
     );
   },
 
-  async markRefunded(transactionId: string, reason: string, metadata?: Record<string, unknown>): Promise<void> {
-    await query(
+  async markRefunded(tenantId: string, transactionId: string, reason: string, metadata?: Record<string, unknown>): Promise<void> {
+    await tenantQuery(
+      tenantId,
       `UPDATE credit_transactions
        SET status = 'REFUNDED',
            failure_reason = $2,
            refunded_at = COALESCE(refunded_at, now()),
            metadata = metadata || $3::jsonb
-       WHERE id = $1`,
-      [transactionId, reason.slice(0, 300), JSON.stringify(metadata ?? {})],
+       WHERE id = $1 AND tenant_id = $4`,
+      [transactionId, reason.slice(0, 300), JSON.stringify(metadata ?? {}), tenantId],
     );
   },
 };

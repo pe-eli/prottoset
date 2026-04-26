@@ -1,4 +1,4 @@
-import { query } from '../../db/pool';
+import { systemQuery, userQuery } from '../../db/pool';
 
 interface SubscriptionRow {
   id: string;
@@ -43,7 +43,8 @@ function toSubscription(row: SubscriptionRow): Subscription {
 
 export const subscriptionRepository = {
   async findActiveByUserId(userId: string): Promise<Subscription | null> {
-    const { rows } = await query<SubscriptionRow>(
+    const { rows } = await userQuery<SubscriptionRow>(
+      userId,
       `SELECT * FROM subscriptions
        WHERE user_id = $1
          AND lower(status) IN (
@@ -72,7 +73,8 @@ export const subscriptionRepository = {
     currentPeriodStart?: Date;
     currentPeriodEnd?: Date;
   }): Promise<Subscription> {
-    const { rows } = await query<SubscriptionRow>(
+    const { rows } = await userQuery<SubscriptionRow>(
+      data.userId,
       `INSERT INTO subscriptions (
         user_id,
         plan_id,
@@ -129,23 +131,27 @@ export const subscriptionRepository = {
 
     params.push(mpSubscriptionId);
 
-    const { rows } = await query<SubscriptionRow>(
+    const { rows } = await systemQuery<SubscriptionRow>(
       `UPDATE subscriptions SET ${sets.join(', ')} WHERE mp_subscription_id = $${idx} RETURNING *`,
       params,
     );
     return rows[0] ? toSubscription(rows[0]) : null;
   },
 
-  async updateStatus(id: string, status: string): Promise<Subscription | null> {
-    const { rows } = await query<SubscriptionRow>(
-      `UPDATE subscriptions SET status = $1, updated_at = now() WHERE id = $2 RETURNING *`,
-      [status, id],
+  async updateStatus(userId: string, id: string, status: string): Promise<Subscription | null> {
+    const { rows } = await userQuery<SubscriptionRow>(
+      userId,
+      `UPDATE subscriptions
+       SET status = $1, updated_at = now()
+       WHERE id = $2 AND user_id = $3
+       RETURNING *`,
+      [status, id, userId],
     );
     return rows[0] ? toSubscription(rows[0]) : null;
   },
 
   async findByMpSubscriptionId(mpSubscriptionId: string): Promise<Subscription | null> {
-    const { rows } = await query<SubscriptionRow>(
+    const { rows } = await systemQuery<SubscriptionRow>(
       `SELECT * FROM subscriptions WHERE mp_subscription_id = $1 LIMIT 1`,
       [mpSubscriptionId],
     );

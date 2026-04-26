@@ -58,7 +58,7 @@ export const subscriptionService = {
       throw new Error('Você já possui uma assinatura ativa');
     }
     if (existing && existingStatus === 'pending') {
-      await subscriptionRepository.updateStatus(existing.id, 'cancelled');
+      await subscriptionRepository.updateStatus(userId, existing.id, 'cancelled');
     }
 
     const plan = PLANS[planId];
@@ -185,7 +185,7 @@ export const subscriptionService = {
       }
     }
 
-    await subscriptionRepository.updateStatus(sub.id, 'cancelled');
+    await subscriptionRepository.updateStatus(userId, sub.id, 'cancelled');
   },
 
   async checkLimit(userId: string, feature: SubscriptionFeature): Promise<{
@@ -295,7 +295,7 @@ export const subscriptionService = {
 
     const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
     if (existing) {
-      await subscriptionRepository.updateStatus(existing.id, 'cancelled');
+      await subscriptionRepository.updateStatus(parsedRef.userId, existing.id, 'cancelled');
     }
 
     const created = await subscriptionRepository.create({
@@ -387,7 +387,7 @@ async function handlePreapprovalEvent(action: string | undefined, preapprovalId:
               },
             });
           }
-          await subscriptionRepository.updateStatus(existing.id, 'cancelled');
+          await subscriptionRepository.updateStatus(parsedRef.userId, existing.id, 'cancelled');
         }
 
         await subscriptionRepository.create({
@@ -408,7 +408,7 @@ async function handlePreapprovalEvent(action: string | undefined, preapprovalId:
       if (!updated && parsedRef) {
         const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
         if (existing) {
-          await subscriptionRepository.updateStatus(existing.id, 'cancelled');
+          await subscriptionRepository.updateStatus(parsedRef.userId, existing.id, 'cancelled');
         }
       }
     } else if (mpStatus === 'paused') {
@@ -419,7 +419,7 @@ async function handlePreapprovalEvent(action: string | undefined, preapprovalId:
       if (!updated && parsedRef) {
         const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
         if (existing) {
-          await subscriptionRepository.updateStatus(existing.id, 'paused');
+          await subscriptionRepository.updateStatus(parsedRef.userId, existing.id, 'paused');
         }
       }
     }

@@ -1,4 +1,4 @@
-import { query } from '../db/pool';
+import { tenantQuery } from '../db/pool';
 import type { QuotaKey } from './quotas';
 import { DEFAULT_QUOTAS } from './quotas';
 
@@ -12,7 +12,8 @@ interface QuotaUsageRow {
 
 export const quotaRepository = {
   async resolveLimit(tenantId: string, quotaKey: QuotaKey): Promise<number> {
-    const { rows } = await query<QuotaLimitRow>(
+    const { rows } = await tenantQuery<QuotaLimitRow>(
+      tenantId,
       `SELECT daily_limit
        FROM quota_limits
        WHERE quota_key = $1 AND (tenant_id = $2 OR tenant_id IS NULL)
@@ -24,7 +25,8 @@ export const quotaRepository = {
   },
 
   async getUsage(tenantId: string, quotaKey: QuotaKey): Promise<number> {
-    const { rows } = await query<QuotaUsageRow>(
+    const { rows } = await tenantQuery<QuotaUsageRow>(
+      tenantId,
       'SELECT used_count FROM quota_usage WHERE tenant_id = $1 AND quota_key = $2 AND usage_date = CURRENT_DATE',
       [tenantId, quotaKey],
     );
@@ -44,7 +46,8 @@ export const quotaRepository = {
       };
     }
 
-    const { rowCount, rows } = await query<QuotaUsageRow>(
+    const { rowCount, rows } = await tenantQuery<QuotaUsageRow>(
+      tenantId,
       `INSERT INTO quota_usage (tenant_id, quota_key, usage_date, used_count, updated_at)
        VALUES ($1, $2, CURRENT_DATE, $3, now())
        ON CONFLICT (tenant_id, quota_key, usage_date)
@@ -76,7 +79,8 @@ export const quotaRepository = {
   async releaseAtomic(tenantId: string, quotaKey: QuotaKey, cost: number): Promise<void> {
     const normalizedCost = Math.max(1, Math.floor(cost || 1));
 
-    await query(
+    await tenantQuery(
+      tenantId,
       `UPDATE quota_usage
        SET used_count = GREATEST(0, used_count - $3),
            updated_at = now()

@@ -76,7 +76,7 @@ export const billingEngine = {
     return withDistributedLock(
       `billing:reserve:${input.tenantId}:${input.feature}:${idempotencyKey}`,
       async () => {
-        const existing = await creditLedgerRepository.getByIdempotencyKey(idempotencyKey);
+        const existing = await creditLedgerRepository.getByIdempotencyKey(input.tenantId, idempotencyKey);
         if (existing) {
           return asReplayResult(existing);
         }
@@ -93,7 +93,7 @@ export const billingEngine = {
         });
 
         if (!pending) {
-          const replay = await creditLedgerRepository.getByIdempotencyKey(idempotencyKey);
+          const replay = await creditLedgerRepository.getByIdempotencyKey(input.tenantId, idempotencyKey);
           if (!replay) {
             return {
               ok: false,
@@ -106,7 +106,7 @@ export const billingEngine = {
 
         const limitCheck = await usageTrackerService.checkFeatureLimit(input.tenantId, input.feature);
         if (!limitCheck.allowed) {
-          await creditLedgerRepository.markFailed(pending.id, 'limit_exceeded', {
+          await creditLedgerRepository.markFailed(input.tenantId, pending.id, 'limit_exceeded', {
             used: limitCheck.used,
             limit: limitCheck.limit,
           });
@@ -141,7 +141,7 @@ export const billingEngine = {
         );
 
         if (!reserved) {
-          await creditLedgerRepository.markFailed(pending.id, 'atomic_limit_check_failed', {
+          await creditLedgerRepository.markFailed(input.tenantId, pending.id, 'atomic_limit_check_failed', {
             used: limitCheck.used,
             limit: limitCheck.limit,
           });
@@ -181,9 +181,13 @@ export const billingEngine = {
     );
   },
 
-  async commit(transactionId: string, metadata?: Record<string, unknown>): Promise<{ ok: boolean; idempotentReplay: boolean; reason?: string }> {
-    return withDistributedLock(`billing:commit:${transactionId}`, async () => {
-      const transaction = await creditLedgerRepository.getById(transactionId);
+  async commit(
+    tenantId: string,
+    transactionId: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<{ ok: boolean; idempotentReplay: boolean; reason?: string }> {
+    return withDistributedLock(`billing:commit:${tenantId}:${transactionId}`, async () => {
+      const transaction = await creditLedgerRepository.getById(tenantId, transactionId);
       if (!transaction) {
         return { ok: false, idempotentReplay: false, reason: 'transaction_not_found' };
       }
@@ -200,7 +204,7 @@ export const billingEngine = {
         return { ok: false, idempotentReplay: true, reason: 'transaction_refunded' };
       }
 
-      await creditLedgerRepository.markCommitted(transaction.id, metadata);
+      await creditLedgerRepository.markCommitted(tenantId, transaction.id, metadata);
 
       metricsService.increment({
         name: 'billing.commit.success',
@@ -225,12 +229,13 @@ export const billingEngine = {
   },
 
   async refund(
+    tenantId: string,
     transactionId: string,
     reason: string,
     metadata?: Record<string, unknown>,
   ): Promise<{ ok: boolean; idempotentReplay: boolean }> {
-    return withDistributedLock(`billing:refund:${transactionId}`, async () => {
-      const transaction = await creditLedgerRepository.getById(transactionId);
+    return withDistributedLock(`billing:refund:${tenantId}:${transactionId}`, async () => {
+      const transaction = await creditLedgerRepository.getById(tenantId, transactionId);
       if (!transaction) {
         return { ok: false, idempotentReplay: false };
       }
@@ -244,7 +249,7 @@ export const billingEngine = {
       }
 
       await usageTrackerService.refundMonthlyUsage(transaction.tenantId, transaction.feature, transaction.amount);
-      await creditLedgerRepository.markRefunded(transaction.id, reason, metadata);
+        await creditLedgerRepository.markRefunded(tenantId, transaction.id, reason, metadata);
 
       metricsService.increment({
         name: 'billing.refund.success',
@@ -292,10 +297,10 @@ export const billingEngine = {
       };
     }
 
-    const committed = await this.commit(reserved.transaction.id);
+    const committed = await this.commit(input.tenantId, reserved.transaction.id);
     if (!committed.ok) {
       if (!committed.idempotentReplay) {
-        await this.refund(reserved.transaction.id, committed.reason || 'commit_failed', {
+        await this.refund(input.tenantId, reserved.transaction.id, committed.reason || 'commit_failed', {
           stage: 'consumeImmediate',
         });
       }

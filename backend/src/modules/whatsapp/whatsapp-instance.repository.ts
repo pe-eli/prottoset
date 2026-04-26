@@ -1,4 +1,4 @@
-import { query } from '../../db/pool';
+import { systemQuery, tenantQuery } from '../../db/pool';
 
 export interface WhatsAppInstance {
   id: string;
@@ -40,7 +40,8 @@ function mapRow(row: InstanceRow): WhatsAppInstance {
 
 export const waInstanceRepository = {
   async findByTenant(tenantId: string): Promise<WhatsAppInstance | null> {
-    const { rows } = await query<InstanceRow>(
+    const { rows } = await tenantQuery<InstanceRow>(
+      tenantId,
       'SELECT * FROM whatsapp_instances WHERE tenant_id = $1',
       [tenantId],
     );
@@ -48,7 +49,7 @@ export const waInstanceRepository = {
   },
 
   async findByInstanceName(instanceName: string): Promise<WhatsAppInstance | null> {
-    const { rows } = await query<InstanceRow>(
+    const { rows } = await systemQuery<InstanceRow>(
       'SELECT * FROM whatsapp_instances WHERE instance_name = $1',
       [instanceName],
     );
@@ -60,7 +61,8 @@ export const waInstanceRepository = {
     data: { instanceName?: string; status?: WhatsAppInstance['status']; phone?: string | null },
   ): Promise<WhatsAppInstance> {
     const instanceName = data.instanceName || `user_${tenantId}`;
-    const { rows } = await query<InstanceRow>(
+    const { rows } = await tenantQuery<InstanceRow>(
+      tenantId,
       `INSERT INTO whatsapp_instances (tenant_id, instance_name, status, phone)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (tenant_id) DO UPDATE SET
@@ -79,7 +81,7 @@ export const waInstanceRepository = {
     status: WhatsAppInstance['status'],
     phone?: string | null,
   ): Promise<void> {
-    await query(
+    await systemQuery(
       `UPDATE whatsapp_instances
        SET status = $2, phone = COALESCE($3, phone), updated_at = now()
        WHERE instance_name = $1`,
@@ -88,7 +90,8 @@ export const waInstanceRepository = {
   },
 
   async setQrCode(tenantId: string, qrCode: string): Promise<void> {
-    await query(
+    await tenantQuery(
+      tenantId,
       `UPDATE whatsapp_instances
        SET qr_code = $2, qr_expires_at = now() + interval '45 seconds', updated_at = now()
        WHERE tenant_id = $1`,
@@ -97,7 +100,8 @@ export const waInstanceRepository = {
   },
 
   async clearQrCode(tenantId: string): Promise<void> {
-    await query(
+    await tenantQuery(
+      tenantId,
       `UPDATE whatsapp_instances
        SET qr_code = NULL, qr_expires_at = NULL, updated_at = now()
        WHERE tenant_id = $1`,
@@ -106,6 +110,6 @@ export const waInstanceRepository = {
   },
 
   async deleteByTenant(tenantId: string): Promise<void> {
-    await query('DELETE FROM whatsapp_instances WHERE tenant_id = $1', [tenantId]);
+    await tenantQuery(tenantId, 'DELETE FROM whatsapp_instances WHERE tenant_id = $1', [tenantId]);
   },
 };

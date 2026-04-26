@@ -1,4 +1,4 @@
-import { query } from '../db/pool';
+import { systemQuery, tenantQuery } from '../db/pool';
 
 export interface AuditLogInput {
   tenantId?: string;
@@ -13,28 +13,33 @@ export interface AuditLogInput {
 
 export const auditLogService = {
   async record(input: AuditLogInput): Promise<void> {
-    await query(
-      `INSERT INTO audit_logs (
-         tenant_id,
-         actor_id,
-         action,
-         target_type,
-         target_id,
-         correlation_id,
-         status,
-         details
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
-      [
-        input.tenantId ?? null,
-        input.actorId ?? null,
-        input.action,
-        input.targetType ?? null,
-        input.targetId ?? null,
-        input.correlationId ?? null,
-        input.status,
-        JSON.stringify(input.details ?? {}),
-      ],
-    );
+    const sql = `INSERT INTO audit_logs (
+      tenant_id,
+      actor_id,
+      action,
+      target_type,
+      target_id,
+      correlation_id,
+      status,
+      details
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`;
+    const params = [
+      input.tenantId ?? null,
+      input.actorId ?? null,
+      input.action,
+      input.targetType ?? null,
+      input.targetId ?? null,
+      input.correlationId ?? null,
+      input.status,
+      JSON.stringify(input.details ?? {}),
+    ];
+
+    if (input.tenantId) {
+      await tenantQuery(input.tenantId, sql, params);
+      return;
+    }
+
+    await systemQuery(sql, params);
   },
 };

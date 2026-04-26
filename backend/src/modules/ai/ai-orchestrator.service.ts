@@ -109,7 +109,7 @@ export const aiOrchestrator = {
             }
           }
 
-          const committed = await billingEngine.commit(reserved.transaction.id, {
+          const committed = await billingEngine.commit(input.tenantId, reserved.transaction.id, {
             promptHash,
             source: input.source,
             estimatedCredits,
@@ -164,6 +164,7 @@ export const aiOrchestrator = {
           };
         } catch (err) {
           await billingEngine.refund(
+            input.tenantId,
             reserved.transaction.id,
             err instanceof Error ? err.message : 'ai_generation_failed',
             {

@@ -1,4 +1,4 @@
-import { query } from '../db/pool';
+import { systemQuery, tenantQuery } from '../db/pool';
 
 type FraudSeverity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -31,20 +31,26 @@ const REQUEST_BURST_LIMIT = readIntEnv('FRAUD_REQUEST_BURST_LIMIT', 30);
 
 export const fraudService = {
   async recordEvent(input: FraudEventInput): Promise<void> {
-    await query(
-      `INSERT INTO fraud_events (tenant_id, event_type, severity, details)
-       VALUES ($1, $2, $3, $4::jsonb)`,
-      [
-        input.tenantId ?? null,
-        input.eventType,
-        input.severity ?? 'medium',
-        JSON.stringify(input.details ?? {}),
-      ],
-    );
+    const sql = `INSERT INTO fraud_events (tenant_id, event_type, severity, details)
+      VALUES ($1, $2, $3, $4::jsonb)`;
+    const params = [
+      input.tenantId ?? null,
+      input.eventType,
+      input.severity ?? 'medium',
+      JSON.stringify(input.details ?? {}),
+    ];
+
+    if (input.tenantId) {
+      await tenantQuery(input.tenantId, sql, params);
+      return;
+    }
+
+    await systemQuery(sql, params);
   },
 
   async blockTenant(tenantId: string, reason: string, minutes = 15): Promise<void> {
-    await query(
+    await tenantQuery(
+      tenantId,
       `INSERT INTO tenant_security_blocks (tenant_id, reason, blocked_until, created_at, updated_at)
        VALUES ($1, $2, now() + make_interval(mins => $3::int), now(), now())
        ON CONFLICT (tenant_id)
@@ -64,7 +70,8 @@ export const fraudService = {
   },
 
   async isTenantBlocked(tenantId: string): Promise<{ blocked: boolean; reason?: string; blockedUntil?: string }> {
-    const { rows } = await query<TenantBlockRow>(
+    const { rows } = await tenantQuery<TenantBlockRow>(
+      tenantId,
       `SELECT reason, blocked_until
        FROM tenant_security_blocks
        WHERE tenant_id = $1 AND blocked_until > now()
@@ -84,7 +91,8 @@ export const fraudService = {
   },
 
   async detectAiSpikeAndBlock(tenantId: string): Promise<void> {
-    const { rows } = await query<AggregateRow>(
+    const { rows } = await tenantQuery<AggregateRow>(
+      tenantId,
       `SELECT COALESCE(SUM(amount), 0)::text AS total
        FROM billing_consumptions
        WHERE tenant_id = $1
@@ -114,7 +122,7 @@ export const fraudService = {
   },
 
   async detectInvalidWebhookBurst(provider: string): Promise<void> {
-    const { rows } = await query<AggregateRow>(
+    const { rows } = await systemQuery<AggregateRow>(
       `SELECT COUNT(*)::text AS total
        FROM fraud_events
        WHERE event_type = 'webhook_invalid_signature'
@@ -139,7 +147,8 @@ export const fraudService = {
   },
 
   async detectRequestBurstAndBlock(tenantId: string): Promise<void> {
-    const { rows } = await query<AggregateRow>(
+    const { rows } = await tenantQuery<AggregateRow>(
+      tenantId,
       `SELECT COUNT(*)::text AS total
        FROM fraud_events
        WHERE tenant_id = $1

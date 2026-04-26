@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import { query } from '../../db/pool';
+import { systemQuery } from '../../db/pool';
 
 interface OutboxRow {
   id: string;
@@ -58,7 +58,7 @@ export const outboxRepository = {
   async claimPending(limit: number): Promise<OutboxEvent[]> {
     const safeLimit = Math.max(1, Math.min(200, Math.floor(limit || 20)));
 
-    const { rows } = await query<OutboxRow>(
+    const { rows } = await systemQuery<OutboxRow>(
       `WITH claimed AS (
          SELECT id
          FROM outbox_events
@@ -81,7 +81,7 @@ export const outboxRepository = {
   },
 
   async markDispatched(id: string): Promise<void> {
-    await query(
+    await systemQuery(
       `UPDATE outbox_events
        SET status = 'dispatched',
            dispatched_at = now(),
@@ -92,7 +92,7 @@ export const outboxRepository = {
   },
 
   async markFailed(id: string, error: string, retryInSeconds = 30): Promise<void> {
-    await query(
+    await systemQuery(
       `UPDATE outbox_events
        SET status = 'failed',
            last_error = $2,

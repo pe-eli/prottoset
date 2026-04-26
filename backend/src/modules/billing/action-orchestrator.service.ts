@@ -118,7 +118,7 @@ export const actionOrchestrator = {
 
       try {
         const result = await input.action();
-        const committed = await billingEngine.commit(reservation.transaction.id, {
+        const committed = await billingEngine.commit(input.tenantId, reservation.transaction.id, {
           actionName: input.actionName,
           correlationId: input.correlationId,
           ...(input.metadata ?? {}),
@@ -166,6 +166,7 @@ export const actionOrchestrator = {
         };
       } catch (err) {
         await billingEngine.refund(
+          input.tenantId,
           reservation.transaction.id,
           err instanceof Error ? err.message : 'action_failed',
           {

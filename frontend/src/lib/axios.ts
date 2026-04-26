@@ -62,6 +62,13 @@ function processQueue(error: unknown) {
   failedQueue = [];
 }
 
+export function resetApiSessionState(): void {
+  csrfToken = null;
+  csrfRequest = null;
+  isRefreshing = false;
+  processQueue(new Error('Session state reset'));
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {

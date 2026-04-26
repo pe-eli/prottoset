@@ -33,6 +33,7 @@ export async function verifyAccessToken(token: string): Promise<AccessTokenPaylo
     const emailVerified = Boolean(payload.emailVerified);
 
     if (!sub || !email || !role || !tenantId) return null;
+    if (tenantId !== sub) return null;
     return { sub, email, role, tenantId, emailVerified };
   } catch {
     return null;

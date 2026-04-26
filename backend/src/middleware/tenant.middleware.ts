@@ -8,9 +8,13 @@ declare global {
   }
 }
 
-export function setTenant(req: Request, _res: Response, next: NextFunction): void {
+export function setTenant(req: Request, res: Response, next: NextFunction): void {
   if (req.authUser) {
-    req.tenantId = req.authUser.userId;
+    if (req.authUser.tenantId !== req.authUser.userId) {
+      res.status(401).json({ error: 'Sessão inválida ou expirada' });
+      return;
+    }
+    req.tenantId = req.authUser.tenantId;
   }
   next();
 }

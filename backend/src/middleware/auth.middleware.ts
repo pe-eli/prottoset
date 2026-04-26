@@ -28,6 +28,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
+  if (payload.tenantId !== payload.sub) {
+    res.status(401).json({ error: 'Sessão inválida ou expirada' });
+    return;
+  }
+
   req.authUser = {
     userId: payload.sub,
     email: payload.email,

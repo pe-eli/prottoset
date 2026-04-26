@@ -40,6 +40,13 @@ const webhookLimiter = createSecurityRateLimit({
   ip: { limit: 120, windowMs: 60 * 1000 },
 });
 
+function setNoStoreHeaders(_req: Request, res: Response, next: NextFunction): void {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+}
+
 if (trustProxy === 'true' || trustProxy === '1') {
   app.set('trust proxy', 1);
 } else if (trustProxy === 'false' || trustProxy === '0') {
@@ -84,12 +91,16 @@ app.post('/api/webhooks/evolution/:event', webhookLimiter, express.raw({ type: '
 
 app.use(express.json({ limit: '200kb' }));
 
-app.use('/api/auth', requireTrustedOrigin(allowedOrigins));
+app.use('/api/auth', setNoStoreHeaders, requireTrustedOrigin(allowedOrigins));
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', (_req, res) => {
   res.status(404).json({ error: 'Rota de autenticação não encontrada' });
 });
-app.use('/api', requireTrustedOrigin(allowedOrigins));
+
+// Public pricing endpoint used before authentication (e.g. mobile plan screen).
+app.get('/api/subscriptions/plans', setNoStoreHeaders, subscriptionsController.getPlans);
+
+app.use('/api', setNoStoreHeaders, requireTrustedOrigin(allowedOrigins));
 app.use('/api', asyncHandler(requireAuth));
 app.use('/api', asyncHandler(requireVerifiedEmail));
 app.use('/api', setTenant);

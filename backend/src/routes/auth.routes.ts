@@ -344,6 +344,15 @@ router.post('/login', loginLimiter, loginSlowDown, asyncHandler(async (req, res)
     return;
   }
 
+  const currentRefreshRaw = req.cookies?.[REFRESH_COOKIE];
+  if (currentRefreshRaw) {
+    const currentRefreshHash = hashToken(currentRefreshRaw);
+    const currentRefreshToken = await refreshTokensRepository.findByHash(currentRefreshHash);
+    if (currentRefreshToken) {
+      await refreshTokensRepository.revokeFamily(currentRefreshToken.family);
+    }
+  }
+
   await authService.issueSession(res, user);
   res.json({
     user: {
@@ -363,7 +372,7 @@ router.post('/logout', requireCsrfToken(), asyncHandler(async (req, res) => {
     const hash = hashToken(raw);
     const token = await refreshTokensRepository.findByHash(hash);
     if (token) {
-      await refreshTokensRepository.revokeById(token.id);
+      await refreshTokensRepository.revokeFamily(token.family);
     }
   }
 

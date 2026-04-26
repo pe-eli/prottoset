@@ -8,6 +8,22 @@ interface ApiErrorPayload {
   error?: string;
 }
 
+function formatPlanPrice(plan: PublicPlan): string {
+  if (typeof plan.price === 'string' && plan.price.trim()) {
+    return plan.price;
+  }
+
+  const monthly = Number(plan.price_monthly);
+  if (Number.isFinite(monthly)) {
+    return monthly.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+  }
+
+  return 'Preco indisponivel';
+}
+
 const CheckIcon = () => (
   <svg className="w-4 h-4 text-mint flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -33,7 +49,10 @@ export function PricingPage() {
     subscriptionsAPI
       .getPlans()
       .then(({ data }) => setPlans(data.plans))
-      .catch(() => setError('Erro ao carregar planos'))
+      .catch((err: unknown) => {
+        const apiError = isAxiosError<ApiErrorPayload>(err) ? err.response?.data?.error : undefined;
+        setError(apiError || 'Erro ao carregar planos');
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -148,7 +167,7 @@ export function PricingPage() {
                 <div className="mb-6">
                   <h3 className="text-lg font-heading font-bold text-text-primary mb-1">{plan.name}</h3>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-heading font-extrabold text-brand-400">{plan.price}</span>
+                    <span className="text-3xl font-heading font-extrabold text-brand-400">{formatPlanPrice(plan)}</span>
                     <span className="text-sm text-text-muted">/mês</span>
                   </div>
                 </div>

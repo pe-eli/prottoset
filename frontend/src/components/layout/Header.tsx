@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authAPI } from '../../features/auth/auth.api';
 import type { AuthUser } from '../../features/auth/auth.api';
 import { useSubscription } from '../../contexts/useSubscription';
 import { leadsAPI, type LeadsDailyQuota } from '../../features/leads/leads.api';
 
 interface HeaderProps {
   user: AuthUser;
-  onLogout: () => void;
+  onLogout: () => Promise<void> | void;
+  logoutPending?: boolean;
 }
 
 function formatSubscriptionBadge(planName: string, status: string): string {
@@ -18,12 +18,13 @@ function formatSubscriptionBadge(planName: string, status: string): string {
   return `${planName} (${status})`;
 }
 
-export function Header({ user, onLogout }: HeaderProps) {
+export function Header({ user, onLogout, logoutPending = false }: HeaderProps) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const { subscription } = useSubscription();
   const [freeTierQuota, setFreeTierQuota] = useState<LeadsDailyQuota | null>(null);
   const hasActiveSubscription = subscription?.status === 'active';
+  const isLoggingOut = logoutPending;
 
   useEffect(() => {
     let mounted = true;
@@ -51,10 +52,12 @@ export function Header({ user, onLogout }: HeaderProps) {
   }, [hasActiveSubscription]);
 
   const handleLogout = async () => {
+    if (isLoggingOut) return;
     try {
-      await authAPI.logout();
-    } finally {
-      onLogout();
+      setMenuOpen(false);
+      await onLogout();
+    } catch {
+      // App-level flow already handles fallback cleanup.
     }
   };
 
@@ -112,8 +115,9 @@ export function Header({ user, onLogout }: HeaderProps) {
         <div className="relative">
           <button
             type="button"
+            disabled={isLoggingOut}
             onClick={() => setMenuOpen(!menuOpen)}
-            className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-white/[0.04] transition-colors"
+            className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-white/[0.04] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-xs font-bold">
               {initials}
@@ -164,12 +168,22 @@ export function Header({ user, onLogout }: HeaderProps) {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-400/10 transition-colors flex items-center gap-2.5"
+                  disabled={isLoggingOut}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-400/10 transition-colors flex items-center gap-2.5 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Sair
+                  {isLoggingOut ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                      Saindo...
+                    </span>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Sair
+                    </>
+                  )}
                 </button>
               </div>
             </>

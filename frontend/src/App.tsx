@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
@@ -22,13 +22,18 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfUsePage } from './pages/TermsOfUsePage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { clearLegacySavedPromptsStorage } from './features/whatsapp/saved-prompts.storage';
+import { resetApiSessionState } from './lib/axios';
+
+type SessionTransition = 'login' | 'logout';
 
 interface ProtectedLayoutProps {
   user: AuthUser;
-  onLogout: () => void;
+  onLogout: () => Promise<void> | void;
+  logoutPending: boolean;
 }
 
-function ProtectedLayout({ user, onLogout }: ProtectedLayoutProps) {
+function ProtectedLayout({ user, onLogout, logoutPending }: ProtectedLayoutProps) {
   const location = useLocation();
   const isMainHub = location.pathname === '/home';
   const showFeatureRail = [
@@ -40,7 +45,7 @@ function ProtectedLayout({ user, onLogout }: ProtectedLayoutProps) {
 
   return (
     <SubscriptionProvider>
-      {isMainHub && <Header user={user} onLogout={onLogout} />}
+      {isMainHub && <Header user={user} onLogout={onLogout} logoutPending={logoutPending} />}
       {showFeatureRail && <FeatureRail />}
       <main className={`flex-1 px-4 py-8 ${showFeatureRail ? 'lg:pl-24' : ''}`}>
         <Outlet context={{ user }} />
@@ -52,9 +57,50 @@ function ProtectedLayout({ user, onLogout }: ProtectedLayoutProps) {
   );
 }
 
+function SessionTransitionOverlay({ mode }: { mode: SessionTransition }) {
+  const message = mode === 'logout'
+    ? 'Encerrando sua sessao com seguranca...'
+    : 'Preparando seu ambiente...';
+
+  return (
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-background/90 backdrop-blur-sm">
+      <div className="rounded-2xl border border-border-light bg-surface-elevated px-6 py-5 text-center shadow-2xl shadow-black/20">
+        <div className="mx-auto h-8 w-8 rounded-full border-2 border-border border-t-brand-400 animate-spin" />
+        <p className="mt-3 text-sm font-medium text-text-secondary">{message}</p>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [sessionTransition, setSessionTransition] = useState<SessionTransition | null>(null);
+
+  const handleAuthenticated = useCallback(async (nextUser: AuthUser) => {
+    setSessionTransition('login');
+    try {
+      resetApiSessionState();
+      clearLegacySavedPromptsStorage();
+      setUser(nextUser);
+    } finally {
+      setSessionTransition(null);
+    }
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    setSessionTransition('logout');
+    try {
+      await authAPI.logout();
+    } catch {
+      // Local logout is always forced even if the request fails.
+    } finally {
+      resetApiSessionState();
+      clearLegacySavedPromptsStorage();
+      setUser(null);
+      setSessionTransition(null);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -91,8 +137,9 @@ function App() {
 
   return (
     <BrowserRouter>
-      <WaBlastProvider>
+      <WaBlastProvider key={user?.id ?? 'guest'}>
         <div className="min-h-screen flex flex-col bg-background">
+          {sessionTransition ? <SessionTransitionOverlay mode={sessionTransition} /> : null}
           <Routes>
             <Route
               index
@@ -100,13 +147,13 @@ function App() {
             />
             <Route
               path="/login"
-              element={user ? <Navigate to="/home" replace /> : <LoginPage onAuthenticated={(u) => setUser(u)} />}
+              element={user ? <Navigate to="/home" replace /> : <LoginPage onAuthenticated={handleAuthenticated} />}
             />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route
               path="/pricing"
               element={
-                <SubscriptionProvider>
+                <SubscriptionProvider key={`pricing-${user?.id ?? 'guest'}`}>
                   <PricingPage />
                 </SubscriptionProvider>
               }
@@ -118,7 +165,7 @@ function App() {
             <Route
               element={
                 user
-                  ? <ProtectedLayout user={user} onLogout={() => setUser(null)} />
+                  ? <ProtectedLayout key={user.id} user={user} onLogout={handleLogout} logoutPending={sessionTransition === 'logout'} />
                   : <Navigate to="/" replace />
               }
             >

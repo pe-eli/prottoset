@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
 import { useSubscription } from '../contexts/useSubscription';
+import type { AuthUser } from '../features/auth/auth.api';
 import {
   contactsAPI,
   type Contact,
@@ -11,6 +12,10 @@ import {
   type ContactMessage,
   type ContactStatus,
 } from '../features/contacts/contacts.api';
+import {
+  buildSavedPromptsStorageKey,
+  migrateLegacySavedPrompts,
+} from '../features/whatsapp/saved-prompts.storage';
 
 const STATUS_CONFIG: Record<ContactStatus, { label: string; color: string; bg: string }> = {
   new: { label: 'Novo', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
@@ -89,8 +94,10 @@ function getGroupKey(contact: Contact): string {
 }
 
 export function ContactsPage() {
+  const { user } = useOutletContext<{ user: AuthUser }>();
   const { subscription } = useSubscription();
   const hasActiveSubscription = subscription?.status === 'active';
+  const promptsStorageKey = useMemo(() => buildSavedPromptsStorageKey(user.id), [user.id]);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -498,6 +505,7 @@ export function ContactsPage() {
       {replyGroup && (
         <ReplyModal
           group={replyGroup}
+          promptsStorageKey={promptsStorageKey}
           onClose={() => setReplyGroup(null)}
           onSent={async () => {
             await fetchContacts();
@@ -551,10 +559,12 @@ function FilterButton({ active, onClick, label }: { active: boolean; onClick: ()
 
 function ReplyModal({
   group,
+  promptsStorageKey,
   onClose,
   onSent,
 }: {
   group: ContactGroup;
+  promptsStorageKey: string;
   onClose: () => void;
   onSent: () => Promise<void>;
 }) {
@@ -567,25 +577,9 @@ function ReplyModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem('closr.whatsapp.savedPrompts');
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return;
-      const normalized = parsed
-        .filter((entry): entry is SavedPrompt => {
-          if (!entry || typeof entry !== 'object') return false;
-          const candidate = entry as Record<string, unknown>;
-          return typeof candidate.id === 'string'
-            && typeof candidate.name === 'string'
-            && typeof candidate.content === 'string';
-        })
-        .slice(0, 50);
-      setSavedPrompts(normalized);
-    } catch {
-      setSavedPrompts([]);
-    }
-  }, []);
+    const migrated = migrateLegacySavedPrompts(promptsStorageKey);
+    setSavedPrompts(migrated);
+  }, [promptsStorageKey]);
 
   const handleSend = async () => {
     setSending(true);

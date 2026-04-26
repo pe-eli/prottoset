@@ -23,7 +23,7 @@ export interface Plan {
 export const PLANS: Record<PlanId, Plan> = {
   solo: {
     id: 'solo',
-    name: 'Solo',
+    name: 'Starter',
     price_brl: 4900,
     mercadopago_plan_id: process.env.MP_PLAN_ID_SOLO || 'MP_PLAN_ID_SOLO',
     limits: {
@@ -43,28 +43,28 @@ export const PLANS: Record<PlanId, Plan> = {
   },
   agencia: {
     id: 'agencia',
-    name: 'Agência',
-    price_brl: 7900,
+    name: 'Pro',
+    price_brl: 6900,
     mercadopago_plan_id: process.env.MP_PLAN_ID_AGENCIA || 'MP_PLAN_ID_AGENCIA',
     limits: {
       leads_per_month: 3000,
       whatsapp_messages: null,
       emails_per_month: 5000,
       pdf_quotes: null,
-      ai_credits: 10000,
+      ai_credits: 2000,
       seats: 3,
     },
     features: [
       '3.000 leads por mês',
       '5.000 e-mails por mês',
-      '10.000 créditos de IA',
+      '2.000 créditos de IA',
       'Histórico de contatos',
     ],
   },
   pro: {
     id: 'pro',
-    name: 'Pro',
-    price_brl: 9900,
+    name: 'Enterprise',
+    price_brl: 19900,
     mercadopago_plan_id: process.env.MP_PLAN_ID_PRO || 'MP_PLAN_ID_PRO',
     limits: {
       leads_per_month: null,

@@ -1,11 +1,12 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
 import { useSubscription } from '../contexts/useSubscription';
+import type { AuthUser } from '../features/auth/auth.api';
 import { whatsappAPI } from '../features/whatsapp/whatsapp.api';
 import { waInstanceAPI } from '../features/whatsapp/wa-instance.api';
 import type { WaInstanceStatus } from '../features/whatsapp/wa-instance.api';
@@ -13,6 +14,11 @@ import { queuesAPI } from '../features/queues/queues.api';
 import type { PhoneQueue } from '../features/queues/queues.types';
 import { QueueManagerModal } from '../features/queues/QueueManagerModal';
 import { useWaBlast } from '../contexts/useWaBlast';
+import {
+  buildSavedPromptsStorageKey,
+  migrateLegacySavedPrompts,
+  writeSavedPrompts,
+} from '../features/whatsapp/saved-prompts.storage';
 
 type JobStatus = 'pending' | 'sending' | 'sent' | 'failed';
 
@@ -85,8 +91,10 @@ function WaIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
 
 
 export function WhatsAppBlastPage() {
+  const { user } = useOutletContext<{ user: AuthUser }>();
   const { subscription, refresh: refreshSubscription } = useSubscription();
   const hasActiveSubscription = subscription?.status === 'active';
+  const promptsStorageKey = useMemo(() => buildSavedPromptsStorageKey(user.id), [user.id]);
 
   const [phoneInput, setPhoneInput] = useState('');
   const [phones, setPhones] = useState<string[]>([]);
@@ -154,31 +162,13 @@ export function WhatsAppBlastPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const raw = window.localStorage.getItem('closr.whatsapp.savedPrompts');
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return;
-      const normalized = parsed
-        .filter((entry): entry is SavedPrompt => {
-          if (!entry || typeof entry !== 'object') return false;
-          const candidate = entry as Record<string, unknown>;
-          return typeof candidate.id === 'string'
-            && typeof candidate.name === 'string'
-            && typeof candidate.content === 'string';
-        })
-        .slice(0, 50);
-      setSavedPrompts(normalized);
-    } catch {
-      setSavedPrompts([]);
-    }
-  }, []);
+    const migrated = migrateLegacySavedPrompts(promptsStorageKey);
+    setSavedPrompts(migrated);
+  }, [promptsStorageKey]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('closr.whatsapp.savedPrompts', JSON.stringify(savedPrompts));
-  }, [savedPrompts]);
+    writeSavedPrompts(promptsStorageKey, savedPrompts);
+  }, [promptsStorageKey, savedPrompts]);
 
   const totalBatches = Math.ceil(phones.length / batchSize);
 

@@ -51,8 +51,11 @@ export const authAPI = {
 
   refresh: () => api.post<AuthResponse>('/auth/refresh'),
 
-  googleLogin: () => {
+  googleLogin: (returnTo?: string) => {
     const base = import.meta.env.VITE_API_URL ?? '/api';
-    window.location.href = `${base}/auth/google`;
+    const target = returnTo
+      ? `${base}/auth/google?returnTo=${encodeURIComponent(returnTo)}`
+      : `${base}/auth/google`;
+    window.location.assign(target);
   },
 };

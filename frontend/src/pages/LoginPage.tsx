@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { authAPI } from '../features/auth/auth.api';
 import type { AuthUser } from '../features/auth/auth.api';
@@ -20,6 +20,7 @@ function getApiErrorMessage(err: unknown): string | undefined {
 
 export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -169,12 +170,24 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     if (busy) return;
     setGoogleLoading(true);
     try {
-      authAPI.googleLogin();
+      const returnTo = `${window.location.origin}/home`;
+      authAPI.googleLogin(returnTo);
     } catch {
       setGoogleLoading(false);
       setError('Nao foi possivel iniciar o login com Google agora. Tente novamente.');
     }
   };
+
+  useEffect(() => {
+    const oauthError = searchParams.get('oauthError');
+    if (!oauthError) return;
+    if (oauthError === 'state_missing') {
+      setError('Sua sessão de login Google expirou. Tente novamente.');
+      setNotice('Se o problema persistir, feche a aba e inicie o login novamente.');
+    } else if (oauthError === 'code_missing') {
+      setError('Não foi possível concluir o login com Google. Tente novamente.');
+    }
+  }, [searchParams]);
 
   return (
     <div

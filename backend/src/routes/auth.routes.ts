@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { randomUUID } from 'crypto';
 import slowDown from 'express-slow-down';
 import { consumeRateLimit } from '../security/rate-limit.store';
@@ -13,11 +13,13 @@ import { authConfig, REFRESH_COOKIE, OAUTH_STATE_COOKIE } from '../auth/auth.con
 import { generateState, generateCodeVerifier, generateCodeChallenge, buildAuthorizationUrl } from '../auth/pkce';
 import { verifyGoogleIdToken, exchangeCodeForTokens } from '../auth/verify';
 import { findOrLinkAccount } from '../auth/linkAccount';
+import { consumeOAuthState, saveOAuthState } from '../auth/oauth-state.store';
 import { requireAuth } from '../middleware/auth.middleware';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createSecurityRateLimit } from '../middleware/rate-limit.middleware';
 import { requireCsrfToken, sendCsrfToken } from '../middleware/csrf.middleware';
 import { n8nVerificationService } from '../services/n8n-verification.service';
+import { getAllowedOrigins } from '../middleware/security.middleware';
 
 const router = Router();
 
@@ -64,6 +66,30 @@ const resendCodeLimiter = createSecurityRateLimit({
   message: 'Muitas solicitações. Aguarde antes de tentar novamente.',
   ip: { limit: 10, windowMs: 60 * 60 * 1000 },
 });
+
+const allowedClientOrigins = getAllowedOrigins();
+
+function normalizeReturnTo(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return authConfig.clientUrl();
+  }
+
+  try {
+    const parsed = new URL(raw);
+    if (!allowedClientOrigins.includes(parsed.origin)) {
+      return authConfig.clientUrl();
+    }
+    return `${parsed.origin}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return authConfig.clientUrl();
+  }
+}
+
+function redirectOAuthError(res: Response, code: string): void {
+  const loginUrl = new URL('/login', authConfig.clientUrl());
+  loginUrl.searchParams.set('oauthError', code);
+  res.redirect(loginUrl.toString());
+}
 
 async function startVerificationForUser(user: { id: string; email: string; displayName: string }): Promise<string> {
   if (n8nVerificationService.enabled()) {
@@ -435,8 +461,13 @@ router.get('/google', authLimiter, (req, res) => {
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
+  const returnTo = normalizeReturnTo(req.query.returnTo);
 
-  res.cookie(OAUTH_STATE_COOKIE, JSON.stringify({ state, codeVerifier }), {
+  saveOAuthState(state, { codeVerifier, returnTo }, 10 * 60 * 1000).catch((err) => {
+    console.error('[Auth] Falha ao salvar OAuth state:', err);
+  });
+
+  res.cookie(OAUTH_STATE_COOKIE, JSON.stringify({ state, codeVerifier, returnTo }), {
     httpOnly: true,
     secure: authConfig.isProduction(),
     sameSite: 'lax',
@@ -454,32 +485,40 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
 
   res.clearCookie(OAUTH_STATE_COOKIE, { path: '/api/auth' });
 
-  if (!cookieValue) {
-    res.status(403).json({ error: 'State ausente' });
-    return;
-  }
-
-  let stored: { state: string; codeVerifier: string };
-  try {
-    stored = JSON.parse(cookieValue);
-  } catch {
-    res.status(403).json({ error: 'State inválido' });
-    return;
-  }
-
   const { code, state: returnedState } = req.query as { code?: string; state?: string };
 
-  if (!returnedState || returnedState !== stored.state) {
-    res.status(403).json({ error: 'State não corresponde' });
+  if (!returnedState) {
+    redirectOAuthError(res, 'state_missing');
+    return;
+  }
+
+  const storedFromServer = await consumeOAuthState(returnedState);
+  let storedFromCookie: { state: string; codeVerifier: string; returnTo?: string } | null = null;
+
+  if (cookieValue) {
+    try {
+      storedFromCookie = JSON.parse(cookieValue) as { state: string; codeVerifier: string; returnTo?: string };
+    } catch {
+      storedFromCookie = null;
+    }
+  }
+
+  const codeVerifier = storedFromServer?.codeVerifier
+    ?? (storedFromCookie?.state === returnedState ? storedFromCookie.codeVerifier : undefined);
+  const returnTo = storedFromServer?.returnTo
+    ?? normalizeReturnTo(storedFromCookie?.returnTo ?? authConfig.clientUrl());
+
+  if (!codeVerifier) {
+    redirectOAuthError(res, 'state_missing');
     return;
   }
 
   if (!code) {
-    res.status(400).json({ error: 'Code ausente' });
+    redirectOAuthError(res, 'code_missing');
     return;
   }
 
-  const { idToken } = await exchangeCodeForTokens(code, stored.codeVerifier);
+  const { idToken } = await exchangeCodeForTokens(code, codeVerifier);
   const profile = await verifyGoogleIdToken(idToken);
   const user = await findOrLinkAccount(profile);
 
@@ -499,7 +538,7 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
   }
 
   await authService.issueSession(res, user);
-  res.redirect(authConfig.clientUrl());
+  res.redirect(returnTo);
 }));
 
 export default router;

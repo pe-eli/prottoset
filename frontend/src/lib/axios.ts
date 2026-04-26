@@ -1,26 +1,48 @@
 import axios from 'axios';
 
+const DEFAULT_API_PATH = '/api';
+const FALLBACK_PRODUCTION_API_ORIGIN = 'https://closr.up.railway.app';
+
+function normalizeApiPath(pathname: string): string {
+  const normalized = pathname.replace(/\/$/, '');
+  return normalized || DEFAULT_API_PATH;
+}
+
+function buildAbsoluteApiBase(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    return `${parsed.origin}${normalizeApiPath(parsed.pathname)}`;
+  } catch {
+    return null;
+  }
+}
+
+function shouldUseProductionFallback(hostname: string): boolean {
+  return hostname === 'closr.com.br' || hostname === 'www.closr.com.br';
+}
+
 function resolveApiBaseUrl(): string {
-  const configured = (import.meta.env.VITE_API_URL ?? '/api').trim();
+  const configured = (import.meta.env.VITE_API_URL ?? DEFAULT_API_PATH).trim();
 
-  // In browser, force same-origin API path when configured URL is cross-origin.
-  // This keeps auth cookies first-party on mobile browsers.
   if (typeof window !== 'undefined') {
-    if (!configured || configured.startsWith('/')) return configured || '/api';
-
-    try {
-      const parsed = new URL(configured);
-      if (parsed.origin !== window.location.origin) {
-        return '/api';
+    if (!configured || configured.startsWith('/')) {
+      if (shouldUseProductionFallback(window.location.hostname)) {
+        return `${FALLBACK_PRODUCTION_API_ORIGIN}${configured || DEFAULT_API_PATH}`;
       }
-      const normalizedPath = parsed.pathname.replace(/\/$/, '');
-      return normalizedPath || '/api';
-    } catch {
-      return '/api';
+      return configured || DEFAULT_API_PATH;
     }
+
+    const absolute = buildAbsoluteApiBase(configured);
+    if (absolute) {
+      return absolute;
+    }
+
+    return shouldUseProductionFallback(window.location.hostname)
+      ? `${FALLBACK_PRODUCTION_API_ORIGIN}${DEFAULT_API_PATH}`
+      : DEFAULT_API_PATH;
   }
 
-  return configured || '/api';
+  return buildAbsoluteApiBase(configured) ?? configured || DEFAULT_API_PATH;
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();

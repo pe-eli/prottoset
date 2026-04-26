@@ -466,8 +466,12 @@ router.get('/google', authLimiter, (req, res) => {
   saveOAuthState(state, { codeVerifier, returnTo }, 10 * 60 * 1000).catch((err) => {
     console.error('[Auth] Falha ao salvar OAuth state:', err);
   });
-authConfig.oauthStateCookieOptions() maxAge: 10 * 60 * 1000,
-  });
+
+  res.cookie(
+    OAUTH_STATE_COOKIE,
+    JSON.stringify({ state, codeVerifier, returnTo }),
+    authConfig.oauthStateCookieOptions(),
+  );
 
   const url = buildAuthorizationUrl(state, codeChallenge);
   res.redirect(url);

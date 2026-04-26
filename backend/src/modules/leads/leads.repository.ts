@@ -44,12 +44,12 @@ function toLead(row: LeadRow): Lead {
 
 export const leadsRepository = {
   async getAll(tenantId: string): Promise<Lead[]> {
-    const { rows } = await tenantQuery<LeadRow>(tenantId, 'SELECT * FROM leads ORDER BY created_at DESC');
+    const { rows } = await tenantQuery<LeadRow>(tenantId, 'SELECT * FROM leads WHERE tenant_id = $1 ORDER BY created_at DESC', [tenantId]);
     return rows.map(toLead);
   },
 
   async getById(tenantId: string, id: string): Promise<Lead | null> {
-    const { rows } = await tenantQuery<LeadRow>(tenantId, 'SELECT * FROM leads WHERE id = $1', [id]);
+    const { rows } = await tenantQuery<LeadRow>(tenantId, 'SELECT * FROM leads WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     return rows[0] ? toLead(rows[0]) : null;
   },
 
@@ -74,9 +74,10 @@ export const leadsRepository = {
       tenantId,
       `SELECT *
          FROM leads
-        WHERE regexp_replace(phone, '\\D', '', 'g') = ANY($1::text[])
+        WHERE tenant_id = $2
+          AND regexp_replace(phone, '\\D', '', 'g') = ANY($1::text[])
         ORDER BY created_at DESC`,
-      [keys],
+      [keys, tenantId],
     );
 
     const map = new Map<string, Lead>();
@@ -134,14 +135,14 @@ export const leadsRepository = {
   async updateStatus(tenantId: string, id: string, status: LeadStatus): Promise<Lead | null> {
     const { rows } = await tenantQuery<LeadRow>(
       tenantId,
-      'UPDATE leads SET status = $1::lead_status WHERE id = $2 RETURNING *',
-      [status, id],
+      'UPDATE leads SET status = $1::lead_status WHERE id = $2 AND tenant_id = $3 RETURNING *',
+      [status, id, tenantId],
     );
     return rows[0] ? toLead(rows[0]) : null;
   },
 
   async delete(tenantId: string, id: string): Promise<boolean> {
-    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM leads WHERE id = $1', [id]);
+    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM leads WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     return (rowCount ?? 0) > 0;
   },
 };

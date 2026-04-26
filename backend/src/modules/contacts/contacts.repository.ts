@@ -61,20 +61,20 @@ function toContact(row: ContactRow): Contact {
 
 export const contactsRepository = {
   async getAll(tenantId: string): Promise<Contact[]> {
-    const { rows } = await tenantQuery<ContactRow>(tenantId, 'SELECT * FROM contacts ORDER BY created_at DESC');
+    const { rows } = await tenantQuery<ContactRow>(tenantId, 'SELECT * FROM contacts WHERE tenant_id = $1 ORDER BY created_at DESC', [tenantId]);
     return rows.map(toContact);
   },
 
   async getById(tenantId: string, id: string): Promise<Contact | null> {
-    const { rows } = await tenantQuery<ContactRow>(tenantId, 'SELECT * FROM contacts WHERE id = $1', [id]);
+    const { rows } = await tenantQuery<ContactRow>(tenantId, 'SELECT * FROM contacts WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     return rows[0] ? toContact(rows[0]) : null;
   },
 
   async getByEmail(tenantId: string, email: string): Promise<Contact | null> {
     const { rows } = await tenantQuery<ContactRow>(
       tenantId,
-      'SELECT * FROM contacts WHERE lower(email) = $1 LIMIT 1',
-      [email.toLowerCase()],
+      'SELECT * FROM contacts WHERE lower(email) = $1 AND tenant_id = $2 LIMIT 1',
+      [email.toLowerCase(), tenantId],
     );
     return rows[0] ? toContact(rows[0]) : null;
   },
@@ -87,10 +87,11 @@ export const contactsRepository = {
       tenantId,
       `SELECT *
        FROM contacts
-       WHERE phone = ANY($1::text[])
+       WHERE tenant_id = $2
+         AND phone = ANY($1::text[])
        ORDER BY updated_at DESC
        LIMIT 1`,
-      [keys],
+      [keys, tenantId],
     );
     return rows[0] ? toContact(rows[0]) : null;
   },
@@ -143,11 +144,11 @@ export const contactsRepository = {
     if (sets.length === 0) return this.getById(tenantId, id);
 
     sets.push(`updated_at = now()`);
-    params.push(id);
+    params.push(id, tenantId);
 
     const { rows } = await tenantQuery<ContactRow>(
       tenantId,
-      `UPDATE contacts SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      `UPDATE contacts SET ${sets.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
       params,
     );
     return rows[0] ? toContact(rows[0]) : null;
@@ -211,7 +212,7 @@ export const contactsRepository = {
   },
 
   async delete(tenantId: string, id: string): Promise<boolean> {
-    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM contacts WHERE id = $1', [id]);
+    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM contacts WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     return (rowCount ?? 0) > 0;
   },
 };

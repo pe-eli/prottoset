@@ -22,6 +22,7 @@ const SELECT_WITH_PHONES = `
   SELECT q.*, COALESCE(array_agg(qp.phone) FILTER (WHERE qp.phone IS NOT NULL), '{}') AS phones
   FROM queues q
   LEFT JOIN queue_phones qp ON q.id = qp.queue_id
+  WHERE q.tenant_id = $1
 `;
 
 export const queuesRepository = {
@@ -29,6 +30,7 @@ export const queuesRepository = {
     const { rows } = await tenantQuery<QueueRow>(
       tenantId,
       `${SELECT_WITH_PHONES} GROUP BY q.id ORDER BY q.created_at ASC`,
+      [tenantId],
     );
     return rows.map(toQueue);
   },
@@ -36,8 +38,8 @@ export const queuesRepository = {
   async getById(tenantId: string, id: string): Promise<PhoneQueue | null> {
     const { rows } = await tenantQuery<QueueRow>(
       tenantId,
-      `${SELECT_WITH_PHONES} WHERE q.id = $1 GROUP BY q.id`,
-      [id],
+      `${SELECT_WITH_PHONES} AND q.id = $2 GROUP BY q.id`,
+      [tenantId, id],
     );
     return rows[0] ? toQueue(rows[0]) : null;
   },
@@ -52,7 +54,7 @@ export const queuesRepository = {
   },
 
   async delete(tenantId: string, id: string): Promise<boolean> {
-    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM queues WHERE id = $1', [id]);
+    const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM queues WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     return (rowCount ?? 0) > 0;
   },
 
@@ -78,8 +80,8 @@ export const queuesRepository = {
   async removePhone(tenantId: string, id: string, phone: string): Promise<PhoneQueue | null> {
     await tenantQuery(
       tenantId,
-      'DELETE FROM queue_phones WHERE queue_id = $1 AND phone = $2',
-      [id, phone],
+      'DELETE FROM queue_phones WHERE queue_id = $1 AND phone = $2 AND tenant_id = $3',
+      [id, phone, tenantId],
     );
     return this.getById(tenantId, id);
   },
@@ -87,8 +89,8 @@ export const queuesRepository = {
   async rename(tenantId: string, id: string, name: string): Promise<PhoneQueue | null> {
     const { rowCount } = await tenantQuery(
       tenantId,
-      'UPDATE queues SET name = $1 WHERE id = $2',
-      [name, id],
+      'UPDATE queues SET name = $1 WHERE id = $2 AND tenant_id = $3',
+      [name, id, tenantId],
     );
     if ((rowCount ?? 0) === 0) return null;
     return this.getById(tenantId, id);
@@ -96,10 +98,10 @@ export const queuesRepository = {
 
   async merge(tenantId: string, sourceIds: string[], targetName: string): Promise<PhoneQueue | null> {
     return tenantTransaction(tenantId, async (client) => {
-      // Verify all sources exist
+      // Verify all sources exist and belong to this tenant
       const { rows: sources } = await client.query<{ id: string }>(
-        'SELECT id FROM queues WHERE id = ANY($1)',
-        [sourceIds],
+        'SELECT id FROM queues WHERE id = ANY($1) AND tenant_id = $2',
+        [sourceIds, tenantId],
       );
       if (sources.length < 2) return null;
 
@@ -128,8 +130,8 @@ export const queuesRepository = {
       const { rows } = await client.query<QueueRow>(
         `SELECT q.*, COALESCE(array_agg(qp.phone) FILTER (WHERE qp.phone IS NOT NULL), '{}') AS phones
          FROM queues q LEFT JOIN queue_phones qp ON q.id = qp.queue_id
-         WHERE q.id = $1 GROUP BY q.id`,
-        [targetId],
+         WHERE q.id = $1 AND q.tenant_id = $2 GROUP BY q.id`,
+        [targetId, tenantId],
       );
       return rows[0] ? toQueue(rows[0]) : null;
     });

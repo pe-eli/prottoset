@@ -96,7 +96,7 @@ export function PricingPage() {
       const { data } = await subscriptionsAPI.changePlan(planId);
       await refresh();
       if (!data.immediate) {
-        setError('Downgrade agendado. SerÃ¡ aplicado ao fim do ciclo atual.');
+        setError('Downgrade agendado. Será aplicado ao fim do ciclo atual.');
       }
     } catch (err: unknown) {
       const apiError = isAxiosError<ApiErrorPayload>(err) ? err.response?.data?.error : undefined;
@@ -150,7 +150,7 @@ export function PricingPage() {
             Escolha seu plano
           </h1>
           <p className="text-text-muted max-w-md mx-auto">
-            Comece a prospectar, disparar mensagens e fechar negÃ³cios hoje mesmo.
+            Comece a prospectar, disparar mensagens e fechar negócios hoje mesmo.
           </p>
           {hasActiveSubscription && (
             <button
@@ -158,7 +158,7 @@ export function PricingPage() {
               onClick={() => void navigate('/billing')}
               className="mt-4 text-sm text-brand-400 underline underline-offset-2"
             >
-              Ver histÃ³rico de cobranÃ§as e gerenciar pagamento â†’
+              Ver histórico de cobranças e gerenciar pagamento →
             </button>
           )}
         </div>
@@ -219,7 +219,7 @@ export function PricingPage() {
                   <h3 className="text-lg font-heading font-bold text-text-primary mb-1">{plan.name}</h3>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-heading font-extrabold text-brand-400">{formatPlanPrice(plan)}</span>
-                    <span className="text-sm text-text-muted">/mÃªs</span>
+                    <span className="text-sm text-text-muted">/mês</span>
                   </div>
                 </div>
 
@@ -280,8 +280,8 @@ export function PricingPage() {
             </h2>
             <p className="text-sm text-text-secondary mb-6">
               {confirmModal.isUpgrade
-                ? 'O upgrade serÃ¡ aplicado imediatamente. VocÃª serÃ¡ cobrado proporcionalmente pela diferenÃ§a.'
-                : 'O downgrade serÃ¡ aplicado ao fim do ciclo de cobranÃ§a atual. VocÃª mantÃ©m acesso ao plano atual atÃ© lÃ¡.'}
+                ? 'O upgrade será aplicado imediatamente. Você será cobrado proporcionalmente pela diferença.'
+                : 'O downgrade será aplicado ao fim do ciclo de cobrança atual. Você mantém acesso ao plano atual até lá.'}
             </p>
             <div className="flex gap-3">
               <button

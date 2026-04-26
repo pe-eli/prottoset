@@ -10,7 +10,7 @@ export function assertProductionSecurityConfig(): void {
 
   const required = [
     'AUTH_JWT_SECRET',
-    'MERCADOPAGO_WEBHOOK_SECRET',
+    'STRIPE_WEBHOOK_SECRET',
     'EVOLUTION_WEBHOOK_SECRET',
     'INTEGRATION_VAULT_KEY',
   ];

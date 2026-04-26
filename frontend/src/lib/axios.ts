@@ -1,7 +1,6 @@
 import axios from 'axios';
 
 const DEFAULT_API_PATH = '/api';
-const FALLBACK_PRODUCTION_API_ORIGIN = 'https://closr.up.railway.app';
 
 function normalizeApiPath(pathname: string): string {
   const normalized = pathname.replace(/\/$/, '');
@@ -17,18 +16,11 @@ function buildAbsoluteApiBase(rawUrl: string): string | null {
   }
 }
 
-function shouldUseProductionFallback(hostname: string): boolean {
-  return hostname === 'closr.com.br' || hostname === 'www.closr.com.br';
-}
-
 function resolveApiBaseUrl(): string {
   const configured = (import.meta.env.VITE_API_URL ?? DEFAULT_API_PATH).trim();
 
   if (typeof window !== 'undefined') {
     if (!configured || configured.startsWith('/')) {
-      if (shouldUseProductionFallback(window.location.hostname)) {
-        return `${FALLBACK_PRODUCTION_API_ORIGIN}${configured || DEFAULT_API_PATH}`;
-      }
       return configured || DEFAULT_API_PATH;
     }
 
@@ -37,12 +29,10 @@ function resolveApiBaseUrl(): string {
       return absolute;
     }
 
-    return shouldUseProductionFallback(window.location.hostname)
-      ? `${FALLBACK_PRODUCTION_API_ORIGIN}${DEFAULT_API_PATH}`
-      : DEFAULT_API_PATH;
+    return DEFAULT_API_PATH;
   }
 
-  return buildAbsoluteApiBase(configured) ?? configured || DEFAULT_API_PATH;
+  return buildAbsoluteApiBase(configured) ?? configured ?? DEFAULT_API_PATH;
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();

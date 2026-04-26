@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { subscriptionsAPI, type Invoice, type SubscriptionInfo } from '../features/subscriptions/subscriptions.api';
+import { useConfirmModal } from '../components/ui/ConfirmModal';
 
 interface ApiErrorPayload {
   error?: string;
@@ -34,6 +35,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export function BillingPage() {
   const navigate = useNavigate();
+  const { confirm, modal: confirmModal } = useConfirmModal();
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,14 @@ export function BillingPage() {
   };
 
   const handleCancel = async () => {
-    if (!confirm('Tem certeza que deseja cancelar? Seu acesso continuará até o fim do ciclo atual.')) return;
+    const ok = await confirm({
+      title: 'Cancelar assinatura',
+      message: 'Tem certeza que deseja cancelar? Seu acesso continuará até o fim do ciclo atual.',
+      confirmLabel: 'Cancelar assinatura',
+      cancelLabel: 'Manter',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       setCancelLoading(true);
       setError(null);
@@ -112,6 +121,7 @@ export function BillingPage() {
 
   return (
     <div className="min-h-screen bg-background px-6 py-12">
+      {confirmModal}
       <div className="max-w-3xl mx-auto space-y-8">
         <div className="flex items-center gap-4">
           <button type="button" onClick={() => void navigate(-1)} className="text-text-muted hover:text-text-primary text-sm">

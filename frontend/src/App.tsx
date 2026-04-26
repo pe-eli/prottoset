@@ -5,6 +5,7 @@ import { Footer } from './components/layout/Footer';
 import { FeatureRail } from './components/layout/FeatureRail';
 import { WaBlastProvider } from './contexts/WaBlastContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { WaBlastIndicator } from './components/WaBlastIndicator';
 import { PaywallModal } from './features/subscriptions/PaywallModal';
 import { authAPI } from './features/auth/auth.api';
@@ -138,6 +139,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <ToastProvider>
       <WaBlastProvider key={user?.id ?? 'guest'}>
         <div className="min-h-screen flex flex-col bg-background">
           {sessionTransition ? <SessionTransitionOverlay mode={sessionTransition} /> : null}
@@ -188,6 +190,7 @@ function App() {
           </Routes>
         </div>
       </WaBlastProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

@@ -8,6 +8,7 @@ import { TextArea } from '../components/ui/TextArea';
 import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
 import { useSubscription } from '../contexts/useSubscription';
 import { contactsAPI } from '../features/contacts/contacts.api';
+import { useToast } from '../contexts/useToast';
 
 const DEFAULT_SUBJECT = 'Transforme sua presença digital — Closr';
 const DEFAULT_BODY = `Olá!
@@ -89,6 +90,7 @@ function formatInterval(seconds: number): string {
 
 export function EmailBlastPage() {
   const { subscription } = useSubscription();
+  const { show: showToast } = useToast();
   const hasActiveSubscription = subscription?.status === 'active';
 
   const [emailInput, setEmailInput] = useState('');
@@ -204,7 +206,7 @@ export function EmailBlastPage() {
       };
     } catch (err: unknown) {
       const apiError = isAxiosError<ApiErrorPayload>(err) ? err.response?.data?.error : undefined;
-      alert(apiError || 'Erro ao iniciar disparo');
+      showToast(apiError || 'Erro ao iniciar disparo', 'error');
     } finally {
       setStarting(false);
     }

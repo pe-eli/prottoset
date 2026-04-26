@@ -9,9 +9,9 @@ const router = Router();
 
 const leadsSearchLimiter = createSecurityRateLimit({
 	name: 'leads-search',
-	message: 'Muitas buscas em pouco tempo. Aguarde alguns minutos.',
-	ip: { limit: 10, windowMs: 10 * 60 * 1000 },
-	user: { limit: 20, windowMs: 10 * 60 * 1000 },
+	message: 'Erro 429 (Too Many Requests): aguarde uns instantes antes de prospectar novamente.',
+	ip: { limit: 10, windowMs: 60 * 1000 },
+	user: { limit: 10, windowMs: 60 * 1000 },
 });
 
 router.get('/', leadsController.getAll);

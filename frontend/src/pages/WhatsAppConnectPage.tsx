@@ -135,7 +135,7 @@ export function WhatsAppConnectPage() {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-bold text-text-primary">
-                {isConnected ? 'Conectado' : isConnecting ? 'Aguardando conexao...' : 'Desconectado'}
+                {isConnected ? 'Conectado' : isConnecting ? 'Aguardando conexão...' : 'Desconectado'}
               </h3>
               <span className={`w-2.5 h-2.5 rounded-full ${
                 isConnected ? 'bg-emerald-400 animate-pulse' : isConnecting ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'
@@ -231,7 +231,7 @@ export function WhatsAppConnectPage() {
             <div>
               <p className="text-sm font-semibold text-text-primary">WhatsApp pronto para uso</p>
               <p className="text-xs text-text-muted mt-0.5">
-                Voce pode enviar mensagens em massa pela pagina de disparos
+                Você pode enviar mensagens em massa pela página de disparos
               </p>
             </div>
             <div className="flex items-center gap-2">

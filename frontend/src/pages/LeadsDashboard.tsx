@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { LeadSearchForm } from '../features/leads/LeadSearchForm';
 import { LeadCard } from '../features/leads/LeadCard';
 import { LeadDetailModal } from '../features/leads/LeadDetailModal';
@@ -14,6 +15,8 @@ import { AddToQueueModal } from '../features/queues/AddToQueueModal';
 import type { LeadsDailyQuota } from '../features/leads/leads.api';
 import type { Lead, LeadSearchParams, LeadMetrics, LeadStatus, LeadPriority } from '../features/leads/leads.types';
 import { safeArray } from '../utils/safe';
+import { useToast } from '../contexts/useToast';
+import { useConfirmModal } from '../components/ui/ConfirmModal';
 
 type ViewMode = 'cards' | 'pipeline';
 type WebsiteFilter = 'all' | 'with' | 'without';
@@ -38,6 +41,8 @@ function titleCasePtBr(value: string): string {
 }
 
 export function LeadsDashboard() {
+  const { show: showToast } = useToast();
+  const { confirm, modal: confirmModal } = useConfirmModal();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -50,6 +55,7 @@ export function LeadsDashboard() {
   const [showBulkQueue, setShowBulkQueue] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [freeTierQuota, setFreeTierQuota] = useState<LeadsDailyQuota | null>(null);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean | null>(null);
 
   // Folders
   const [folders, setFolders] = useState<LeadFolder[]>([]);
@@ -175,8 +181,10 @@ export function LeadsDashboard() {
   const fetchSearchQuota = useCallback(async () => {
     try {
       const { data } = await leadsAPI.getSearchQuota();
+      setHasActiveSubscription(data.hasActiveSubscription ?? null);
       setFreeTierQuota(data.dailyLeadsQuota ?? null);
     } catch {
+      setHasActiveSubscription(null);
       setFreeTierQuota(null);
     }
   }, []);
@@ -233,8 +241,25 @@ export function LeadsDashboard() {
 
       await fetchSearchQuota();
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Erro ao buscar leads';
-      alert(message);
+      if (isAxiosError(err) && err.response?.status === 429) {
+        const payload = err.response.data as {
+          code?: string;
+          quota?: { key?: string };
+        } | undefined;
+        const quotaKey = payload?.quota?.key;
+        if (payload?.code === 'rate_limit_exceeded') {
+          showToast('Erro 429 (Too Many Requests): aguarde uns instantes antes de prospectar novamente.', 'warning');
+        } else if (payload?.code === 'free_tier_limit_exceeded') {
+          showToast('Limite diário do plano gratuito atingido (50 leads por dia).', 'warning');
+        } else if (quotaKey === 'scrape_requests_daily') {
+          showToast('Cota diária de scraping atingida.', 'warning');
+        } else {
+          showToast('Requisição bloqueada por limite de uso. Aguarde uns instantes e tente novamente.', 'warning');
+        }
+      } else {
+        const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Erro ao buscar leads';
+        showToast(message, 'error');
+      }
     } finally {
       setSearchLoading(false);
     }
@@ -284,7 +309,13 @@ export function LeadsDashboard() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Excluir ${selectedIds.size} lead(s) selecionado(s)?`)) return;
+    const ok = await confirm({
+      title: 'Excluir leads',
+      message: `Tem certeza que deseja excluir ${selectedIds.size} lead(s) selecionado(s)? Essa ação não pode ser desfeita.`,
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await Promise.all([...selectedIds].map((id) => leadsAPI.delete(id)));
@@ -309,6 +340,7 @@ export function LeadsDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
+      {confirmModal}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -336,7 +368,12 @@ export function LeadsDashboard() {
       </div>
 
       {/* Search Form */}
-      <LeadSearchForm onSearch={handleSearch} loading={searchLoading} freeTierQuota={freeTierQuota} />
+      <LeadSearchForm
+        onSearch={handleSearch}
+        loading={searchLoading}
+        freeTierQuota={freeTierQuota}
+        hasActiveSubscription={hasActiveSubscription}
+      />
 
       {/* Loading animation */}
       {searchLoading && <SearchLoadingOverlay />}

@@ -11,9 +11,15 @@ interface LeadSearchFormProps {
   onSearch: (params: LeadSearchParams, queueId?: string) => void;
   loading: boolean;
   freeTierQuota?: LeadsDailyQuota | null;
+  hasActiveSubscription?: boolean | null;
 }
 
-export function LeadSearchForm({ onSearch, loading, freeTierQuota = null }: LeadSearchFormProps) {
+export function LeadSearchForm({
+  onSearch,
+  loading,
+  freeTierQuota = null,
+  hasActiveSubscription = null,
+}: LeadSearchFormProps) {
   const [form, setForm] = useState<LeadSearchParams>({
     searchTerm: '',
     city: '',
@@ -54,6 +60,21 @@ export function LeadSearchForm({ onSearch, loading, freeTierQuota = null }: Lead
 
   return (
     <Card gradient>
+      <div className="mb-4 rounded-xl border border-brand-400/25 bg-brand-500/10 px-3.5 py-3">
+        <p className="text-xs font-semibold text-brand-100 uppercase tracking-wide">Restrições da prospecção</p>
+        <ul className="mt-2 space-y-1 text-xs text-brand-100/95">
+          <li>Frequência: <strong>até 10 requisições por minuto</strong> (erro 429 se exceder).</li>
+          <li>Por requisição: <strong>máximo de 100 resultados</strong> por busca.</li>
+          <li>
+            Cota diária:{' '}
+            {hasActiveSubscription
+              ? <strong>sem limite diário para assinatura ativa</strong>
+              : <strong>até {freeTierQuota?.limit ?? 50} leads por dia no plano gratuito</strong>}
+            .
+          </li>
+        </ul>
+      </div>
+
       {freeTierQuota?.applied && (
         <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3">
           <p className="text-xs font-semibold text-amber-200 uppercase tracking-wide">Plano gratuito</p>

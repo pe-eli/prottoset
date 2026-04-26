@@ -90,7 +90,11 @@ export function createSecurityRateLimit(options: RateLimitOptions): RequestHandl
           }
 
           res.setHeader('Retry-After', Math.ceil(result.retryAfterMs / 1000));
-          res.status(429).json({ error: options.message });
+          res.status(429).json({
+            error: options.message,
+            code: 'rate_limit_exceeded',
+            limiter: options.name,
+          });
           return;
         }
       }

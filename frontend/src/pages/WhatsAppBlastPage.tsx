@@ -19,6 +19,7 @@ import {
   migrateLegacySavedPrompts,
   writeSavedPrompts,
 } from '../features/whatsapp/saved-prompts.storage';
+import { useToast } from '../contexts/useToast';
 
 type JobStatus = 'pending' | 'sending' | 'sent' | 'failed';
 
@@ -93,6 +94,7 @@ function WaIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
 export function WhatsAppBlastPage() {
   const { user } = useOutletContext<{ user: AuthUser }>();
   const { subscription, refresh: refreshSubscription } = useSubscription();
+  const { show: showToast } = useToast();
   const hasActiveSubscription = subscription?.status === 'active';
   const promptsStorageKey = useMemo(() => buildSavedPromptsStorageKey(user.id), [user.id]);
 
@@ -176,11 +178,11 @@ export function WhatsAppBlastPage() {
     const name = promptName.trim();
     const content = promptBase.trim();
     if (!name) {
-      alert('Informe o nome do prompt.');
+      showToast('Informe o nome do prompt.', 'warning');
       return;
     }
     if (!content) {
-      alert('Informe o conteúdo do prompt.');
+      showToast('Informe o conteúdo do prompt.', 'warning');
       return;
     }
 
@@ -231,7 +233,7 @@ export function WhatsAppBlastPage() {
   const handleTestPrompt = async () => {
     const normalizedPrompt = promptBase.trim();
     if (!normalizedPrompt) {
-      alert('Digite um prompt antes de testar.');
+      showToast('Digite um prompt antes de testar.', 'warning');
       return;
     }
 
@@ -241,7 +243,7 @@ export function WhatsAppBlastPage() {
       .filter(Boolean);
 
     if (personalizationEnabled && personalizationFields.length === 0) {
-      alert('Selecione ao menos um campo para personalização por lead.');
+      showToast('Selecione ao menos um campo para personalização por lead.', 'warning');
       return;
     }
 
@@ -250,7 +252,7 @@ export function WhatsAppBlastPage() {
       && personalizationFields.includes('pain_points')
       && normalizedPainPoints.length === 0
     ) {
-      alert('Digite ao menos uma dor para incluir na personalização.');
+      showToast('Digite ao menos uma dor para incluir na personalização.', 'warning');
       return;
     }
 
@@ -420,11 +422,11 @@ export function WhatsAppBlastPage() {
     const normalizedManualMessage = manualMessage.trim();
 
     if (messageMode === 'ai' && !normalizedPromptBase) {
-      alert('Defina um prompt antes de iniciar o disparo.');
+      showToast('Defina um prompt antes de iniciar o disparo.', 'warning');
       return;
     }
     if (messageMode === 'manual' && !normalizedManualMessage) {
-      alert('Defina a mensagem fixa antes de iniciar o disparo.');
+      showToast('Defina a mensagem fixa antes de iniciar o disparo.', 'warning');
       return;
     }
 
@@ -434,7 +436,7 @@ export function WhatsAppBlastPage() {
       .filter(Boolean);
 
     if (messageMode === 'ai' && personalizationEnabled && personalizationFields.length === 0) {
-      alert('Selecione ao menos um campo para personalização por lead.');
+      showToast('Selecione ao menos um campo para personalização por lead.', 'warning');
       return;
     }
 
@@ -444,7 +446,7 @@ export function WhatsAppBlastPage() {
       && personalizationFields.includes('pain_points')
       && normalizedPainPoints.length === 0
     ) {
-      alert('Digite ao menos uma dor para incluir na personalização.');
+      showToast('Digite ao menos uma dor para incluir na personalização.', 'warning');
       return;
     }
 
@@ -472,7 +474,7 @@ export function WhatsAppBlastPage() {
       setGlobalActive(blastId, data.total);
       connectToBlast(blastId);
     } catch (err: unknown) {
-      alert(getAxiosErrorMessage(err, 'Erro ao iniciar disparo'));
+      showToast(getAxiosErrorMessage(err, 'Erro ao iniciar disparo'), 'error');
     } finally {
       startRequestRef.current = false;
       setStarting(false);

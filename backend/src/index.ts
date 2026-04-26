@@ -82,8 +82,11 @@ app.use(cors({
 }));
 app.use(cookieParser());
 
-// MercadoPago webhook — public endpoint (no auth, validated by signature)
-app.post('/api/webhooks/mercadopago', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), subscriptionsController.webhook);
+// MercadoPago webhook — legacy, kept for existing MP subscribers
+app.post('/api/webhooks/mercadopago', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), subscriptionsController.mercadopagoWebhook);
+
+// Stripe webhook — MUST use raw body before express.json() parses it
+app.post('/api/webhooks/stripe', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), subscriptionsController.stripeWebhook);
 
 // Evolution API webhook — public endpoint (identified by instanceName)
 app.post('/api/webhooks/evolution', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), evolutionWebhookController.handle);

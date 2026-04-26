@@ -15,17 +15,20 @@ export interface Plan {
   id: PlanId;
   name: string;
   price_brl: number; // centavos
-  mercadopago_plan_id: string;
+  stripe_price_id: string;
   limits: PlanLimits;
   features: string[];
 }
+
+/** Relative rank used to determine upgrade vs downgrade direction. */
+export const PLAN_RANK: Record<PlanId, number> = { solo: 1, agencia: 2, pro: 3 };
 
 export const PLANS: Record<PlanId, Plan> = {
   solo: {
     id: 'solo',
     name: 'Starter',
     price_brl: 4900,
-    mercadopago_plan_id: process.env.MP_PLAN_ID_SOLO || 'MP_PLAN_ID_SOLO',
+    stripe_price_id: process.env.STRIPE_PRICE_ID_SOLO || '',
     limits: {
       leads_per_month: 500,
       whatsapp_messages: null,
@@ -45,7 +48,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'agencia',
     name: 'Pro',
     price_brl: 6900,
-    mercadopago_plan_id: process.env.MP_PLAN_ID_AGENCIA || 'MP_PLAN_ID_AGENCIA',
+    stripe_price_id: process.env.STRIPE_PRICE_ID_AGENCIA || '',
     limits: {
       leads_per_month: 3000,
       whatsapp_messages: null,
@@ -65,7 +68,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'pro',
     name: 'Enterprise',
     price_brl: 19900,
-    mercadopago_plan_id: process.env.MP_PLAN_ID_PRO || 'MP_PLAN_ID_PRO',
+    stripe_price_id: process.env.STRIPE_PRICE_ID_PRO || '',
     limits: {
       leads_per_month: null,
       whatsapp_messages: null,

@@ -31,13 +31,31 @@ export interface SubscriptionInfo {
   planName: string;
   status: string;
   currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  scheduledPlan: string | null;
   usage: Usage;
   limits: PlanLimits;
 }
 
+export interface Invoice {
+  id: string;
+  stripeInvoiceId: string;
+  amount: number; // centavos
+  currency: string;
+  status: string;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
 export const subscriptionsAPI = {
   getPlans: () => api.get<{ plans: PublicPlan[] }>('/subscriptions/plans'),
-  checkout: (planId: string) => api.post<{ url: string }>('/subscriptions/checkout', { planId }),
   getMe: () => api.get<{ subscription: SubscriptionInfo | null }>('/subscriptions/me'),
+  getBillingHistory: () => api.get<{ invoices: Invoice[] }>('/subscriptions/billing-history'),
+  checkout: (planId: string) => api.post<{ url: string }>('/subscriptions/checkout', { planId }),
+  changePlan: (planId: string) => api.post<{ success: boolean; immediate: boolean; effectiveAt: string | null }>('/subscriptions/change-plan', { planId }),
   cancel: () => api.post('/subscriptions/cancel'),
+  reactivate: () => api.post('/subscriptions/reactivate'),
+  getBillingPortalUrl: () => api.post<{ url: string }>('/subscriptions/billing-portal'),
 };

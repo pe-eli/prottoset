@@ -2,6 +2,7 @@ import { enqueueWebhookEventJob } from '../../jobs/queues';
 import { fraudService } from '../../security/fraud.service';
 import { webhookEventsRepository, type WebhookProvider } from './webhook-events.repository';
 import { webhookSecurityService } from './webhook-security.service';
+import { getStripeClient } from '../../infrastructure/stripe';
 
 class WebhookAuthError extends Error {
   readonly statusCode: number;
@@ -188,9 +189,54 @@ export const webhookIntakeService = {
   },
 
   getProviderFromValue(value: string): WebhookProvider {
-    if (value === 'mercadopago' || value === 'evolution') {
-      return value;
+    if (value === 'mercadopago' || value === 'evolution' || value === 'stripe') {
+      return value as WebhookProvider;
     }
     throw new Error('Provider de webhook inválido');
+  },
+
+  /** Stripe webhook — validates signature then enqueues for processing. */
+  async intakeStripe(params: {
+    rawBody: Buffer | string;
+    signatureHeader?: string;
+  }): Promise<{ accepted: boolean; duplicate: boolean; webhookEventId: string }> {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+    if (!webhookSecret) {
+      throw new WebhookAuthError('STRIPE_WEBHOOK_SECRET não configurado', 500);
+    }
+
+    const stripe = getStripeClient();
+    if (!stripe) {
+      throw new WebhookAuthError('Stripe não configurado', 500);
+    }
+
+    if (!params.signatureHeader) {
+      throw new WebhookAuthError('Assinatura Stripe ausente', 400);
+    }
+
+    let event: any;
+    try {
+      const rawBodyBuf = Buffer.isBuffer(params.rawBody) ? params.rawBody : Buffer.from(params.rawBody);
+      event = stripe.webhooks.constructEvent(rawBodyBuf, params.signatureHeader, webhookSecret);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
+      throw new WebhookAuthError(`Assinatura Stripe inválida: ${msg}`, 400);
+    }
+
+    const eventId = `stripe:${event.id}`;
+
+    const { created, event: webhookEvent } = await webhookEventsRepository.createPending({
+      provider: 'stripe' as WebhookProvider,
+      eventId,
+      eventType: event.type,
+      payload: event as unknown as Record<string, unknown>,
+      signatureValid: true,
+    });
+
+    if (created) {
+      await enqueueWebhookEventJob({ provider: 'stripe', webhookEventId: webhookEvent.id });
+    }
+
+    return { accepted: true, duplicate: !created, webhookEventId: webhookEvent.id };
   },
 };

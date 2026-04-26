@@ -1,9 +1,12 @@
-import { PreApproval } from 'mercadopago';
-import { getMercadoPagoClient } from '../../infrastructure/mercadopago';
+﻿import Stripe = require('stripe');
+type StripeInstance = InstanceType<typeof Stripe>;
+import { getStripeClient } from '../../infrastructure/stripe';
 import { subscriptionRepository, type Subscription } from './subscription.repository';
+import { invoicesRepository } from './invoices.repository';
 import { usageRepository, type Usage } from './usage.repository';
 import {
   PLANS,
+  PLAN_RANK,
   getPublicPlans,
   isValidPlanId,
   FEATURE_LIMIT_MAP,
@@ -13,12 +16,13 @@ import {
   type SubscriptionFeature,
 } from '../../config/plans';
 import { getSubscriptionOverride } from '../../config/subscription-overrides';
-import { fraudService } from '../../security/fraud.service';
 
 export interface SubscriptionInfo {
   planId: string;
   planName: string;
   status: string;
+  cancelAtPeriodEnd: boolean;
+  scheduledPlan: string | null;
   currentPeriodEnd: string | null;
   usage: Usage;
   limits: PlanLimits;
@@ -32,94 +36,165 @@ export interface SubscriptionAccessState {
   bypassLimits: boolean;
 }
 
-type CanonicalSubscriptionStatus = 'active' | 'pending' | 'paused' | 'cancelled' | 'inactive';
+type CanonicalSubscriptionStatus = 'active' | 'pending' | 'paused' | 'cancelled' | 'past_due' | 'inactive';
+
+// ─── PUBLIC HELPERS ──────────────────────────────────────────
 
 export const subscriptionService = {
   getPublicPlans(): PublicPlan[] {
     return getPublicPlans();
   },
 
-  async createCheckout(userId: string, userEmail: string, planId: string): Promise<string> {
-    if (!isValidPlanId(planId)) {
-      throw new Error('Plano inválido');
-    }
+  // ── STRIPE CHECKOUT SESSION ────────────────────────────────
 
-    const mpClient = getMercadoPagoClient();
-    if (!mpClient) {
-      throw new Error('MercadoPago não configurado');
-    }
+  async createCheckoutSession(userId: string, userEmail: string, planId: string): Promise<string> {
+    if (!isValidPlanId(planId)) throw new Error('Plano inválido');
 
-    // Keep only one actionable subscription per user.
-    // - active: block creating a new checkout
-    // - pending: cancel stale pending and create a fresh checkout
-    const existing = await subscriptionRepository.findActiveByUserId(userId);
-    const existingStatus = normalizeSubscriptionStatus(existing?.status);
-    if (existingStatus === 'active') {
-      throw new Error('Você já possui uma assinatura ativa');
-    }
-    if (existing && existingStatus === 'pending') {
-      await subscriptionRepository.updateStatus(userId, existing.id, 'cancelled');
-    }
+    const stripe = getStripeClient();
+    if (!stripe) throw new Error('Stripe não configurado');
 
     const plan = PLANS[planId];
-    const preApproval = new PreApproval(mpClient);
-    const externalReference = buildExternalReference(userId, planId);
+    if (!plan.stripe_price_id) throw new Error('Price ID do Stripe não configurado para este plano');
 
-    const response = await preApproval.create({
-      body: {
-        reason: `Closr — Plano ${plan.name}`,
-        auto_recurring: {
-          frequency: 1,
-          frequency_type: 'months',
-          transaction_amount: plan.price_brl / 100,
-          currency_id: 'BRL',
-        },
-        payer_email: userEmail,
-        external_reference: externalReference,
-        back_url: process.env.MP_SUCCESS_URL || 'http://localhost:5173/home?subscribed=true',
-        status: 'pending',
-      },
+    // If the user already has an active Stripe subscription, do NOT create a new checkout.
+    // They must use change-plan instead.
+    const existing = await subscriptionRepository.findActiveByUserId(userId);
+    if (existing?.stripeSubscriptionId && normalizeStatus(existing.status) === 'active') {
+      throw new Error('Você já possui uma assinatura ativa. Use a opção de troca de plano.');
+    }
+
+    // Find or create Stripe customer
+    const customerId = await getOrCreateStripeCustomer(stripe, userId, userEmail, existing?.stripeCustomerId ?? null);
+
+    const successUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/home?stripe_success=1`;
+    const cancelUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/pricing`;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: customerId,
+      line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: { userId, planId },
+      subscription_data: { metadata: { userId, planId } },
+      allow_promotion_codes: true,
     });
 
-    const initPoint = response.init_point;
-    if (!initPoint) {
-      throw new Error('MercadoPago não retornou URL de checkout');
-    }
+    if (!session.url) throw new Error('Stripe não retornou URL de checkout');
+    return session.url;
+  },
 
-    // Save pending subscription
-    try {
-      await subscriptionRepository.create({
-        userId,
-        planId,
-        status: 'pending',
-        mpSubscriptionId: response.id ? String(response.id) : undefined,
+  // ── CUSTOMER PORTAL ────────────────────────────────────────
+
+  async createBillingPortalSession(userId: string): Promise<string> {
+    const stripe = getStripeClient();
+    if (!stripe) throw new Error('Stripe não configurado');
+
+    const sub = await subscriptionRepository.findActiveByUserId(userId);
+    if (!sub?.stripeCustomerId) throw new Error('Nenhum perfil de cobrança encontrado');
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: sub.stripeCustomerId,
+      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/billing`,
+    });
+
+    return session.url;
+  },
+
+  // ── CHANGE PLAN (upgrade / downgrade) ─────────────────────
+
+  async changePlan(userId: string, newPlanId: string): Promise<{ immediate: boolean; effectiveAt: string | null }> {
+    if (!isValidPlanId(newPlanId)) throw new Error('Plano inválido');
+
+    const stripe = getStripeClient();
+    if (!stripe) throw new Error('Stripe não configurado');
+
+    const sub = await subscriptionRepository.findActiveByUserId(userId);
+    if (!sub?.stripeSubscriptionId) throw new Error('Nenhuma assinatura ativa com Stripe');
+    if (sub.planId === newPlanId) throw new Error('Você já está neste plano');
+
+    const newPlan = PLANS[newPlanId];
+    if (!newPlan.stripe_price_id) throw new Error('Price ID do Stripe não configurado');
+
+    const isUpgrade = (PLAN_RANK[newPlanId as PlanId] ?? 0) > (PLAN_RANK[sub.planId as PlanId] ?? 0);
+
+    // Retrieve the current Stripe subscription to get the item ID
+    const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+    const itemId = stripeSub.items.data[0]?.id;
+    if (!itemId) throw new Error('Item da assinatura não encontrado no Stripe');
+
+    if (isUpgrade) {
+      // IMMEDIATE: proration auto-calculated by Stripe
+      await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        items: [{ id: itemId, price: newPlan.stripe_price_id }],
+        proration_behavior: 'create_prorations',
+        payment_behavior: 'pending_if_incomplete',
+        expand: ['latest_invoice.payment_intent'],
       });
-    } catch (err: any) {
-      if (err?.code === '23505') {
-        throw new Error('Já existe um checkout em andamento. Tente novamente em alguns segundos.');
-      }
-      throw err;
-    }
 
-    return initPoint;
-  },
+      // Reflect immediately in our DB (webhook will confirm, but we update optimistically)
+      await subscriptionRepository.updateByStripeSubscriptionId(sub.stripeSubscriptionId, {
+        planId: newPlanId,
+        stripePriceId: newPlan.stripe_price_id,
+        scheduledPlan: null,
+      });
 
-  async processWebhookPayload(body: Record<string, unknown>): Promise<void> {
-    const type = body.type as string | undefined;
-    const action = body.action as string | undefined;
-    const data = body.data as Record<string, unknown> | undefined;
-    const dataId = data?.id as string | undefined;
+      return { immediate: true, effectiveAt: null };
+    } else {
+      // DOWNGRADE: schedule for next cycle — do NOT touch Stripe subscription now.
+      // Our cron job will apply it when current_period_end passes.
+      await subscriptionRepository.updateByStripeSubscriptionId(sub.stripeSubscriptionId, {
+        scheduledPlan: newPlanId,
+      });
 
-    if (!type || !dataId) {
-      return; // Ignore unrecognized events
-    }
-
-    if (type === 'subscription_preapproval') {
-      await handlePreapprovalEvent(action, dataId);
-    } else if (type === 'payment') {
-      await handlePaymentEvent(dataId);
+      return {
+        immediate: false,
+        effectiveAt: sub.currentPeriodEnd?.toISOString() ?? null,
+      };
     }
   },
+
+  // ── CANCEL SUBSCRIPTION ───────────────────────────────────
+
+  async cancelSubscription(userId: string): Promise<void> {
+    const stripe = getStripeClient();
+    if (!stripe) throw new Error('Stripe não configurado');
+
+    const sub = await subscriptionRepository.findActiveByUserId(userId);
+    if (!sub) throw new Error('Nenhuma assinatura ativa');
+
+    if (sub.stripeSubscriptionId) {
+      await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      });
+      await subscriptionRepository.updateByStripeSubscriptionId(sub.stripeSubscriptionId, {
+        cancelAtPeriodEnd: true,
+      });
+    } else {
+      // Legacy MP subscription
+      await subscriptionRepository.updateStatus(userId, sub.id, 'cancelled');
+    }
+  },
+
+  // ── REACTIVATE (undo cancel_at_period_end) ─────────────────
+
+  async reactivateSubscription(userId: string): Promise<void> {
+    const stripe = getStripeClient();
+    if (!stripe) throw new Error('Stripe não configurado');
+
+    const sub = await subscriptionRepository.findActiveByUserId(userId);
+    if (!sub?.stripeSubscriptionId) throw new Error('Nenhuma assinatura Stripe encontrada');
+    if (!sub.cancelAtPeriodEnd) throw new Error('Assinatura não está agendada para cancelamento');
+
+    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+      cancel_at_period_end: false,
+    });
+    await subscriptionRepository.updateByStripeSubscriptionId(sub.stripeSubscriptionId, {
+      cancelAtPeriodEnd: false,
+    });
+  },
+
+  // ── MY SUBSCRIPTION ────────────────────────────────────────
 
   async getMySubscription(userId: string): Promise<SubscriptionInfo | null> {
     const state = await this.resolveAccessState(userId);
@@ -135,31 +210,36 @@ export const subscriptionService = {
       planId,
       planName: plan.name,
       status: state.effectiveStatus,
+      cancelAtPeriodEnd: state.subscription?.cancelAtPeriodEnd ?? false,
+      scheduledPlan: state.subscription?.scheduledPlan ?? null,
       currentPeriodEnd: state.subscription?.currentPeriodEnd?.toISOString() ?? null,
       usage,
       limits: plan.limits,
     };
   },
 
+  // ── BILLING HISTORY (invoices) ─────────────────────────────
+
+  async getBillingHistory(userId: string) {
+    return invoicesRepository.listByUserId(userId);
+  },
+
+  // ── ACCESS STATE ───────────────────────────────────────────
+
   async resolveAccessState(userId: string): Promise<SubscriptionAccessState> {
     const override = getSubscriptionOverride(userId);
-    let sub = await subscriptionRepository.findActiveByUserId(userId);
-    const normalizedSubStatus = normalizeSubscriptionStatus(sub?.status);
-
-    if (sub && normalizedSubStatus === 'pending' && sub.mpSubscriptionId && !override?.forceStatus) {
-      sub = await reconcilePendingSubscriptionStatus(sub);
-    }
+    const sub = await subscriptionRepository.findActiveByUserId(userId);
 
     const effectiveStatus = override?.forceStatus
-      ? normalizeSubscriptionStatus(override.forceStatus)
-      : normalizeSubscriptionStatus(sub?.status);
-    const isActive = effectiveStatus === 'active';
+      ? normalizeStatus(override.forceStatus)
+      : normalizeStatus(sub?.status);
+    const isActive = effectiveStatus === 'active' || effectiveStatus === 'past_due';
 
-    const effectivePlanId = override?.planId ?? sub?.planId ?? (isActive ? 'pro' : null);
+    const effectivePlanId = override?.planId ?? sub?.planId ?? null;
     const planId = effectivePlanId && isValidPlanId(effectivePlanId) ? effectivePlanId : null;
 
     return {
-      subscription: sub,
+      subscription: sub ?? null,
       effectiveStatus,
       isActive,
       planId,
@@ -167,26 +247,7 @@ export const subscriptionService = {
     };
   },
 
-  async cancelSubscription(userId: string): Promise<void> {
-    const sub = await subscriptionRepository.findActiveByUserId(userId);
-    if (!sub) {
-      throw new Error('Nenhuma assinatura ativa');
-    }
-
-    // Cancel on MercadoPago if we have a subscription ID
-    if (sub.mpSubscriptionId) {
-      const mpClient = getMercadoPagoClient();
-      if (mpClient) {
-        const preApproval = new PreApproval(mpClient);
-        await preApproval.update({
-          id: sub.mpSubscriptionId,
-          body: { status: 'cancelled' },
-        });
-      }
-    }
-
-    await subscriptionRepository.updateStatus(userId, sub.id, 'cancelled');
-  },
+  // ── QUOTA CHECK ────────────────────────────────────────────
 
   async checkLimit(userId: string, feature: SubscriptionFeature): Promise<{
     allowed: boolean;
@@ -194,27 +255,17 @@ export const subscriptionService = {
     limit: number | null;
   }> {
     const state = await this.resolveAccessState(userId);
-    if (state.bypassLimits) {
-      return { allowed: true, used: 0, limit: null };
-    }
-
-    if (!state.isActive) {
-      return { allowed: false, used: 0, limit: 0 };
-    }
+    if (state.bypassLimits) return { allowed: true, used: 0, limit: null };
+    if (!state.isActive) return { allowed: false, used: 0, limit: 0 };
 
     const planId = state.planId;
-    if (!planId) {
-      return { allowed: false, used: 0, limit: 0 };
-    }
+    if (!planId) return { allowed: false, used: 0, limit: 0 };
 
     const plan = PLANS[planId];
     const limitKey = FEATURE_LIMIT_MAP[feature];
     const limit = plan.limits[limitKey] as number | null;
 
-    // null = unlimited
-    if (limit === null) {
-      return { allowed: true, used: 0, limit: null };
-    }
+    if (limit === null) return { allowed: true, used: 0, limit: null };
 
     const usage = await usageRepository.getUsageForMonth(userId);
     const usageMap: Record<SubscriptionFeature, number> = {
@@ -229,254 +280,109 @@ export const subscriptionService = {
     return { allowed: used < limit, used, limit };
   },
 
-  async reconcileByMpSubscriptionId(mpSubscriptionId: string): Promise<{
-    mpSubscriptionId: string;
-    status: string;
-    action: 'updated' | 'created';
-    userId: string;
-    planId: PlanId;
-  }> {
-    const mpClient = getMercadoPagoClient();
-    if (!mpClient) {
-      throw new Error('MercadoPago não configurado');
+  // ── STRIPE WEBHOOK SYNC ────────────────────────────────────
+
+  async syncStripeSubscription(stripeSub: Record<string, any>): Promise<void> {
+    const userId = stripeSub.metadata?.userId;
+    const planId = stripeSub.metadata?.planId;
+
+    if (!userId || !planId || !isValidPlanId(planId)) {
+      console.warn('[Stripe] syncStripeSubscription: missing/invalid metadata', {
+        subId: stripeSub.id,
+        userId,
+        planId,
+      });
+      return;
     }
 
-    const preApproval = new PreApproval(mpClient);
+    const item = stripeSub.items.data[0];
+    const priceId = item?.price?.id ?? '';
+    const periodStart = new Date(stripeSub.current_period_start * 1000);
+    const periodEnd = new Date(stripeSub.current_period_end * 1000);
+    const customerId = typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
 
-    let detail: any;
-    try {
-      detail = await preApproval.get({ id: mpSubscriptionId });
-    } catch {
-      throw new Error('Assinatura não encontrada no MercadoPago');
-    }
-
-    const parsedRef = parseExternalReference(detail.external_reference);
-    if (!parsedRef) {
-      throw new Error('Não foi possível reconciliar sem external_reference válido');
-    }
-
-    const status = mapMpStatusToLocal(detail.status);
-    const now = new Date();
-    const periodEnd = new Date(now);
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
-    const periodStart = status === 'active' ? now : undefined;
-    const safePeriodEnd = status === 'active' ? periodEnd : undefined;
-
-    const updated = await subscriptionRepository.updateByMpSubscriptionId(mpSubscriptionId, {
-      status,
+    await subscriptionRepository.upsertByStripeSubscriptionId({
+      userId,
+      planId,
+      status: stripeSub.status,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: stripeSub.id,
+      stripePriceId: priceId,
+      cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
       currentPeriodStart: periodStart,
-      currentPeriodEnd: safePeriodEnd,
-      mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
+      currentPeriodEnd: periodEnd,
     });
 
-    if (updated) {
-      if (parsedRef && updated.planId !== parsedRef.planId) {
-        await fraudService.recordEvent({
-          tenantId: updated.userId,
-          eventType: 'abrupt_plan_change',
-          severity: 'high',
-          details: {
-            source: 'reconcileByMpSubscriptionId',
-            mpSubscriptionId,
-            dbPlanId: updated.planId,
-            externalRefPlanId: parsedRef.planId,
-          },
-        });
-      }
+    // Cancel all legacy non-Stripe active subscriptions for this user
+    await subscriptionRepository.cancelAllLegacyActiveForUser(userId, stripeSub.id);
+  },
 
-      return {
-        mpSubscriptionId,
-        status,
-        action: 'updated',
-        userId: updated.userId,
-        planId: isValidPlanId(updated.planId) ? updated.planId : parsedRef.planId,
-      };
-    }
+  async handleStripeInvoice(stripeInvoice: Record<string, any>): Promise<void> {
+    const customerId = typeof stripeInvoice.customer === 'string'
+      ? stripeInvoice.customer
+      : stripeInvoice.customer?.id ?? '';
 
-    const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
-    if (existing) {
-      await subscriptionRepository.updateStatus(parsedRef.userId, existing.id, 'cancelled');
-    }
+    if (!customerId) return;
 
-    const created = await subscriptionRepository.create({
-      userId: parsedRef.userId,
-      planId: parsedRef.planId,
-      status,
-      mpSubscriptionId,
-      mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
-      currentPeriodStart: periodStart,
-      currentPeriodEnd: safePeriodEnd,
+    const sub = await subscriptionRepository.findByStripeCustomerId(customerId);
+    if (!sub) return;
+
+    await invoicesRepository.upsert({
+      userId: sub.userId,
+      stripeInvoiceId: stripeInvoice.id,
+      amount: stripeInvoice.amount_paid,
+      currency: stripeInvoice.currency,
+      status: stripeInvoice.status ?? 'open',
+      hostedInvoiceUrl: stripeInvoice.hosted_invoice_url ?? null,
+      invoicePdf: stripeInvoice.invoice_pdf ?? null,
+      paidAt: stripeInvoice.status === 'paid' ? new Date(stripeInvoice.created * 1000) : null,
     });
+  },
 
-    return {
-      mpSubscriptionId,
-      status,
-      action: 'created',
-      userId: created.userId,
-      planId: parsedRef.planId,
-    };
+  /** Legacy MP webhook support — kept for backward compatibility */
+  async processWebhookPayload(_body: Record<string, unknown>): Promise<void> {
+    // MP webhook is deprecated — Stripe handles all new subscriptions
   },
 };
 
-async function reconcilePendingSubscriptionStatus(sub: Subscription): Promise<Subscription> {
-  if (!sub.mpSubscriptionId) return sub;
+// ─── INTERNAL HELPERS ────────────────────────────────────────
 
-  const mpClient = getMercadoPagoClient();
-  if (!mpClient) return sub;
-
-  const preApproval = new PreApproval(mpClient);
-
-  try {
-    const detail: any = await preApproval.get({ id: sub.mpSubscriptionId });
-    const mappedStatus = mapMpStatusToLocal(detail.status);
-    if (mappedStatus === sub.status) return sub;
-
-    const now = new Date();
-    const periodEnd = new Date(now);
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-    const updated = await subscriptionRepository.updateByMpSubscriptionId(sub.mpSubscriptionId, {
-      status: mappedStatus,
-      currentPeriodStart: mappedStatus === 'active' ? (sub.currentPeriodStart ?? now) : undefined,
-      currentPeriodEnd: mappedStatus === 'active' ? (sub.currentPeriodEnd ?? periodEnd) : undefined,
-      mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
-    });
-
-    return updated ?? sub;
-  } catch {
-    return sub;
-  }
-}
-
-async function handlePreapprovalEvent(action: string | undefined, preapprovalId: string): Promise<void> {
-  const mpClient = getMercadoPagoClient();
-  if (!mpClient) return;
-
-  const preApproval = new PreApproval(mpClient);
-
-  try {
-    const detail = await preApproval.get({ id: preapprovalId });
-    const mpStatus = detail.status;
-    const parsedRef = parseExternalReference(detail.external_reference);
-
-    if (mpStatus === 'authorized') {
-      const now = new Date();
-      const periodEnd = new Date(now);
-      periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-      const updated = await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
-        status: 'active',
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-        mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
-      });
-
-      if (!updated && parsedRef) {
-        const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
-        if (existing) {
-          if (existing.planId !== parsedRef.planId) {
-            await fraudService.recordEvent({
-              tenantId: parsedRef.userId,
-              eventType: 'abrupt_plan_change',
-              severity: 'high',
-              details: {
-                source: 'handlePreapprovalEvent',
-                mpSubscriptionId: preapprovalId,
-                oldPlanId: existing.planId,
-                newPlanId: parsedRef.planId,
-              },
-            });
-          }
-          await subscriptionRepository.updateStatus(parsedRef.userId, existing.id, 'cancelled');
-        }
-
-        await subscriptionRepository.create({
-          userId: parsedRef.userId,
-          planId: parsedRef.planId,
-          status: 'active',
-          mpSubscriptionId: preapprovalId,
-          mpPayerId: detail.payer_id ? String(detail.payer_id) : undefined,
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd,
-        });
-      }
-    } else if (mpStatus === 'cancelled') {
-      const updated = await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
-        status: 'cancelled',
-      });
-
-      if (!updated && parsedRef) {
-        const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
-        if (existing) {
-          await subscriptionRepository.updateStatus(parsedRef.userId, existing.id, 'cancelled');
-        }
-      }
-    } else if (mpStatus === 'paused') {
-      const updated = await subscriptionRepository.updateByMpSubscriptionId(preapprovalId, {
-        status: 'paused',
-      });
-
-      if (!updated && parsedRef) {
-        const existing = await subscriptionRepository.findActiveByUserId(parsedRef.userId);
-        if (existing) {
-          await subscriptionRepository.updateStatus(parsedRef.userId, existing.id, 'paused');
-        }
-      }
+async function getOrCreateStripeCustomer(
+  stripe: StripeInstance,
+  userId: string,
+  userEmail: string,
+  existingCustomerId: string | null,
+): Promise<string> {
+  if (existingCustomerId) {
+    // Verify the customer still exists in Stripe
+    try {
+      const customer = await stripe.customers.retrieve(existingCustomerId);
+      if (!customer.deleted) return existingCustomerId;
+    } catch {
+      // Customer not found, create a new one
     }
-  } catch (err: any) {
-    console.error('[Subscriptions] Error fetching preapproval detail:', err.message);
-  }
-}
-
-async function handlePaymentEvent(paymentId: string): Promise<void> {
-  // Payment events can confirm subscription is active or flag issues
-  // For now, we rely on preapproval events for status changes
-  console.log('[Subscriptions] Payment event received:', paymentId);
-}
-
-function buildExternalReference(userId: string, planId: PlanId): string {
-  return `closr:${userId}:${planId}`;
-}
-
-function parseExternalReference(value: unknown): { userId: string; planId: PlanId } | null {
-  if (typeof value !== 'string') return null;
-
-  const parts = value.split(':');
-  if (parts.length !== 3 || parts[0] !== 'closr') return null;
-
-  const userId = parts[1];
-  const planIdRaw = parts[2];
-  if (!isValidPlanId(planIdRaw)) return null;
-
-  return { userId, planId: planIdRaw };
-}
-
-function mapMpStatusToLocal(mpStatus: unknown): 'active' | 'pending' | 'paused' | 'cancelled' {
-  const status = typeof mpStatus === 'string' ? mpStatus.toLowerCase() : '';
-  if (status === 'authorized' || status === 'active' || status === 'approved') return 'active';
-  if (status === 'paused') return 'paused';
-  if (status === 'cancelled' || status === 'canceled') return 'cancelled';
-  return 'pending';
-}
-
-function normalizeSubscriptionStatus(rawStatus: unknown): CanonicalSubscriptionStatus {
-  const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : '';
-
-  if (status === 'active' || status === 'authorized' || status === 'approved' || status === 'trialing' || status === 'in_trial') {
-    return 'active';
   }
 
-  if (status === 'pending' || status === 'in_process') {
-    return 'pending';
-  }
+  // Search by metadata first to avoid duplicates
+  const list = await stripe.customers.list({ email: userEmail, limit: 5 });
+  const match = list.data.find((c: any) => c.metadata?.userId === userId);
+  if (match) return match.id;
 
-  if (status === 'paused' || status === 'suspended') {
-    return 'paused';
-  }
+  const created = await stripe.customers.create({
+    email: userEmail,
+    metadata: { userId },
+  });
 
-  if (status === 'cancelled' || status === 'canceled' || status === 'expired' || status === 'ended') {
-    return 'cancelled';
-  }
+  return created.id;
+}
 
+function normalizeStatus(rawStatus: unknown): CanonicalSubscriptionStatus {
+  const s = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : '';
+  if (['active', 'authorized', 'approved', 'trialing', 'in_trial'].includes(s)) return 'active';
+  if (['past_due'].includes(s)) return 'past_due';
+  if (['pending', 'in_process', 'incomplete'].includes(s)) return 'pending';
+  if (['paused', 'suspended'].includes(s)) return 'paused';
+  if (['cancelled', 'canceled', 'expired', 'ended', 'unpaid'].includes(s)) return 'cancelled';
   return 'inactive';
 }
+

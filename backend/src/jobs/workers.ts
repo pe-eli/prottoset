@@ -15,6 +15,7 @@ import { webhookProcessorService } from '../modules/webhooks/webhook-processor.s
 import { aiOrchestrator } from '../modules/ai/ai-orchestrator.service';
 import { integrationVaultService } from '../modules/integrations/integration-vault.service';
 import { outboxDispatcherService, startOutboxDispatcherLoop } from '../modules/outbox/outbox-dispatcher.service';
+import { startDowngradeCronJob } from './downgrade-cron';
 import {
   buildPersonalizedPrompt,
   buildPhoneKeys,
@@ -381,6 +382,7 @@ export function startBackgroundWorkers(): void {
   workersStarted = true;
   startOutboxDispatcherLoop();
   void outboxDispatcherService.kick(100);
+  startDowngradeCronJob();
 
   new Worker<BlastJobPayload>('email-blasts', async (job) => {
     if (job.attemptsMade > 0) {

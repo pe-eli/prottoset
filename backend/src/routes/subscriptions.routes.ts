@@ -18,17 +18,20 @@ const cancelLimiter = createSecurityRateLimit({
   user: { limit: 8, windowMs: 10 * 60 * 1000 },
 });
 
-const reconcileLimiter = createSecurityRateLimit({
-  name: 'subscription-reconcile',
-  message: 'Muitas tentativas de reconciliação. Aguarde alguns minutos.',
-  ip: { limit: 5, windowMs: 10 * 60 * 1000 },
+const changePlanLimiter = createSecurityRateLimit({
+  name: 'subscription-change-plan',
+  message: 'Muitas tentativas de troca de plano. Aguarde alguns minutos.',
+  ip: { limit: 10, windowMs: 10 * 60 * 1000 },
   user: { limit: 10, windowMs: 10 * 60 * 1000 },
 });
 
 router.get('/plans', subscriptionsController.getPlans);
-router.post('/checkout', checkoutLimiter, subscriptionsController.checkout);
 router.get('/me', subscriptionsController.getMe);
+router.get('/billing-history', subscriptionsController.getBillingHistory);
+router.post('/checkout', checkoutLimiter, subscriptionsController.checkout);
+router.post('/billing-portal', subscriptionsController.billingPortal);
+router.post('/change-plan', changePlanLimiter, subscriptionsController.changePlan);
 router.post('/cancel', cancelLimiter, subscriptionsController.cancel);
-router.post('/admin/reconcile', reconcileLimiter, subscriptionsController.reconcile);
+router.post('/reactivate', subscriptionsController.reactivate);
 
 export default router;

@@ -8,7 +8,7 @@ export interface BlastJobPayload {
 }
 
 export interface WebhookJobPayload {
-  provider: 'mercadopago' | 'evolution';
+  provider: 'mercadopago' | 'evolution' | 'stripe';
   webhookEventId: string;
 }
 

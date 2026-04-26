@@ -804,3 +804,39 @@ CREATE POLICY tenant_security_blocks_tenant ON tenant_security_blocks
     tenant_id = current_setting('app.current_tenant', true)::uuid
     OR current_setting('app.security_bypass', true) = 'true'
   );
+
+-- ============================================================
+-- STRIPE BILLING COLUMNS + INVOICES TABLE
+-- ============================================================
+
+-- Add Stripe columns to the subscriptions table (idempotent)
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS stripe_price_id TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS scheduled_plan VARCHAR(50);
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT false;
+
+-- Unique partial index on stripe_subscription_id (allows NULL for legacy MP rows)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_stripe_sub_id
+  ON subscriptions (stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
+
+-- Fast lookup by Stripe customer ID (for webhook handlers)
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer
+  ON subscriptions (stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
+
+-- ─── INVOICES ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS invoices (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stripe_invoice_id  TEXT NOT NULL UNIQUE,
+  amount             INTEGER NOT NULL CHECK (amount >= 0),  -- centavos (BRL)
+  currency           TEXT NOT NULL DEFAULT 'brl',
+  status             TEXT NOT NULL,  -- open | paid | uncollectible | void
+  hosted_invoice_url TEXT,
+  invoice_pdf        TEXT,
+  paid_at            TIMESTAMPTZ,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_user
+  ON invoices (user_id, created_at DESC);

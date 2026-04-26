@@ -1,6 +1,6 @@
 import { query } from '../../db/pool';
 
-export type WebhookProvider = 'mercadopago' | 'evolution';
+export type WebhookProvider = 'mercadopago' | 'evolution' | 'stripe';
 export type WebhookEventStatus = 'pending' | 'processed' | 'failed';
 
 interface WebhookEventRow {

@@ -18,6 +18,7 @@ import { WhatsAppConnectPage } from './pages/WhatsAppConnectPage';
 import { ContactsPage } from './pages/ContactsPage';
 import { LoginPage } from './pages/LoginPage';
 import { PricingPage } from './pages/PricingPage';
+import { BillingPage } from './pages/BillingPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfUsePage } from './pages/TermsOfUsePage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
@@ -179,6 +180,7 @@ function App() {
               <Route path="/leads/whatsapp/connect" element={<WhatsAppConnectPage />} />
               <Route path="/leads/contatos" element={<ContactsPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />
+              <Route path="/billing" element={<BillingPage />} />
               <Route path="/assinatura" element={<Navigate to="/pricing" replace />} />
             </Route>
 

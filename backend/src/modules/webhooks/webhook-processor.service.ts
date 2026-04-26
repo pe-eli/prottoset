@@ -4,7 +4,12 @@ import { contactsRepository } from '../contacts/contacts.repository';
 import { contactMessagesRepository } from '../contacts/contact-messages.repository';
 
 export const webhookProcessorService = {
-  async process(provider: 'mercadopago' | 'evolution', payload: Record<string, unknown>): Promise<void> {
+  async process(provider: 'mercadopago' | 'evolution' | 'stripe', payload: Record<string, unknown>): Promise<void> {
+    if (provider === 'stripe') {
+      await processStripePayload(payload);
+      return;
+    }
+
     if (provider === 'mercadopago') {
       await subscriptionService.processWebhookPayload(payload);
       return;
@@ -195,4 +200,80 @@ function extractMessages(data: unknown): Array<{
   }
 
   return out;
+}
+
+// ─── STRIPE PROCESSOR ────────────────────────────────────────
+
+const SUBSCRIPTION_EVENTS = new Set([
+  'customer.subscription.created',
+  'customer.subscription.updated',
+  'customer.subscription.deleted',
+  'checkout.session.completed',
+]);
+
+const INVOICE_EVENTS = new Set([
+  'invoice.paid',
+  'invoice.payment_succeeded',
+  'invoice.payment_failed',
+  'invoice.updated',
+]);
+
+async function processStripePayload(payload: Record<string, unknown>): Promise<void> {
+  // The payload stored in the DB is the full Stripe Event object (already verified by constructEvent in intake).
+  const stripeEvent = payload as any;
+  const eventType: string = stripeEvent.type;
+
+  if (SUBSCRIPTION_EVENTS.has(eventType)) {
+    let stripeSub: any = null;
+
+    if (eventType === 'checkout.session.completed') {
+      const session: any = stripeEvent.data.object;
+      if (session.mode !== 'subscription') return;
+
+      // Retrieve the full subscription object
+      const subscriptionId = typeof session.subscription === 'string'
+        ? session.subscription
+        : session.subscription?.id;
+
+      if (!subscriptionId) {
+        console.error('[Stripe] checkout.session.completed: missing subscription id');
+        return;
+      }
+
+      // We need the Stripe client to retrieve the subscription — import lazily to avoid circular deps.
+      const { getStripeClient } = await import('../../infrastructure/stripe');
+      const stripe = getStripeClient();
+      if (!stripe) return;
+
+      stripeSub = await stripe.subscriptions.retrieve(subscriptionId, {
+        expand: ['items.data.price'],
+      });
+
+      // Transfer metadata from checkout session to subscription if missing
+      if (!stripeSub.metadata?.userId && session.metadata?.userId) {
+        await stripe.subscriptions.update(subscriptionId, {
+          metadata: { userId: session.metadata.userId, planId: session.metadata.planId },
+        });
+        stripeSub = await stripe.subscriptions.retrieve(subscriptionId, {
+          expand: ['items.data.price'],
+        });
+      }
+    } else {
+      stripeSub = stripeEvent.data.object;
+    }
+
+    if (!stripeSub) return;
+
+    await subscriptionService.syncStripeSubscription(stripeSub);
+    return;
+  }
+
+  if (INVOICE_EVENTS.has(eventType)) {
+    const invoice: any = stripeEvent.data.object;
+    await subscriptionService.handleStripeInvoice(invoice);
+    return;
+  }
+
+  // Unhandled event type — ignore silently (log at debug level)
+  console.debug('[Stripe] Unhandled event type:', eventType);
 }

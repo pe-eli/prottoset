@@ -53,7 +53,6 @@ const ITEMS: FeatureItem[] = [
 
 export function FeatureRail() {
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
   const [hidden, setHidden] = useState(false);
 
   if (hidden) {
@@ -75,24 +74,7 @@ export function FeatureRail() {
   return (
     <aside className="fixed left-3 top-1/2 z-40 -translate-y-1/2">
       <div className="rounded-3xl border border-border-light bg-surface/90 p-2.5 shadow-2xl shadow-black/35 backdrop-blur">
-        <div className="mb-1.5 flex items-center justify-between gap-1">
-          <button
-            type="button"
-            onClick={() => setCollapsed((prev) => !prev)}
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-transparent text-text-muted transition-colors hover:border-border-light hover:bg-surface-elevated hover:text-text-primary"
-            aria-label={collapsed ? 'Expandir menu' : 'Retrair menu'}
-            title={collapsed ? 'Expandir menu' : 'Retrair menu'}
-          >
-            <svg
-              className={`h-4 w-4 transition-transform ${collapsed ? 'rotate-180' : ''}`}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+        <div className="mb-1.5 flex justify-end">
           <button
             type="button"
             onClick={() => setHidden(true)}
@@ -114,7 +96,7 @@ export function FeatureRail() {
                 to={item.path}
                 title={item.label}
                 aria-label={item.label}
-                className={`group flex ${collapsed ? 'h-10 w-10' : 'h-11 w-11'} items-center justify-center rounded-2xl border transition-all ${
+                className={`group flex h-11 w-11 items-center justify-center rounded-2xl border transition-all ${
                   active
                     ? 'border-brand-400/50 bg-brand-400/20 text-brand-300 shadow-lg shadow-brand-400/25'
                     : 'border-transparent bg-surface-secondary/60 text-text-muted hover:border-border-light hover:bg-surface-elevated hover:text-text-primary'

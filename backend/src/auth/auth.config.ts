@@ -33,7 +33,10 @@ function isProduction(): boolean {
 }
 
 function cookieSameSite(): 'lax' | 'none' {
-  return env().AUTH_COOKIE_SAMESITE || 'lax';
+  if (isProduction()) return 'none';
+  const configured = env().AUTH_COOKIE_SAMESITE;
+  if (configured === 'lax' || configured === 'none') return configured;
+  return 'lax';
 }
 
 function cookieSecure(): boolean {

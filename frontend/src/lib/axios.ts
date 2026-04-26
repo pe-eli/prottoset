@@ -49,6 +49,7 @@ api.interceptors.request.use(async (config) => {
 });
 
 let isRefreshing = false;
+let refreshBlockedUntil = 0;
 let failedQueue: Array<{
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
@@ -66,6 +67,7 @@ export function resetApiSessionState(): void {
   csrfToken = null;
   csrfRequest = null;
   isRefreshing = false;
+  refreshBlockedUntil = 0;
   processQueue(new Error('Session state reset'));
 }
 
@@ -91,6 +93,10 @@ api.interceptors.response.use(
       !original._retry &&
       !original.url?.includes('/auth/')
     ) {
+      if (Date.now() < refreshBlockedUntil) {
+        return Promise.reject(error);
+      }
+
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -106,6 +112,15 @@ api.interceptors.response.use(
         processQueue(null);
         return api(original);
       } catch (refreshError) {
+        const status = (refreshError as { response?: { status?: number } })?.response?.status;
+        if (status === 401) {
+          refreshBlockedUntil = Date.now() + 60_000;
+          window.dispatchEvent(new CustomEvent('auth:session-expired', {
+            detail: {
+              reason: (refreshError as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Sessão expirada',
+            },
+          }));
+        }
         processQueue(refreshError);
         return Promise.reject(refreshError);
       } finally {

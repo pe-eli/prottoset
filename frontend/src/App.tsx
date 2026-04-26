@@ -126,6 +126,16 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const onSessionExpired = () => {
+      resetApiSessionState();
+      clearLegacySavedPromptsStorage();
+      setUser(null);
+    };
+    window.addEventListener('auth:session-expired', onSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', onSessionExpired);
+  }, []);
+
   if (checkingAuth) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -163,7 +173,7 @@ function App() {
             />
             <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
             <Route path="/termos-de-uso" element={<TermsOfUsePage />} />
-            <Route path="/landing" element={<Navigate to="/" replace />} />
+            <Route path="/landing" element={<LandingPage isAuthenticated={!!user} />} />
 
             <Route
               element={

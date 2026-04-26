@@ -19,7 +19,19 @@ function isAllowedOrigin(origin: string, allowedOrigins: string[]): boolean {
 }
 
 export function getAllowedOrigins(): string[] {
-  return normalizeOriginList(process.env.CLIENT_URL || 'http://localhost:5173');
+  const base = normalizeOriginList(process.env.CLIENT_URL || 'http://localhost:5173');
+  const expanded = new Set<string>(base);
+
+  for (const origin of base) {
+    if (origin.includes('://www.')) {
+      expanded.add(origin.replace('://www.', '://'));
+    } else if (origin.startsWith('http://') || origin.startsWith('https://')) {
+      const [scheme, rest] = origin.split('://');
+      if (rest) expanded.add(`${scheme}://www.${rest}`);
+    }
+  }
+
+  return [...expanded];
 }
 
 export function requireTrustedOrigin(allowedOrigins: string[]) {

@@ -104,7 +104,7 @@ const STATS = [
 ];
 
 /* ─── Navigation ─── */
-const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => void }) => {
+const Navigation = React.memo(({ onNavigate, isAuthenticated = false }: { onNavigate: (path: string) => void; isAuthenticated?: boolean }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const scrollTo = (id: string) => {
@@ -135,10 +135,10 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
 
           <div className="hidden md:flex items-center gap-4">
             <button
-              onClick={() => onNavigate('/login')}
+              onClick={() => onNavigate(isAuthenticated ? '/home' : '/login')}
               className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold rounded-lg bg-brand-400 text-white hover:bg-brand-500 active:scale-95 transition-all cursor-pointer"
             >
-              Começar agora
+              {isAuthenticated ? 'Painel' : 'Começar agora'}
             </button>
           </div>
 
@@ -170,10 +170,10 @@ const Navigation = React.memo(({ onNavigate }: { onNavigate: (path: string) => v
             </button>
             <div className="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
               <button
-                onClick={() => { setMobileMenuOpen(false); onNavigate('/login'); }}
+                onClick={() => { setMobileMenuOpen(false); onNavigate(isAuthenticated ? '/home' : '/login'); }}
                 className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold rounded-lg bg-brand-400 text-white cursor-pointer"
               >
-                Começar agora
+                {isAuthenticated ? 'Painel' : 'Começar agora'}
               </button>
             </div>
           </div>
@@ -517,13 +517,13 @@ const LandingFooter = React.memo(() => (
 LandingFooter.displayName = 'LandingFooter';
 
 /* ─── Main ─── */
-export function LandingPage() {
+export function LandingPage({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
 
   return (
     <main className="min-h-screen bg-background text-text-primary">
-      <Navigation onNavigate={go} />
+      <Navigation onNavigate={go} isAuthenticated={isAuthenticated} />
       <Hero onNavigate={go} />
       <Features />
       <HowItWorks />

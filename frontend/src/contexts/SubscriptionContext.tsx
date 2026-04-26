@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { subscriptionsAPI, type SubscriptionInfo } from '../features/subscriptions/subscriptions.api';
 import { SubscriptionContext, type PaywallReason } from './subscription-context';
-const SUBSCRIPTION_REFRESH_INTERVAL_MS = 10_000;
+const SUBSCRIPTION_REFRESH_INTERVAL_MS = 60_000;
+const MIN_REFRESH_GAP_MS = 15_000;
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
@@ -9,10 +10,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
   const fetchingRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
 
-  const fetchSubscription = useCallback(async (options?: { clearOnError?: boolean }) => {
+  const fetchSubscription = useCallback(async (options?: { clearOnError?: boolean; force?: boolean }) => {
+    const now = Date.now();
+    if (!options?.force && now - lastRefreshAtRef.current < MIN_REFRESH_GAP_MS) return;
     if (fetchingRef.current) return;
     fetchingRef.current = true;
+    lastRefreshAtRef.current = now;
     try {
       const { data } = await subscriptionsAPI.getMe();
       setSubscription(data.subscription);
@@ -47,7 +52,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, [openPaywall]);
 
   useEffect(() => {
-    fetchSubscription({ clearOnError: true });
+    fetchSubscription({ clearOnError: true, force: true });
   }, [fetchSubscription]);
 
   useEffect(() => {

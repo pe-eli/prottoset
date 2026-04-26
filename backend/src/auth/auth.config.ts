@@ -100,8 +100,19 @@ export const authConfig = {
       httpOnly: true,
       secure: cookieSecure(),
       sameSite,
-      path: '/api/auth',
+      path: '/',
       maxAge: env().AUTH_REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
+    };
+  },
+
+  oauthStateCookieOptions(): CookieOptions {
+    const sameSite = cookieSameSite();
+    return {
+      httpOnly: true,
+      secure: cookieSecure(),
+      sameSite,
+      path: '/',
+      maxAge: 10 * 60 * 1000,
     };
   },
 };

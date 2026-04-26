@@ -77,6 +77,7 @@ let failedQueue: Array<{
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
 }> = [];
+let consecutiveRefreshFailures = 0;
 
 function processQueue(error: unknown) {
   failedQueue.forEach(({ resolve, reject }) => {
@@ -95,7 +96,11 @@ export function resetApiSessionState(): void {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Reset consecutive failures on success
+    consecutiveRefreshFailures = 0;
+    return response;
+  },
   async (error) => {
     const original = error.config;
 
@@ -137,18 +142,28 @@ api.interceptors.response.use(
 
       try {
         csrfToken = null;
+        consecutiveRefreshFailures = 0;
         await api.post('/auth/refresh');
         processQueue(null);
         return api(original);
       } catch (refreshError) {
+        consecutiveRefreshFailures++;
         const status = (refreshError as { response?: { status?: number } })?.response?.status;
+        
         if (status === 401) {
-          refreshBlockedUntil = Date.now() + 60_000;
-          window.dispatchEvent(new CustomEvent('auth:session-expired', {
-            detail: {
-              reason: (refreshError as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Sessão expirada',
-            },
-          }));
+          // Only block after multiple failures (for mobile resilience)
+          if (consecutiveRefreshFailures >= 2) {
+            refreshBlockedUntil = Date.now() + 60_000;
+            window.dispatchEvent(new CustomEvent('auth:session-expired', {
+              detail: {
+                reason: (refreshError as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Sessão expirada',
+              },
+            }));
+          } else {
+            // First failure: add exponential backoff for mobile cookie settling
+            const backoffMs = Math.pow(2, consecutiveRefreshFailures - 1) * 100;
+            refreshBlockedUntil = Date.now() + backoffMs;
+          }
         }
         processQueue(refreshError);
         return Promise.reject(refreshError);

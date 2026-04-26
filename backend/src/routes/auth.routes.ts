@@ -466,13 +466,7 @@ router.get('/google', authLimiter, (req, res) => {
   saveOAuthState(state, { codeVerifier, returnTo }, 10 * 60 * 1000).catch((err) => {
     console.error('[Auth] Falha ao salvar OAuth state:', err);
   });
-
-  res.cookie(OAUTH_STATE_COOKIE, JSON.stringify({ state, codeVerifier, returnTo }), {
-    httpOnly: true,
-    secure: authConfig.isProduction(),
-    sameSite: 'lax',
-    path: '/api/auth',
-    maxAge: 10 * 60 * 1000,
+authConfig.oauthStateCookieOptions() maxAge: 10 * 60 * 1000,
   });
 
   const url = buildAuthorizationUrl(state, codeChallenge);
@@ -483,7 +477,7 @@ router.get('/google', authLimiter, (req, res) => {
 router.get('/google/callback', asyncHandler(async (req, res) => {
   const cookieValue = req.cookies?.[OAUTH_STATE_COOKIE];
 
-  res.clearCookie(OAUTH_STATE_COOKIE, { path: '/api/auth' });
+  res.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
 
   const { code, state: returnedState } = req.query as { code?: string; state?: string };
 

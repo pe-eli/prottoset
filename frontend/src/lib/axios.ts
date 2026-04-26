@@ -1,6 +1,29 @@
 import axios from 'axios';
 
-export const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api') as string;
+function resolveApiBaseUrl(): string {
+  const configured = (import.meta.env.VITE_API_URL ?? '/api').trim();
+
+  // In browser, force same-origin API path when configured URL is cross-origin.
+  // This keeps auth cookies first-party on mobile browsers.
+  if (typeof window !== 'undefined') {
+    if (!configured || configured.startsWith('/')) return configured || '/api';
+
+    try {
+      const parsed = new URL(configured);
+      if (parsed.origin !== window.location.origin) {
+        return '/api';
+      }
+      const normalizedPath = parsed.pathname.replace(/\/$/, '');
+      return normalizedPath || '/api';
+    } catch {
+      return '/api';
+    }
+  }
+
+  return configured || '/api';
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -91,7 +114,13 @@ api.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       !original._retry &&
-      !original.url?.includes('/auth/')
+      !original.url?.includes('/auth/refresh') &&
+      !original.url?.includes('/auth/login') &&
+      !original.url?.includes('/auth/logout') &&
+      !original.url?.includes('/auth/register') &&
+      !original.url?.includes('/auth/verify-code') &&
+      !original.url?.includes('/auth/resend-code') &&
+      !original.url?.includes('/auth/check-email')
     ) {
       if (Date.now() < refreshBlockedUntil) {
         return Promise.reject(error);

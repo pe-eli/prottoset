@@ -1,4 +1,4 @@
-import { api } from '../../lib/axios';
+import { API_BASE_URL, api } from '../../lib/axios';
 
 export interface AuthUser {
   id: string;
@@ -52,10 +52,9 @@ export const authAPI = {
   refresh: () => api.post<AuthResponse>('/auth/refresh'),
 
   googleLogin: (returnTo?: string) => {
-    const base = import.meta.env.VITE_API_URL ?? '/api';
     const target = returnTo
-      ? `${base}/auth/google?returnTo=${encodeURIComponent(returnTo)}`
-      : `${base}/auth/google`;
+      ? `${API_BASE_URL}/auth/google?returnTo=${encodeURIComponent(returnTo)}`
+      : `${API_BASE_URL}/auth/google`;
     window.location.assign(target);
   },
 };

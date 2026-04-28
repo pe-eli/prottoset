@@ -14,7 +14,28 @@ const leadsSearchLimiter = createSecurityRateLimit({
 	user: { limit: 10, windowMs: 60 * 1000 },
 });
 
+const discoverySearchLimiter = createSecurityRateLimit({
+	name: 'leads-discovery-search',
+	message: 'Erro 429 (Too Many Requests): aguarde uns instantes antes de iniciar nova descoberta.',
+	ip: { limit: 4, windowMs: 60 * 1000 },
+	user: { limit: 4, windowMs: 60 * 1000 },
+});
+
 router.get('/', leadsController.getAll);
+router.post(
+	'/discovery/search',
+	discoverySearchLimiter,
+	enforceFeatureLimitForActiveSubscription('leads'),
+	enforceQuotaForInactiveSubscription({
+		quotaKey: 'discovery_searches_daily',
+		message: 'Cota diária de Discovery atingida.',
+		cost: () => 1,
+	}),
+	allowLeadsSearchForFreeTier(),
+	leadsController.createDiscoverySearch,
+);
+router.get('/discovery/searches/:searchId', leadsController.getDiscoverySearchStatus);
+router.get('/discovery/searches/:searchId/results', leadsController.getDiscoverySearchResults);
 router.post(
 	'/search',
 	leadsSearchLimiter,

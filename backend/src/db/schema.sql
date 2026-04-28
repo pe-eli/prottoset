@@ -131,6 +131,7 @@ VALUES
   (NULL, 'email_messages_daily', 50),
   (NULL, 'whatsapp_blasts_daily', 20),
   (NULL, 'scrape_requests_daily', 100),
+  (NULL, 'discovery_searches_daily', 30),
   (NULL, 'free_leads_daily', 50),
   (NULL, 'pdf_generations_daily', 50)
 ON CONFLICT (tenant_id, quota_key) DO NOTHING;
@@ -247,6 +248,89 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_dedup ON leads (tenant_id, lower(nam
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS leads_tenant ON leads;
 CREATE POLICY leads_tenant ON leads
+  USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
+  WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
+
+-- DISCOVERY SEARCHES
+CREATE TABLE IF NOT EXISTS discovery_searches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  query TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  provider TEXT NOT NULL DEFAULT 'google',
+  requested_max_results INTEGER NOT NULL DEFAULT 20 CHECK (requested_max_results >= 1 AND requested_max_results <= 100),
+  discovered_urls INTEGER NOT NULL DEFAULT 0 CHECK (discovered_urls >= 0),
+  extracted_profiles INTEGER NOT NULL DEFAULT 0 CHECK (extracted_profiles >= 0),
+  normalized_leads INTEGER NOT NULL DEFAULT 0 CHECK (normalized_leads >= 0),
+  duplicates INTEGER NOT NULL DEFAULT 0 CHECK (duplicates >= 0),
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_discovery_searches_tenant ON discovery_searches (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_discovery_searches_status ON discovery_searches (status, created_at DESC);
+
+ALTER TABLE discovery_searches ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS discovery_searches_tenant ON discovery_searches;
+CREATE POLICY discovery_searches_tenant ON discovery_searches
+  USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
+  WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
+
+-- RAW DISCOVERY RESULTS
+CREATE TABLE IF NOT EXISTS raw_discovery_results (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  search_id UUID NOT NULL REFERENCES discovery_searches(id) ON DELETE CASCADE,
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL DEFAULT 'google',
+  title TEXT NOT NULL DEFAULT '',
+  snippet TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL,
+  instagram_url TEXT,
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'extracting', 'extracted', 'normalizing', 'normalized', 'deduplicated', 'failed')),
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, search_id, url)
+);
+
+CREATE INDEX IF NOT EXISTS idx_raw_discovery_results_tenant ON raw_discovery_results (tenant_id, search_id);
+CREATE INDEX IF NOT EXISTS idx_raw_discovery_results_status ON raw_discovery_results (tenant_id, status, created_at DESC);
+
+ALTER TABLE raw_discovery_results ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS raw_discovery_results_tenant ON raw_discovery_results;
+CREATE POLICY raw_discovery_results_tenant ON raw_discovery_results
+  USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
+  WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
+
+-- INSTAGRAM PROFILES
+CREATE TABLE IF NOT EXISTS instagram_profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  search_id UUID REFERENCES discovery_searches(id) ON DELETE SET NULL,
+  lead_id UUID REFERENCES leads(id) ON DELETE SET NULL,
+  username TEXT NOT NULL,
+  normalized_username TEXT NOT NULL,
+  full_name TEXT NOT NULL DEFAULT '',
+  biography TEXT NOT NULL DEFAULT '',
+  external_url TEXT NOT NULL DEFAULT '',
+  followers INTEGER,
+  profile_pic_url TEXT NOT NULL DEFAULT '',
+  profile_url TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'instagram_public_profile',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, normalized_username)
+);
+
+CREATE INDEX IF NOT EXISTS idx_instagram_profiles_tenant ON instagram_profiles (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_instagram_profiles_search ON instagram_profiles (tenant_id, search_id);
+
+ALTER TABLE instagram_profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS instagram_profiles_tenant ON instagram_profiles;
+CREATE POLICY instagram_profiles_tenant ON instagram_profiles
   USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
@@ -635,6 +719,9 @@ CREATE TABLE IF NOT EXISTS tenant_security_blocks (
 ALTER TABLE outbound_runs FORCE ROW LEVEL SECURITY;
 ALTER TABLE outbound_run_items FORCE ROW LEVEL SECURITY;
 ALTER TABLE leads FORCE ROW LEVEL SECURITY;
+ALTER TABLE discovery_searches FORCE ROW LEVEL SECURITY;
+ALTER TABLE raw_discovery_results FORCE ROW LEVEL SECURITY;
+ALTER TABLE instagram_profiles FORCE ROW LEVEL SECURITY;
 ALTER TABLE lead_folders FORCE ROW LEVEL SECURITY;
 ALTER TABLE lead_folder_leads FORCE ROW LEVEL SECURITY;
 ALTER TABLE contacts FORCE ROW LEVEL SECURITY;

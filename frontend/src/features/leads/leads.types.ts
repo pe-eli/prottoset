@@ -28,6 +28,7 @@ export interface LeadSearchParams {
   searchTerm: string;
   city: string;
   maxResults?: number;
+  mode?: 'maps' | 'discovery';
 }
 
 export interface LeadMetrics {
@@ -38,6 +39,33 @@ export interface LeadMetrics {
 }
 
 export interface LeadSearchResult {
+  saved: Lead[];
+  duplicates: number;
+  metrics: LeadMetrics;
+}
+
+export interface DiscoverySearchSummary {
+  id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  query: string;
+  requestedMaxResults: number;
+  discoveredUrls: number;
+  extractedProfiles: number;
+  normalizedLeads: number;
+  duplicates: number;
+  errorMessage: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface DiscoverySearchCreateResponse {
+  message: string;
+  search: DiscoverySearchSummary;
+}
+
+export interface DiscoverySearchResultsResponse {
+  search: DiscoverySearchSummary;
   saved: Lead[];
   duplicates: number;
   metrics: LeadMetrics;

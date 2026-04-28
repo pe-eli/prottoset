@@ -211,6 +211,15 @@ export const leadSearchSchema = z.object({
   maxResults: z.coerce.number().int().min(1).max(100).optional(),
 });
 
+export const discoverySearchSchema = z.object({
+  query: nonEmptyString(220, 'query é obrigatória'),
+  maxResults: z.coerce.number().int().min(1).max(80).optional(),
+});
+
+export const discoverySearchIdParamSchema = z.object({
+  searchId: uuidSchema,
+});
+
 export const leadStatusUpdateSchema = z.object({
   status: z.enum(['new', 'contacted', 'replied', 'converted', 'ignored']),
 });

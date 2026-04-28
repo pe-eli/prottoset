@@ -24,6 +24,7 @@ export function LeadSearchForm({
     searchTerm: '',
     city: '',
     maxResults: 20,
+    mode: 'discovery',
   });
 
   const [queues, setQueues] = useState<PhoneQueue[]>([]);
@@ -96,9 +97,9 @@ export function LeadSearchForm({
             </svg>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-text-primary">Buscar no Google Maps</h3>
+            <h3 className="text-sm font-bold text-text-primary">Discovery Engine</h3>
             <p className="text-xs text-text-secondary mt-0.5">
-              Busca por nicho + cidade, mapeia bairros e extrai emails dos sites
+              Google + Instagram com processamento assíncrono e deduplicação
             </p>
           </div>
         </div>
@@ -129,6 +130,18 @@ export function LeadSearchForm({
             onChange={(e) => setForm((prev) => ({ ...prev, maxResults: Number(e.target.value) }))}
             required
           />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Modo de busca</label>
+            <select
+              value={form.mode || 'discovery'}
+              onChange={(e) => setForm((prev) => ({ ...prev, mode: e.target.value === 'maps' ? 'maps' : 'discovery' }))}
+              className="px-3 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary
+                focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200"
+            >
+              <option value="discovery">Google + Instagram (Discovery)</option>
+              <option value="maps">Google Maps (legado)</option>
+            </select>
+          </div>
         </div>
 
         {/* Queue selector */}
@@ -194,7 +207,7 @@ export function LeadSearchForm({
         </div>
 
         <Button type="submit" disabled={loading || !form.searchTerm.trim() || !form.city.trim()}>
-          {loading ? 'Gerando leads...' : 'Gerar Leads'}
+          {loading ? 'Processando busca...' : 'Gerar Leads'}
         </Button>
       </form>
     </Card>

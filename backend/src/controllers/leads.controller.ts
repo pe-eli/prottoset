@@ -1,10 +1,96 @@
 import { Request, Response } from 'express';
 import { leadsService } from '../modules/leads/leads.service';
-import { leadSearchSchema, leadStatusUpdateSchema, uuidParamSchema } from '../validation/request.schemas';
+import { discoverySearchIdParamSchema, discoverySearchSchema, leadSearchSchema, leadStatusUpdateSchema, uuidParamSchema } from '../validation/request.schemas';
 import { subscriptionService } from '../modules/subscriptions/subscription.service';
 import { quotaRepository } from '../security/quota.repository';
+import { discoveryService } from '../modules/discovery/discovery.service';
 
 export const leadsController = {
+  async createDiscoverySearch(req: Request, res: Response): Promise<void> {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        res.status(401).json({ error: 'Não autenticado' });
+        return;
+      }
+
+      const parsed = discoverySearchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+
+      const search = await discoveryService.createSearch(
+        tenantId,
+        parsed.data.query,
+        parsed.data.maxResults ?? 20,
+      );
+
+      res.status(202).json({
+        message: 'Busca Discovery enfileirada com sucesso.',
+        search,
+      });
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status || 500;
+      const message = (err as Error)?.message || 'Erro ao iniciar busca Discovery';
+      res.status(status).json({ error: message });
+    }
+  },
+
+  async getDiscoverySearchStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        res.status(401).json({ error: 'Não autenticado' });
+        return;
+      }
+
+      const parsed = discoverySearchIdParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+
+      const search = await discoveryService.getSearch(tenantId, parsed.data.searchId);
+      if (!search) {
+        res.status(404).json({ error: 'Busca Discovery não encontrada' });
+        return;
+      }
+
+      res.json(search);
+    } catch (err: unknown) {
+      const message = (err as Error)?.message || 'Erro ao consultar status da busca Discovery';
+      res.status(500).json({ error: message });
+    }
+  },
+
+  async getDiscoverySearchResults(req: Request, res: Response): Promise<void> {
+    try {
+      const tenantId = req.tenantId;
+      if (!tenantId) {
+        res.status(401).json({ error: 'Não autenticado' });
+        return;
+      }
+
+      const parsed = discoverySearchIdParamSchema.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0].message });
+        return;
+      }
+
+      const result = await discoveryService.getSearchLeads(tenantId, parsed.data.searchId);
+      if (!result) {
+        res.status(404).json({ error: 'Busca Discovery não encontrada' });
+        return;
+      }
+
+      res.json(result);
+    } catch (err: unknown) {
+      const message = (err as Error)?.message || 'Erro ao consultar resultados da busca Discovery';
+      res.status(500).json({ error: message });
+    }
+  },
+
   async getSearchQuota(req: Request, res: Response): Promise<void> {
     try {
       const tenantId = req.tenantId;

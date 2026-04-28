@@ -46,6 +46,8 @@ export function LeadsDashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchMode, setSearchMode] = useState<'maps' | 'discovery'>('discovery');
+  const [searchProgressLabel, setSearchProgressLabel] = useState<string>('Encontrando empresas...');
   const [view, setView] = useState<ViewMode>('cards');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [lastResult, setLastResult] = useState<{ saved: number; duplicates: number; metrics: LeadMetrics } | null>(null);
@@ -204,11 +206,55 @@ export function LeadsDashboard() {
     fetchSearchQuota();
   }, [fetchLeads, fetchFolders, fetchSearchQuota]);
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const pollDiscoveryUntilDone = async (searchId: string) => {
+    const timeoutAt = Date.now() + 2 * 60 * 1000;
+
+    while (Date.now() < timeoutAt) {
+      const { data } = await leadsAPI.getDiscoverySearch(searchId);
+
+      if (data.status === 'queued') {
+        setSearchProgressLabel('Encontrando empresas...');
+      } else if (data.status === 'running') {
+        if (data.extractedProfiles < Math.max(1, data.discoveredUrls)) {
+          setSearchProgressLabel('Buscando perfis...');
+        } else {
+          setSearchProgressLabel('Analisando leads...');
+        }
+      } else if (data.status === 'failed') {
+        throw new Error(data.errorMessage || 'A busca Discovery falhou durante o processamento.');
+      } else if (data.status === 'completed') {
+        return;
+      }
+
+      await sleep(3_000);
+    }
+
+    throw new Error('A busca Discovery excedeu o tempo máximo de processamento.');
+  };
+
   const handleSearch = async (params: LeadSearchParams, queueId?: string) => {
     setSearchLoading(true);
     setLastResult(null);
+    const mode = params.mode === 'maps' ? 'maps' : 'discovery';
+    setSearchMode(mode);
+    setSearchProgressLabel(mode === 'discovery' ? 'Encontrando empresas...' : 'Gerando leads...');
+
     try {
-      const { data } = await leadsAPI.search(params);
+      const data = mode === 'discovery'
+        ? await (async () => {
+          const query = `${params.searchTerm.trim()} em ${params.city.trim()}`;
+          const create = await leadsAPI.discoverySearch(query, params.maxResults);
+          const searchId = create.data.search.id;
+
+          await pollDiscoveryUntilDone(searchId);
+
+          const result = await leadsAPI.getDiscoveryResults(searchId);
+          return result.data;
+        })()
+        : (await leadsAPI.search(params)).data;
+
       const saved = safeArray<Lead>(data?.saved);
       const metrics: LeadMetrics = data?.metrics ?? {
         totalLeads: 0,
@@ -253,6 +299,8 @@ export function LeadsDashboard() {
           showToast('Limite diário do plano gratuito atingido (50 leads por dia).', 'warning');
         } else if (quotaKey === 'scrape_requests_daily') {
           showToast('Cota diária de scraping atingida.', 'warning');
+        } else if (quotaKey === 'discovery_searches_daily') {
+          showToast('Cota diária de Discovery atingida.', 'warning');
         } else {
           showToast('Requisição bloqueada por limite de uso. Aguarde uns instantes e tente novamente.', 'warning');
         }
@@ -376,7 +424,7 @@ export function LeadsDashboard() {
       />
 
       {/* Loading animation */}
-      {searchLoading && <SearchLoadingOverlay />}
+      {searchLoading && <SearchLoadingOverlay mode={searchMode} progressLabel={searchProgressLabel} />}
 
       {/* Folders panel */}
       {!searchLoading && (

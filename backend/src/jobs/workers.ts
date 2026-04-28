@@ -24,6 +24,12 @@ import {
   pickPainPoint,
   resolveLeadByPhone,
 } from '../modules/whatsapp/personalization.utils';
+import { discoveryEngine } from '../modules/discovery/discovery.engine';
+import type {
+  DiscoverySearchJobPayload,
+  InstagramExtractionJobPayload,
+  LeadNormalizationJobPayload,
+} from './queues';
 
 let workersStarted = false;
 
@@ -401,4 +407,16 @@ export function startBackgroundWorkers(): void {
   new Worker<WebhookJobPayload>('webhook-events', async (job) => {
     await processWebhookEvent(job.data);
   }, { connection, concurrency: 8 });
+
+  new Worker<DiscoverySearchJobPayload>('discovery-search-queue', async (job) => {
+    await discoveryEngine.processSearchJob(job.data);
+  }, { connection, concurrency: 1 });
+
+  new Worker<InstagramExtractionJobPayload>('instagram-extraction-queue', async (job) => {
+    await discoveryEngine.processInstagramExtractionJob(job.data);
+  }, { connection, concurrency: 2 });
+
+  new Worker<LeadNormalizationJobPayload>('lead-normalization-queue', async (job) => {
+    await discoveryEngine.processLeadNormalizationJob(job.data);
+  }, { connection, concurrency: 2 });
 }

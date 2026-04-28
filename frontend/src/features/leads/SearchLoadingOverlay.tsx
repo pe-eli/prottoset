@@ -1,4 +1,21 @@
-export function SearchLoadingOverlay() {
+interface SearchLoadingOverlayProps {
+  mode?: 'maps' | 'discovery';
+  progressLabel?: string;
+}
+
+export function SearchLoadingOverlay({ mode = 'maps', progressLabel }: SearchLoadingOverlayProps) {
+  const steps = mode === 'discovery'
+    ? [
+      '1. Encontrando empresas...',
+      '2. Buscando perfis...',
+      '3. Analisando leads...',
+    ]
+    : [
+      '1. Mapeando bairros da cidade',
+      '2. Buscando no Google Maps',
+      '3. Extraindo emails dos sites',
+    ];
+
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-5 animate-fade-in">
       {/* Animated dots */}
@@ -10,11 +27,11 @@ export function SearchLoadingOverlay() {
 
       {/* Animated text with steps */}
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-semibold text-brand-100">Gerando leads...</p>
+        <p className="text-sm font-semibold text-brand-100">{progressLabel || 'Processando busca...'}</p>
         <div className="space-y-0.5">
-          <p className="text-xs text-brand-400">1. Mapeando bairros da cidade</p>
-          <p className="text-xs text-brand-400">2. Buscando no Google Maps</p>
-          <p className="text-xs text-brand-400">3. Extraindo emails dos sites</p>
+          {steps.map((step) => (
+            <p key={step} className="text-xs text-brand-400">{step}</p>
+          ))}
         </div>
       </div>
 

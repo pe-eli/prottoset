@@ -90,22 +90,50 @@ function parseGoogleHtml(html: string): GoogleSearchCandidate[] {
   const $ = cheerio.load(html);
   const results: GoogleSearchCandidate[] = [];
 
-  $('div.g').each((_idx, element) => {
-    const anchor = $(element).find('a').first();
-    const href = parseGoogleRedirectUrl(anchor.attr('href') || '');
-    if (!href) return;
+  // Try modern Google SERP structure (2024+): divs with data-sokoban-container or Gx5Zad class
+  const modernSelectors = [
+    'div[data-sokoban-container="true"]',
+    'div.Gx5Zad',
+    'div.g',  // fallback to legacy selector
+  ];
 
-    const title = $(element).find('h3').first().text().trim();
-    const snippet = $(element).find('div.VwiC3b, span.aCOpRe').first().text().trim();
-    const instagramUrl = toInstagramProfileUrl(href);
+  for (const selector of modernSelectors) {
+    $(selector).each((_idx, element) => {
+      const $el = $(element);
+      
+      // Find the link element - could be direct child or nested
+      const anchor = $el.find('a[href*="/url?"]').first() || $el.find('a').first();
+      if (!anchor.length) return;
 
-    results.push({
-      title,
-      snippet,
-      url: href,
-      instagramUrl,
+      const href = parseGoogleRedirectUrl(anchor.attr('href') || '');
+      if (!href) return;
+
+      // Extract title from h3 tag
+      const title = $el.find('h3').first().text().trim();
+      
+      // Extract snippet from common snippet classes
+      let snippet = '';
+      const snippetElement = $el.find('div.VwiC3b, span.aCOpRe, div.s, span.s').first();
+      if (snippetElement.length) {
+        snippet = snippetElement.text().trim();
+      }
+
+      const instagramUrl = toInstagramProfileUrl(href);
+
+      // Only add if we have basic info
+      if (title || instagramUrl) {
+        results.push({
+          title,
+          snippet,
+          url: href,
+          instagramUrl,
+        });
+      }
     });
-  });
+
+    // If we found results with this selector, use them
+    if (results.length > 0) break;
+  }
 
   return results;
 }

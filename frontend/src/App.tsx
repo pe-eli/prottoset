@@ -106,39 +106,39 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    let attempts = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const maxRetries = 3;
 
-    const checkAuth = async () => {
+    const checkAuth = async (attempt = 1) => {
       try {
         const { data } = await authAPI.me();
         if (!mounted) return;
         setUser(data.user);
+        setCheckingAuth(false);
       } catch (err) {
         if (!mounted) return;
-        attempts++;
-        
-        // Retry logic for mobile: cookies might take a moment to be available
-        if (attempts < maxRetries) {
+
+        // Retry logic for cookie propagation after navigation-based auth flows.
+        if (attempt < maxRetries) {
           // Exponential backoff: 100ms, 200ms, 400ms
-          const delay = Math.pow(2, attempts - 1) * 100;
-          setTimeout(checkAuth, delay);
+          const delay = Math.pow(2, attempt - 1) * 100;
+          retryTimer = setTimeout(() => {
+            void checkAuth(attempt + 1);
+          }, delay);
         } else {
-          // After max retries, set user to null
           setUser(null);
-        }
-      } finally {
-        if (!mounted) return;
-        if (attempts >= maxRetries) {
           setCheckingAuth(false);
         }
       }
     };
 
-    checkAuth();
+    void checkAuth();
 
     return () => {
       mounted = false;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
     };
   }, []);
 

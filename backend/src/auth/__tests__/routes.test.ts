@@ -551,12 +551,14 @@ describe('auth routes', () => {
   });
 
   describe('GET /api/auth/google/callback', () => {
-    it('retorna 403 sem state cookie', async () => {
+    it('redireciona para login sem state cookie', async () => {
       const res = await request(app)
         .get('/api/auth/google/callback')
         .query({ code: 'test', state: 'test' });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toContain('/login');
+      expect(res.headers.location).toContain('oauthError=state_missing');
     });
   });
 });

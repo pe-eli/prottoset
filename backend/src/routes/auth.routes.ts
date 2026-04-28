@@ -69,19 +69,23 @@ const resendCodeLimiter = createSecurityRateLimit({
 
 const allowedClientOrigins = getAllowedOrigins();
 
+function authHomeUrl(): string {
+  return new URL('/home', authConfig.clientUrl()).toString();
+}
+
 function normalizeReturnTo(raw: unknown): string {
   if (typeof raw !== 'string' || !raw.trim()) {
-    return authConfig.clientUrl();
+    return authHomeUrl();
   }
 
   try {
     const parsed = new URL(raw);
     if (!allowedClientOrigins.includes(parsed.origin)) {
-      return authConfig.clientUrl();
+      return authHomeUrl();
     }
     return `${parsed.origin}${parsed.pathname}${parsed.search}`;
   } catch {
-    return authConfig.clientUrl();
+    return authHomeUrl();
   }
 }
 
@@ -461,7 +465,7 @@ router.get('/google', authLimiter, (req, res) => {
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
-  const returnTo = normalizeReturnTo(req.query.returnTo);
+  const returnTo = normalizeReturnTo(req.query.returnTo ?? authHomeUrl());
 
   saveOAuthState(state, { codeVerifier, returnTo }, 10 * 60 * 1000).catch((err) => {
     console.error('[Auth] Falha ao salvar OAuth state:', err);
@@ -504,7 +508,7 @@ router.get('/google/callback', asyncHandler(async (req, res) => {
   const codeVerifier = storedFromServer?.codeVerifier
     ?? (storedFromCookie?.state === returnedState ? storedFromCookie.codeVerifier : undefined);
   const returnTo = storedFromServer?.returnTo
-    ?? normalizeReturnTo(storedFromCookie?.returnTo ?? authConfig.clientUrl());
+    ?? normalizeReturnTo(storedFromCookie?.returnTo ?? authHomeUrl());
 
   if (!codeVerifier) {
     redirectOAuthError(res, 'state_missing');

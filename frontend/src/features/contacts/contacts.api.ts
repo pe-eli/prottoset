@@ -1,7 +1,16 @@
 import { api, API_BASE_URL } from '../../lib/axios';
 
-export type ContactStatus = 'new' | 'contacted' | 'negotiating' | 'client' | 'lost';
+export type ContactStatus = 'new' | 'contacted' | 'no_reply' | 'interested' | 'negotiating' | 'client' | 'lost';
 export type ContactChannel = 'email' | 'whatsapp' | 'manual';
+
+export type ActivityType =
+  | 'MESSAGE_SENT'
+  | 'FOLLOWUP_CREATED'
+  | 'NOTE_CREATED'
+  | 'STATUS_CHANGED'
+  | 'CAMPAIGN_SENT'
+  | 'CONTACT_CREATED'
+  | 'MANUAL_INTERACTION';
 
 export interface Contact {
   id: string;
@@ -17,6 +26,16 @@ export interface Contact {
   lastReadAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ContactActivity {
+  id: string;
+  contactId: string;
+  type: ActivityType;
+  title: string;
+  description?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface ContactMessage {
@@ -48,6 +67,21 @@ export const contactsAPI = {
   update: (id: string, data: Partial<Pick<Contact, 'name' | 'phone' | 'company' | 'status' | 'notes'>>) =>
     api.patch<Contact>(`/contacts/${id}`, data),
 
+  delete: (id: string) => api.delete(`/contacts/${id}`),
+
+  getActivities: (id: string) =>
+    api.get<ContactActivity[]>(`/contacts/${id}/activities`),
+
+  addNote: (id: string, content: string) =>
+    api.post<ContactActivity>(`/contacts/${id}/notes`, { content }),
+
+  createFollowup: (id: string, data: { scheduledFor: string; note?: string; priority?: 'low' | 'normal' | 'high' }) =>
+    api.post<ContactActivity>(`/contacts/${id}/followups`, data),
+
+  completeFollowup: (contactId: string, activityId: string, done: boolean) =>
+    api.patch<ContactActivity>(`/contacts/${contactId}/followups/${activityId}`, { done }),
+
+  // Legacy — kept for backwards compatibility
   getMessages: (id: string) =>
     api.get<ContactMessage[]>(`/contacts/${id}/messages`),
 
@@ -59,8 +93,6 @@ export const contactsAPI = {
     promptBase?: string;
     manualMessage?: string;
   }) => api.post<{ ok: boolean; message: string }>(`/contacts/${id}/reply`, data),
-
-  delete: (id: string) => api.delete(`/contacts/${id}`),
 
   /** Inicia o blast e retorna o blastId para acompanhar via SSE */
   startBlast: (emails: string[], subject: string, body: string, config: BlastConfig) =>

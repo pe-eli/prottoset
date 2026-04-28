@@ -1,6 +1,15 @@
-export type ContactStatus = 'new' | 'contacted' | 'negotiating' | 'client' | 'lost';
+export type ContactStatus = 'new' | 'contacted' | 'no_reply' | 'interested' | 'negotiating' | 'client' | 'lost';
 export type ContactChannel = 'email' | 'whatsapp' | 'manual';
 export type ContactMessageDirection = 'inbound' | 'outbound';
+
+export type ActivityType =
+  | 'MESSAGE_SENT'
+  | 'FOLLOWUP_CREATED'
+  | 'NOTE_CREATED'
+  | 'STATUS_CHANGED'
+  | 'CAMPAIGN_SENT'
+  | 'CONTACT_CREATED'
+  | 'MANUAL_INTERACTION';
 
 export interface Contact {
   id: string;
@@ -16,6 +25,16 @@ export interface Contact {
   lastReadAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ContactActivity {
+  id: string;
+  contactId: string;
+  type: ActivityType;
+  title: string;
+  description?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface ContactMessage {

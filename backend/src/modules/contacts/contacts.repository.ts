@@ -1,7 +1,7 @@
 import { tenantQuery } from '../../db/pool';
 import { Contact, ContactStatus } from '../../types/contacts.types';
 
-const VALID_STATUSES: ContactStatus[] = ['new', 'contacted', 'negotiating', 'client', 'lost'];
+const VALID_STATUSES: ContactStatus[] = ['new', 'contacted', 'no_reply', 'interested', 'negotiating', 'client', 'lost'];
 
 interface ContactRow {
   id: string;

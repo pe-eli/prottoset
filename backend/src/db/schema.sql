@@ -25,6 +25,14 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
+  ALTER TYPE contact_status ADD VALUE IF NOT EXISTS 'no_reply';
+EXCEPTION WHEN others THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TYPE contact_status ADD VALUE IF NOT EXISTS 'interested';
+EXCEPTION WHEN others THEN NULL; END $$;
+
+DO $$ BEGIN
   CREATE TYPE contact_channel AS ENUM ('email','whatsapp','manual');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
@@ -417,6 +425,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_messages_external
 ALTER TABLE contact_messages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS contact_messages_tenant ON contact_messages;
 CREATE POLICY contact_messages_tenant ON contact_messages
+  USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
+  WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
+
+-- CONTACT ACTIVITIES (CRM timeline)
+CREATE TABLE IF NOT EXISTS contact_activities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN (
+    'MESSAGE_SENT','FOLLOWUP_CREATED','NOTE_CREATED','STATUS_CHANGED',
+    'CAMPAIGN_SENT','CONTACT_CREATED','MANUAL_INTERACTION'
+  )),
+  title TEXT NOT NULL,
+  description TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_contact_activities_contact
+  ON contact_activities (tenant_id, contact_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_contact_activities_type
+  ON contact_activities (tenant_id, contact_id, type, created_at DESC);
+
+ALTER TABLE contact_activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contact_activities FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS contact_activities_tenant ON contact_activities;
+CREATE POLICY contact_activities_tenant ON contact_activities
   USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid);
 

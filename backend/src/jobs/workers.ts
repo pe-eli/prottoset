@@ -5,6 +5,7 @@ import { resendService } from '../services/resend.service';
 import { evolutionService } from '../services/evolution.service';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { contactMessagesRepository } from '../modules/contacts/contact-messages.repository';
+import { contactActivitiesRepository } from '../modules/contacts/contact-activities.repository';
 import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
 import { leadsRepository } from '../modules/leads/leads.repository';
 import { billingService } from '../modules/subscriptions/billing.service';
@@ -160,6 +161,15 @@ async function updateContactMessage(tenantId: string, item: OutboundRunItem): Pr
     lastMessage: item.message,
     lastMessageAt: sentAt,
   });
+
+  // Record CRM activity for timeline
+  contactActivitiesRepository.create(tenantId, {
+    contactId: contact.id,
+    type: 'MESSAGE_SENT',
+    title: 'Mensagem enviada',
+    description: item.message.length > 200 ? `${item.message.slice(0, 200)}…` : item.message,
+    metadata: { runId: item.runId, channel: 'whatsapp' },
+  }).catch((err: Error) => console.error('[Workers] Failed to record MESSAGE_SENT activity:', err.message));
 }
 
 async function processWhatsAppBlast({ tenantId, runId }: BlastJobPayload): Promise<void> {

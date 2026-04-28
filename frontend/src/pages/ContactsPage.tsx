@@ -1,52 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { SubscriptionLockedView } from '../components/subscription/SubscriptionLockedView';
 import { useSubscription } from '../contexts/useSubscription';
 import type { AuthUser } from '../features/auth/auth.api';
-import {
-  contactsAPI,
-  type Contact,
-  type ContactChannel,
-  type ContactMessage,
-  type ContactStatus,
-} from '../features/contacts/contacts.api';
-import {
-  buildSavedPromptsStorageKey,
-  migrateLegacySavedPrompts,
-} from '../features/whatsapp/saved-prompts.storage';
+import { contactsAPI, type Contact, type ContactStatus } from '../features/contacts/contacts.api';
+import { ContactActivityCenter, STATUS_CONFIG, STATUS_OPTIONS } from '../features/contacts/ContactActivityCenter';
 
-const STATUS_CONFIG: Record<ContactStatus, { label: string; color: string; bg: string }> = {
-  new: { label: 'Novo', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-  contacted: { label: 'Contatado', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
-  negotiating: { label: 'Negociando', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
-  client: { label: 'Cliente', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
-  lost: { label: 'Perdido', color: 'text-gray-500', bg: 'bg-gray-100 border-gray-200' },
-};
-
-const STATUS_OPTIONS: ContactStatus[] = ['new', 'contacted', 'negotiating', 'client', 'lost'];
-
-interface SavedPrompt {
-  id: string;
-  name: string;
-  content: string;
+function getChannel(c: Contact) {
+  return c.channel ?? 'manual';
 }
 
-interface ContactGroup {
-  key: string;
-  contacts: Contact[];
-  primary: Contact;
-  messages: ContactMessage[];
-  unreadCount: number;
-}
-
-function EmailIcon({ className = 'w-3 h-3' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-    </svg>
-  );
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 1) return 'agora';
+  if (diffMins < 60) return `${diffMins}min`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d`;
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
 
 function WaIcon({ className = 'w-3 h-3' }: { className?: string }) {
@@ -57,58 +34,140 @@ function WaIcon({ className = 'w-3 h-3' }: { className?: string }) {
   );
 }
 
-function PersonIcon({ className = 'w-3 h-3' }: { className?: string }) {
+function EmailIcon({ className = 'w-3 h-3' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
   );
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+function StatCard({ label, value, sub, gradient }: { label: string; value: number; sub?: string; gradient: string }) {
+  return (
+    <div className="bg-surface border border-border-light rounded-2xl shadow-sm p-4 relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-16 h-16 bg-gradient-to-br ${gradient} opacity-5 rounded-bl-3xl`} />
+      <p className="text-xs text-text-secondary font-medium">{label}</p>
+      <p className={`text-2xl font-bold mt-0.5 bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}>{value}</p>
+      {sub && <p className="text-[10px] text-text-muted mt-0.5">{sub}</p>}
+    </div>
+  );
 }
 
-function getStatusConfig(status: string) {
-  return STATUS_CONFIG[status as ContactStatus] ?? STATUS_CONFIG.new;
+function PipelineBar({ contacts }: { contacts: Contact[] }) {
+  const counts = useMemo(() => {
+    const map: Record<ContactStatus, number> = {
+      new: 0, contacted: 0, no_reply: 0, interested: 0, negotiating: 0, client: 0, lost: 0,
+    };
+    for (const c of contacts) {
+      if (c.status in map) map[c.status as ContactStatus]++;
+    }
+    return map;
+  }, [contacts]);
+
+  const total = contacts.length || 1;
+
+  return (
+    <div className="bg-surface border border-border-light rounded-2xl p-4 space-y-3">
+      <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Pipeline de status</p>
+      <div className="flex h-2.5 rounded-full overflow-hidden gap-px">
+        {STATUS_OPTIONS.map((status) => {
+          const pct = (counts[status] / total) * 100;
+          if (pct === 0) return null;
+          const cfg = STATUS_CONFIG[status];
+          return (
+            <div
+              key={status}
+              style={{ width: `${pct}%` }}
+              className={`${cfg.dot} transition-all duration-500`}
+              title={`${cfg.label}: ${counts[status]}`}
+            />
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {STATUS_OPTIONS.filter((s) => counts[s] > 0).map((status) => {
+          const cfg = STATUS_CONFIG[status];
+          return (
+            <div key={status} className="flex items-center gap-1">
+              <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+              <span className="text-[10px] text-text-muted">{cfg.label} ({counts[status]})</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
-function getChannel(c: Contact): ContactChannel {
-  return c.channel ?? 'manual';
-}
+function ContactCard({ contact, onClick }: { contact: Contact; onClick: () => void }) {
+  const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.new;
+  const ch = getChannel(contact);
+  const displayName = contact.name || contact.email || contact.phone || 'Contato';
+  const initials = displayName.charAt(0).toUpperCase();
+  const lastAt = contact.lastMessageAt || contact.updatedAt;
 
-function normalizePhone(value: string): string {
-  const digits = (value || '').replace(/\D/g, '');
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
-  return digits;
-}
-
-function getGroupKey(contact: Contact): string {
-  if (getChannel(contact) === 'whatsapp' && contact.phone) {
-    return `wa:${normalizePhone(contact.phone)}`;
-  }
-  return `contact:${contact.id}`;
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left p-4 bg-surface border border-border-light rounded-2xl hover:border-brand-400/40 hover:shadow-md hover:shadow-brand-500/5 transition-all duration-200 group"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-400 flex items-center justify-center shrink-0 shadow-sm">
+          <span className="text-white font-bold text-sm">{initials}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-text-primary truncate group-hover:text-brand-300 transition-colors">
+              {displayName}
+            </p>
+            <span className="text-[10px] text-text-muted shrink-0">{formatDate(lastAt)}</span>
+          </div>
+          {(contact.company || contact.phone) && (
+            <p className="text-xs text-text-secondary truncate mt-0.5">
+              {contact.company || contact.phone}
+            </p>
+          )}
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${statusCfg.bg} ${statusCfg.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
+              {statusCfg.label}
+            </span>
+            <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+              ch === 'whatsapp'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : ch === 'email'
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'bg-surface-secondary border-border text-text-muted'
+            }`}>
+              {ch === 'whatsapp' ? <WaIcon /> : ch === 'email' ? <EmailIcon /> : null}
+              {ch === 'whatsapp' ? 'WhatsApp' : ch === 'email' ? 'Email' : 'Manual'}
+            </span>
+          </div>
+          {contact.lastMessage && (
+            <p className="text-[11px] text-text-muted mt-2 truncate leading-relaxed">
+              {contact.lastMessage}
+            </p>
+          )}
+        </div>
+        <svg className="w-4 h-4 text-text-muted group-hover:text-brand-400 shrink-0 mt-1 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </button>
+  );
 }
 
 export function ContactsPage() {
-  const { user } = useOutletContext<{ user: AuthUser }>();
+  useOutletContext<{ user: AuthUser }>();
   const { subscription } = useSubscription();
   const hasActiveSubscription = subscription?.status === 'active';
-  const promptsStorageKey = useMemo(() => buildSavedPromptsStorageKey(user.id), [user.id]);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<ContactStatus | 'all'>('all');
-  const [channelTab, setChannelTab] = useState<ContactChannel | 'all'>('all');
-  const [messagesByContact, setMessagesByContact] = useState<Record<string, ContactMessage[]>>({});
-  const [messagesPollingDisabled, setMessagesPollingDisabled] = useState(false);
-  const consecutiveMessagesFetchFailuresRef = useRef(0);
-
-  const [replyGroup, setReplyGroup] = useState<ContactGroup | null>(null);
-  const [detailGroup, setDetailGroup] = useState<ContactGroup | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ContactStatus | 'all'>('all');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'whatsapp' | 'email' | 'manual'>('all');
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -122,193 +181,53 @@ export function ContactsPage() {
     }
   }, []);
 
-  const markGroupAsRead = useCallback(async (group: ContactGroup, optimistic = false) => {
-    const ids = [...new Set(group.contacts.map((contact) => contact.id))];
-    if (optimistic) {
-      const readAt = new Date().toISOString();
-      setContacts((prev) => prev.map((contact) => (
-        ids.includes(contact.id)
-          ? { ...contact, lastReadAt: readAt }
-          : contact
-      )));
-    }
-    await Promise.allSettled(ids.map((id) => contactsAPI.markRead(id)));
-  }, []);
-
-  const closeDetailModal = useCallback(() => {
-    if (!detailGroup) {
-      setDetailGroup(null);
-      return;
-    }
-
-    const target = detailGroup;
-    setDetailGroup(null);
-    if (target.unreadCount > 0) {
-      void markGroupAsRead(target, true);
-    }
-  }, [detailGroup, markGroupAsRead]);
-
-  const fetchMessages = useCallback(async (list: Contact[]) => {
-    if (messagesPollingDisabled) {
-      return;
-    }
-
-    const candidates = list.filter((c) => getChannel(c) === 'whatsapp');
-    if (candidates.length === 0) {
-      consecutiveMessagesFetchFailuresRef.current = 0;
-      return;
-    }
-
-    // Limit aggressive polling by fetching only the most recent WhatsApp contacts.
-    const recentCandidates = [...candidates]
-      .sort((a, b) => {
-        const aDate = new Date(a.lastMessageAt || a.updatedAt).getTime();
-        const bDate = new Date(b.lastMessageAt || b.updatedAt).getTime();
-        return bDate - aDate;
-      })
-      .slice(0, 8);
-
-    const results = await Promise.allSettled(
-      recentCandidates.map(async (contact) => {
-        const { data } = await contactsAPI.getMessages(contact.id);
-        return { contactId: contact.id, messages: Array.isArray(data) ? data : [] };
-      }),
-    );
-
-    const next: Record<string, ContactMessage[]> = {};
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        next[result.value.contactId] = result.value.messages;
-      }
-    }
-
-    const failed = results.filter((result) => result.status === 'rejected').length;
-    if (failed === 0) {
-      consecutiveMessagesFetchFailuresRef.current = 0;
-    } else if (failed === results.length) {
-      consecutiveMessagesFetchFailuresRef.current += 1;
-      if (consecutiveMessagesFetchFailuresRef.current >= 2) {
-        setMessagesPollingDisabled(true);
-      }
-    } else {
-      consecutiveMessagesFetchFailuresRef.current = 0;
-    }
-
-    setMessagesByContact((prev) => ({ ...prev, ...next }));
-  }, [messagesPollingDisabled]);
-
   useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
 
-  useEffect(() => {
-    fetchMessages(contacts);
-  }, [contacts, fetchMessages]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') {
-        return;
-      }
-      fetchMessages(contacts);
-    }, 15000);
-    return () => window.clearInterval(id);
-  }, [contacts, fetchMessages]);
-
-  const handleStatusChange = useCallback(async (id: string, status: ContactStatus) => {
-    try {
-      await contactsAPI.update(id, { status });
-      await fetchContacts();
-    } catch (err) {
-      console.error('Failed to update status:', err);
+  const filtered = useMemo(() => {
+    let list = contacts;
+    if (statusFilter !== 'all') {
+      list = list.filter((c) => c.status === statusFilter);
     }
-  }, [fetchContacts]);
-
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      await contactsAPI.delete(id);
-      await fetchContacts();
-    } catch (err) {
-      console.error('Failed to delete contact:', err);
+    if (channelFilter !== 'all') {
+      list = list.filter((c) => getChannel(c) === channelFilter);
     }
-  }, [fetchContacts]);
-
-  const channelFiltered = useMemo(() => (
-    channelTab === 'all'
-      ? contacts
-      : contacts.filter((c) => getChannel(c) === channelTab)
-  ), [contacts, channelTab]);
-
-  const filtered = useMemo(() => (
-    filter === 'all' ? channelFiltered : channelFiltered.filter((c) => c.status === filter)
-  ), [channelFiltered, filter]);
-
-  const grouped = useMemo<ContactGroup[]>(() => {
-    const map = new Map<string, Contact[]>();
-    for (const contact of filtered) {
-      const key = getGroupKey(contact);
-      const current = map.get(key) ?? [];
-      current.push(contact);
-      map.set(key, current);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((c) =>
+        c.name?.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
+        c.phone?.includes(q) ||
+        c.company?.toLowerCase().includes(q),
+      );
     }
-
-    const groups: ContactGroup[] = [];
-    for (const [key, list] of map.entries()) {
-      const sortedContacts = [...list].sort((a, b) => {
-        const aDate = new Date(a.updatedAt).getTime();
-        const bDate = new Date(b.updatedAt).getTime();
-        return bDate - aDate;
-      });
-      const primary = sortedContacts[0];
-      const mergedMessages = sortedContacts
-        .flatMap((c) => messagesByContact[c.id] ?? [])
-        .sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
-
-      const lastReadAt = sortedContacts
-        .map((c) => c.lastReadAt)
-        .filter((date): date is string => Boolean(date))
-        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
-      const readTimestamp = lastReadAt ? new Date(lastReadAt).getTime() : 0;
-      const unreadCount = mergedMessages.filter((msg) => (
-        msg.direction === 'inbound' && new Date(msg.sentAt).getTime() > readTimestamp
-      )).length;
-
-      groups.push({
-        key,
-        contacts: sortedContacts,
-        primary,
-        messages: mergedMessages,
-        unreadCount,
-      });
-    }
-
-    groups.sort((a, b) => {
-      if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
-      if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
-      const aDate = a.primary.lastMessageAt || a.primary.updatedAt;
-      const bDate = b.primary.lastMessageAt || b.primary.updatedAt;
+    return [...list].sort((a, b) => {
+      const aDate = a.lastMessageAt || a.updatedAt;
+      const bDate = b.lastMessageAt || b.updatedAt;
       return new Date(bDate).getTime() - new Date(aDate).getTime();
     });
+  }, [contacts, statusFilter, channelFilter, search]);
 
-    return groups;
-  }, [filtered, messagesByContact]);
+  const handleContactUpdated = useCallback((updated: Contact) => {
+    setContacts((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+    setSelectedContact(updated);
+  }, []);
 
-  const emailCount = contacts.filter((c) => getChannel(c) === 'email').length;
+  const handleContactDeleted = useCallback((id: string) => {
+    setContacts((prev) => prev.filter((c) => c.id !== id));
+    setSelectedContact(null);
+  }, []);
+
+  const closedCount = contacts.filter((c) => c.status === 'client').length;
+  const interestedCount = contacts.filter((c) => c.status === 'interested' || c.status === 'negotiating').length;
   const waCount = contacts.filter((c) => getChannel(c) === 'whatsapp').length;
-  const manualCount = contacts.length - emailCount - waCount;
-
-  const channelTabs: Array<{ key: ContactChannel | 'all'; label: string; count: number }> = [
-    { key: 'all', label: 'Todos', count: contacts.length },
-    { key: 'email', label: 'Email', count: emailCount },
-    { key: 'whatsapp', label: 'WhatsApp', count: waCount },
-    { key: 'manual', label: 'Manual', count: manualCount },
-  ];
 
   if (!hasActiveSubscription) {
     return (
       <SubscriptionLockedView
         featureName="Contatos e CRM"
-        description="O funil de contatos fica disponível com uma assinatura ativa. Assine para desbloquear gestão de contatos, e-mail e WhatsApp."
+        description="O CRM de prospecção fica disponível com uma assinatura ativa. Assine para desbloquear."
       />
     );
   }
@@ -317,27 +236,30 @@ export function ContactsPage() {
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/leads" className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors">
-            <svg className="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <Link
+            to="/leads"
+            className="w-9 h-9 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
+          >
+            <svg className="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
             <h2 className="text-2xl font-bold text-text-primary">Contatos</h2>
-            <p className="text-sm text-text-secondary">Conversas por WhatsApp agrupadas por número</p>
+            <p className="text-sm text-text-secondary">CRM de prospecção e acompanhamento</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/leads/disparos">
             <Button variant="outline" size="sm">
               <EmailIcon className="w-3.5 h-3.5" />
-              Novo Disparo E-mail
+              Disparo Email
             </Button>
           </Link>
           <Link to="/leads/whatsapp">
             <Button variant="outline" size="sm">
               <WaIcon className="w-3.5 h-3.5" />
-              Novo Disparo WhatsApp
+              Disparo WhatsApp
             </Button>
           </Link>
         </div>
@@ -345,470 +267,134 @@ export function ContactsPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Total" value={contacts.length} gradient="from-brand-600 to-brand-400" />
-        <StatCard label="Via Email" value={emailCount} gradient="from-blue-500 to-cyan-400" />
-        <StatCard label="Via WhatsApp" value={waCount} gradient="from-emerald-500 to-teal-400" />
-        <StatCard label="Clientes" value={contacts.filter((c) => c.status === 'client').length} gradient="from-amber-500 to-yellow-400" />
+        <StatCard label="WhatsApp" value={waCount} gradient="from-emerald-500 to-teal-400" />
+        <StatCard label="Interessados" value={interestedCount} gradient="from-amber-500 to-yellow-400" sub="Interessado + Em neg." />
+        <StatCard label="Fechados" value={closedCount} gradient="from-purple-500 to-violet-400" />
       </div>
 
-      <div className="flex items-center gap-1 bg-surface-secondary border border-border rounded-xl p-1 w-fit">
-        {channelTabs.map(({ key, label, count }) => (
-          <button
-            key={key}
-            onClick={() => setChannelTab(key)}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all duration-200 font-semibold ${
-              channelTab === key ? 'bg-surface text-text-primary shadow-sm border border-border' : 'text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            {key === 'email' && <EmailIcon />}
-            {key === 'whatsapp' && <WaIcon />}
-            {key === 'manual' && <PersonIcon />}
-            {label}
-            {count > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center ${
-                channelTab === key ? 'bg-brand-400/15 text-brand-200' : 'bg-brand-400/10 text-brand-300'
-              }`}>
-                {count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {contacts.length > 0 && <PipelineBar contacts={contacts} />}
 
-      {messagesPollingDisabled && (
-        <div className="text-xs px-3 py-2 rounded-xl border border-amber-400/25 bg-amber-500/10 text-amber-200">
-          Atualização automática das conversas pausada por instabilidade no servidor. Recarregue a página após estabilizar o backend.
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, email, telefone..."
+            className="w-full pl-9 pr-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40"
+          />
         </div>
-      )}
+        <div className="flex items-center gap-1 bg-surface-secondary border border-border rounded-xl p-1">
+          {([
+            { key: 'all', label: 'Canal' },
+            { key: 'whatsapp', label: 'WhatsApp' },
+            { key: 'email', label: 'Email' },
+          ] as const).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setChannelFilter(key)}
+              className={`text-xs px-2.5 py-1.5 rounded-lg font-semibold transition-all ${
+                channelFilter === key
+                  ? 'bg-surface text-text-primary border border-border shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <div className="flex items-center gap-1.5 bg-surface-secondary border border-border rounded-xl p-1 w-fit">
-        <FilterButton active={filter === 'all'} onClick={() => setFilter('all')} label="Todos" />
-        {STATUS_OPTIONS.map((s) => (
-          <FilterButton key={s} active={filter === s} onClick={() => setFilter(s)} label={STATUS_CONFIG[s].label} />
-        ))}
+      <div className="flex items-center gap-1 flex-wrap bg-surface-secondary border border-border rounded-xl p-1 w-fit">
+        <button
+          onClick={() => setStatusFilter('all')}
+          className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all ${
+            statusFilter === 'all'
+              ? 'bg-surface text-text-primary border border-border shadow-sm'
+              : 'text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          Todos
+        </button>
+        {STATUS_OPTIONS.map((s) => {
+          const cfg = STATUS_CONFIG[s];
+          const count = contacts.filter((c) => c.status === s).length;
+          return (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                statusFilter === s
+                  ? 'bg-surface text-text-primary border border-border shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+              {cfg.label}
+              {count > 0 && (
+                <span className="text-[10px] px-1 rounded font-bold opacity-60">{count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-sm text-brand-300">Carregando contatos...</div>
-      ) : grouped.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="h-6 w-6 rounded-full border-2 border-border border-t-brand-400 animate-spin mx-auto" />
+          <p className="text-sm text-text-muted mt-3">Carregando contatos...</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <Card className="text-center py-12" gradient>
-          <p className="text-sm text-brand-400">Nenhum contato encontrado</p>
+          <div className="w-12 h-12 rounded-2xl bg-surface-secondary flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          {search || statusFilter !== 'all' || channelFilter !== 'all' ? (
+            <>
+              <p className="text-sm font-semibold text-text-primary">Nenhum resultado</p>
+              <p className="text-xs text-text-muted mt-1">Tente ajustar os filtros</p>
+              <button
+                onClick={() => { setSearch(''); setStatusFilter('all'); setChannelFilter('all'); }}
+                className="mt-3 text-xs text-brand-400 hover:text-brand-300 font-semibold"
+              >
+                Limpar filtros
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-text-primary">Nenhum contato ainda</p>
+              <p className="text-xs text-text-muted mt-1">
+                Contatos aparecem aqui após disparos por WhatsApp ou Email
+              </p>
+            </>
+          )}
         </Card>
       ) : (
-        <div className="space-y-3">
-          {grouped.map((group) => {
-            const ch = getChannel(group.primary);
-            const displayName = group.primary.name || group.primary.email || group.primary.phone || '?';
-            const phone = group.primary.phone || '';
-            const bubbleMessages = group.messages.length > 0
-              ? group.messages
-              : (group.primary.lastMessage ? [{
-                id: `${group.primary.id}-last`,
-                contactId: group.primary.id,
-                channel: ch,
-                direction: 'outbound' as const,
-                content: group.primary.lastMessage,
-                sentAt: group.primary.lastMessageAt || group.primary.updatedAt,
-                createdAt: group.primary.updatedAt,
-              }] : []);
-
-            return (
-              <Card key={group.key} hover className="!p-0">
-                <div className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 text-left min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-400 flex items-center justify-center shrink-0 shadow-sm">
-                        <span className="text-white font-bold text-sm">{displayName.charAt(0).toUpperCase()}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-semibold text-text-primary truncate">{displayName}</h4>
-                        <div className="flex items-center gap-2 flex-wrap mt-1">
-                          <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                            ch === 'whatsapp'
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                              : ch === 'email'
-                                ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                : 'bg-brand-50 border-brand-200 text-brand-500'
-                          }`}>
-                            {ch === 'whatsapp' ? <WaIcon /> : ch === 'email' ? <EmailIcon /> : <PersonIcon />}
-                            {ch === 'whatsapp' ? 'WhatsApp' : ch === 'email' ? 'Email' : 'Manual'}
-                          </span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${getStatusConfig(group.primary.status).bg} ${getStatusConfig(group.primary.status).color}`}>
-                            {getStatusConfig(group.primary.status).label}
-                          </span>
-                          {phone && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold border border-emerald-400/30 bg-emerald-500/10 text-emerald-300">
-                              {phone}
-                            </span>
-                          )}
-                          {group.unreadCount > 0 && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold border border-brand-400/40 bg-brand-500/20 text-brand-100">
-                              {group.unreadCount} nova{group.unreadCount > 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0" onClick={(event) => event.stopPropagation()}>
-                      <select
-                        value={group.primary.status}
-                        onChange={(event) => handleStatusChange(group.primary.id, event.target.value as ContactStatus)}
-                        className="text-[11px] px-2 py-1.5 bg-surface-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-400/40 cursor-pointer"
-                      >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
-                        ))}
-                      </select>
-                      <Button
-                        size="sm"
-                        onClick={() => setReplyGroup(group)}
-                        disabled={getChannel(group.primary) !== 'whatsapp' || !group.primary.phone}
-                      >
-                        Responder
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setDetailGroup(group)}
-                      >
-                        Detalhes
-                      </Button>
-                    </div>
-                  </div>
-
-                  {bubbleMessages.length > 0 && (
-                    <div className="rounded-xl border border-border-light bg-surface-secondary/70 p-3 max-h-44 overflow-y-auto space-y-2">
-                      {bubbleMessages.map((msg) => {
-                        const mine = msg.direction === 'outbound';
-                        return (
-                          <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[85%] rounded-2xl px-3 py-2 ${
-                              mine
-                                ? 'bg-emerald-500/20 border border-emerald-400/30 text-emerald-100'
-                                : 'bg-surface border border-border text-text-primary'
-                            }`}>
-                              <p className="text-xs whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                              <p className="text-[10px] mt-1 opacity-70">{formatDateTime(msg.sentAt)}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {replyGroup && (
-        <ReplyModal
-          group={replyGroup}
-          promptsStorageKey={promptsStorageKey}
-          onClose={() => setReplyGroup(null)}
-          onSent={async () => {
-            await fetchContacts();
-            await fetchMessages(contacts);
-            setReplyGroup(null);
-          }}
-        />
-      )}
-
-      {detailGroup && (
-        <DetailModal
-          group={detailGroup}
-          onClose={closeDetailModal}
-          onDeleted={async (id) => {
-            await handleDelete(id);
-            setDetailGroup(null);
-          }}
-          onSaved={async () => {
-            await fetchContacts();
-            await fetchMessages(contacts);
-          }}
-          onReply={() => setReplyGroup(detailGroup)}
-        />
-      )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, gradient }: { label: string; value: number; gradient: string }) {
-  return (
-    <div className="bg-surface border border-border-light rounded-2xl shadow-sm p-4 relative overflow-hidden">
-      <div className={`absolute top-0 right-0 w-20 h-20 bg-gradient-to-br ${gradient} opacity-5 rounded-bl-[3rem]`} />
-      <p className="text-xs text-brand-400 font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}>{value}</p>
-    </div>
-  );
-}
-
-function FilterButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`text-xs px-3 py-1.5 rounded-lg transition-all duration-200 font-semibold ${
-        active ? 'bg-surface text-text-primary shadow-sm border border-border' : 'text-text-secondary hover:text-text-primary'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ReplyModal({
-  group,
-  promptsStorageKey,
-  onClose,
-  onSent,
-}: {
-  group: ContactGroup;
-  promptsStorageKey: string;
-  onClose: () => void;
-  onSent: () => Promise<void>;
-}) {
-  const [messageMode, setMessageMode] = useState<'ai' | 'manual'>('ai');
-  const [manualMessage, setManualMessage] = useState('');
-  const [promptBase, setPromptBase] = useState('Crie uma resposta curta, cordial e objetiva para continuar a conversa no WhatsApp.');
-  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
-  const [selectedPromptId, setSelectedPromptId] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const migrated = migrateLegacySavedPrompts(promptsStorageKey);
-    setSavedPrompts(migrated);
-  }, [promptsStorageKey]);
-
-  const handleSend = async () => {
-    setSending(true);
-    setError(null);
-    try {
-      await contactsAPI.replyWhatsapp(group.primary.id, {
-        messageMode,
-        promptBase: messageMode === 'ai' ? promptBase : undefined,
-        manualMessage: messageMode === 'manual' ? manualMessage : undefined,
-      });
-      await onSent();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Falha ao enviar resposta';
-      setError(message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-brand-950/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-surface rounded-2xl border border-border-light shadow-2xl w-full max-w-xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-text-primary">Responder cliente</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center">
-            <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-1 bg-surface-secondary border border-border rounded-xl p-1 w-fit">
-          <button
-            type="button"
-            onClick={() => setMessageMode('ai')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${messageMode === 'ai' ? 'bg-surface text-text-primary border border-border' : 'text-text-secondary'}`}
-          >
-            Prompt (IA)
-          </button>
-          <button
-            type="button"
-            onClick={() => setMessageMode('manual')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${messageMode === 'manual' ? 'bg-surface text-text-primary border border-border' : 'text-text-secondary'}`}
-          >
-            Mensagem fixa
-          </button>
-        </div>
-
-        {messageMode === 'ai' ? (
-          <div className="space-y-2">
-            {savedPrompts.length > 0 && (
-              <select
-                value={selectedPromptId}
-                onChange={(event) => {
-                  const id = event.target.value;
-                  setSelectedPromptId(id);
-                  const selected = savedPrompts.find((prompt) => prompt.id === id);
-                  if (selected) setPromptBase(selected.content);
-                }}
-                className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary"
-              >
-                <option value="">Selecionar prompt salvo</option>
-                {savedPrompts.map((prompt) => (
-                  <option key={prompt.id} value={prompt.id}>{prompt.name}</option>
-                ))}
-              </select>
-            )}
-            <textarea
-              rows={5}
-              value={promptBase}
-              onChange={(event) => setPromptBase(event.target.value)}
-              placeholder="Digite o prompt para gerar a resposta"
-              className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary resize-none"
+        <div className="space-y-2">
+          <p className="text-xs text-text-muted px-1">{filtered.length} contato{filtered.length !== 1 ? 's' : ''}</p>
+          {filtered.map((contact) => (
+            <ContactCard
+              key={contact.id}
+              contact={contact}
+              onClick={() => setSelectedContact(contact)}
             />
-          </div>
-        ) : (
-          <textarea
-            rows={5}
-            value={manualMessage}
-            onChange={(event) => setManualMessage(event.target.value)}
-            placeholder="Digite a mensagem fixa"
-            className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary resize-none"
-          />
-        )}
-
-        {error && <p className="text-xs text-red-400">{error}</p>}
-
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button
-            onClick={handleSend}
-            disabled={sending || (messageMode === 'manual' ? !manualMessage.trim() : !promptBase.trim())}
-          >
-            {sending ? 'Enviando...' : 'Enviar'}
-          </Button>
+          ))}
         </div>
-      </div>
-    </div>
-  );
-}
+      )}
 
-function DetailModal({
-  group,
-  onClose,
-  onDeleted,
-  onSaved,
-  onReply,
-}: {
-  group: ContactGroup;
-  onClose: () => void;
-  onDeleted: (id: string) => Promise<void>;
-  onSaved: () => Promise<void>;
-  onReply: () => void;
-}) {
-  const [form, setForm] = useState({
-    name: group.primary.name,
-    phone: group.primary.phone,
-    company: group.primary.company,
-    notes: group.primary.notes,
-    status: group.primary.status,
-  });
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await contactsAPI.update(group.primary.id, {
-        name: form.name,
-        phone: form.phone,
-        company: form.company,
-        notes: form.notes,
-        status: form.status,
-      });
-      await onSaved();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const messages = group.messages.length > 0
-    ? group.messages
-    : (group.primary.lastMessage ? [{
-      id: `${group.primary.id}-last`,
-      contactId: group.primary.id,
-      channel: getChannel(group.primary),
-      direction: 'outbound' as const,
-      content: group.primary.lastMessage,
-      sentAt: group.primary.lastMessageAt || group.primary.updatedAt,
-      createdAt: group.primary.updatedAt,
-    }] : []);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-brand-950/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-surface rounded-2xl border border-border-light shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 space-y-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-text-primary">Detalhes do contato</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center">
-            <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input
-            value={form.name}
-            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-            placeholder="Nome"
-            className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary"
-          />
-          <input
-            value={form.phone}
-            onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-            placeholder="Telefone"
-            className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary"
-          />
-          <input
-            value={form.company}
-            onChange={(event) => setForm((prev) => ({ ...prev, company: event.target.value }))}
-            placeholder="Empresa"
-            className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary"
-          />
-          <select
-            value={form.status}
-            onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as ContactStatus }))}
-            className="px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary"
-          >
-            {STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>
-            ))}
-          </select>
-        </div>
-
-        <textarea
-          rows={3}
-          value={form.notes}
-          onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-          placeholder="Observações"
-          className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary resize-none"
+      {selectedContact && (
+        <ContactActivityCenter
+          contact={selectedContact}
+          onClose={() => setSelectedContact(null)}
+          onUpdated={handleContactUpdated}
+          onDeleted={handleContactDeleted}
         />
-
-        <div className="rounded-xl border border-border-light bg-surface-secondary/70 p-4 max-h-[46vh] overflow-y-auto space-y-2">
-          {messages.length === 0 ? (
-            <p className="text-xs text-text-muted">Sem mensagens ainda.</p>
-          ) : messages.map((msg) => {
-            const mine = msg.direction === 'outbound';
-            return (
-              <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[88%] rounded-2xl px-3 py-2 ${
-                  mine
-                    ? 'bg-emerald-500/20 border border-emerald-400/30 text-emerald-100'
-                    : 'bg-surface border border-border text-text-primary'
-                }`}>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                  <p className="text-[10px] mt-1 opacity-70">{formatDateTime(msg.sentAt)}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <Button onClick={onReply} disabled={getChannel(group.primary) !== 'whatsapp' || !group.primary.phone}>Responder</Button>
-          <Button variant="secondary" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Editar / Salvar'}</Button>
-          <Button variant="outline" onClick={() => onDeleted(group.primary.id)}>Excluir</Button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

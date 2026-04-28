@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { v4 as uuid } from 'uuid';
 import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { contactMessagesRepository } from '../modules/contacts/contact-messages.repository';
+import { contactActivitiesRepository } from '../modules/contacts/contact-activities.repository';
 import { Contact } from '../types/contacts.types';
 import { blastParamSchema, contactCreateSchema, contactUpdateSchema, contactWhatsappReplySchema, emailBlastSchema, uuidParamSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
@@ -94,8 +95,19 @@ export const contactsController = {
         return res.status(400).json({ error: parsed.error.issues[0].message });
       }
 
+      const previous = await contactsRepository.getById(req.tenantId!, paramsParsed.data.id);
       const contact = await contactsRepository.update(req.tenantId!, paramsParsed.data.id, parsed.data);
       if (!contact) return res.status(404).json({ error: 'Contato não encontrado' });
+
+      if (previous && parsed.data.status && parsed.data.status !== previous.status) {
+        contactActivitiesRepository.create(req.tenantId!, {
+          contactId: contact.id,
+          type: 'STATUS_CHANGED',
+          title: `Status alterado`,
+          metadata: { from: previous.status, to: parsed.data.status },
+        }).catch((err: Error) => console.error('[Contacts] Failed to record status change activity:', err.message));
+      }
+
       res.json(contact);
     } catch (err: any) {
       console.error('[Contacts] update error:', err.message);
@@ -123,7 +135,132 @@ export const contactsController = {
     }
   },
 
-  async markRead(req: Request, res: Response) {
+  async getActivities(req: Request, res: Response) {
+    try {
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+
+      const contact = await contactsRepository.getById(req.tenantId!, paramsParsed.data.id);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contato não encontrado' });
+      }
+
+      const activities = await contactActivitiesRepository.listByContact(req.tenantId!, contact.id);
+      res.json(activities);
+    } catch (err: any) {
+      console.error('[Contacts] getActivities error:', err.message);
+      res.status(500).json({ error: 'Erro ao buscar atividades do contato' });
+    }
+  },
+
+  async addNote(req: Request, res: Response) {
+    try {
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+
+      const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+      if (!content) {
+        return res.status(400).json({ error: 'Conteúdo da nota é obrigatório' });
+      }
+      if (content.length > 2000) {
+        return res.status(400).json({ error: 'Nota deve ter no máximo 2000 caracteres' });
+      }
+
+      const contact = await contactsRepository.getById(req.tenantId!, paramsParsed.data.id);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contato não encontrado' });
+      }
+
+      const activity = await contactActivitiesRepository.create(req.tenantId!, {
+        contactId: contact.id,
+        type: 'NOTE_CREATED',
+        title: 'Nota adicionada',
+        description: content,
+      });
+
+      console.info(`[Contacts] Note added for contact ${contact.id} (tenant ${req.tenantId})`);
+      res.status(201).json(activity);
+    } catch (err: any) {
+      console.error('[Contacts] addNote error:', err.message);
+      res.status(500).json({ error: 'Erro ao adicionar nota' });
+    }
+  },
+
+  async createFollowup(req: Request, res: Response) {
+    try {
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+
+      const scheduledFor = typeof req.body?.scheduledFor === 'string' ? req.body.scheduledFor.trim() : '';
+      const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+      const priority = ['low', 'normal', 'high'].includes(req.body?.priority) ? req.body.priority : 'normal';
+
+      if (!scheduledFor || isNaN(Date.parse(scheduledFor))) {
+        return res.status(400).json({ error: 'Data do follow-up inválida' });
+      }
+
+      const scheduledDate = new Date(scheduledFor);
+      if (scheduledDate <= new Date()) {
+        return res.status(400).json({ error: 'Data do follow-up deve ser futura' });
+      }
+
+      const contact = await contactsRepository.getById(req.tenantId!, paramsParsed.data.id);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contato não encontrado' });
+      }
+
+      const activity = await contactActivitiesRepository.create(req.tenantId!, {
+        contactId: contact.id,
+        type: 'FOLLOWUP_CREATED',
+        title: 'Follow-up agendado',
+        description: note || undefined,
+        metadata: {
+          scheduledFor: scheduledDate.toISOString(),
+          priority,
+          done: false,
+        },
+      });
+
+      console.info(`[Contacts] Follow-up created for contact ${contact.id} (tenant ${req.tenantId})`);
+      res.status(201).json(activity);
+    } catch (err: any) {
+      console.error('[Contacts] createFollowup error:', err.message);
+      res.status(500).json({ error: 'Erro ao agendar follow-up' });
+    }
+  },
+
+  async completeFollowup(req: Request, res: Response) {
+    try {
+      const paramsParsed = uuidParamSchema.safeParse(req.params);
+      if (!paramsParsed.success) {
+        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
+      }
+
+      const activityId = typeof req.params?.activityId === 'string' ? req.params.activityId.trim() : '';
+      if (!activityId) {
+        return res.status(400).json({ error: 'ID da atividade inválido' });
+      }
+
+      const done = req.body?.done !== false;
+      const activity = await contactActivitiesRepository.updateFollowupDone(req.tenantId!, activityId, done);
+      if (!activity) {
+        return res.status(404).json({ error: 'Follow-up não encontrado' });
+      }
+
+      res.json(activity);
+    } catch (err: any) {
+      console.error('[Contacts] completeFollowup error:', err.message);
+      res.status(500).json({ error: 'Erro ao atualizar follow-up' });
+    }
+  },
+
+
     try {
       const paramsParsed = uuidParamSchema.safeParse(req.params);
       if (!paramsParsed.success) {

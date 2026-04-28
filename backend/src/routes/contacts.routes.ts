@@ -27,6 +27,10 @@ router.post(
 router.get('/blast/:blastId/stream', contactsController.streamBlast);
 router.get('/:id/messages', contactsController.getMessages);
 router.post('/:id/read', contactsController.markRead);
+router.get('/:id/activities', contactsController.getActivities);
+router.post('/:id/notes', contactsController.addNote);
+router.post('/:id/followups', contactsController.createFollowup);
+router.patch('/:id/followups/:activityId', contactsController.completeFollowup);
 router.post(
 	'/:id/reply',
 	requireActiveSubscription('whatsapp'),

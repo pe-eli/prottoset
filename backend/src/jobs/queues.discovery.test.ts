@@ -51,8 +51,8 @@ describe('discovery queues', () => {
     });
 
     expect(mocked.addMock).toHaveBeenCalledTimes(3);
-    expect(mocked.addMock.mock.calls[0][2]).toEqual({ jobId: 'tenant-1:search-1' });
-    expect(mocked.addMock.mock.calls[1][2]).toEqual({ jobId: 'tenant-1:raw-1' });
-    expect(mocked.addMock.mock.calls[2][2]).toEqual({ jobId: 'tenant-1:raw-1' });
+    expect(mocked.addMock.mock.calls[0][2]).toEqual({ jobId: 'tenant-1-search-1' });
+    expect(mocked.addMock.mock.calls[1][2]).toEqual({ jobId: 'tenant-1-raw-1' });
+    expect(mocked.addMock.mock.calls[2][2]).toEqual({ jobId: 'tenant-1-raw-1' });
   });
 });

@@ -139,18 +139,18 @@ export function getLeadNormalizationQueue(): Queue<LeadNormalizationJobPayload> 
 
 export async function enqueueDiscoverySearchJob(payload: DiscoverySearchJobPayload): Promise<void> {
   await getDiscoverySearchQueue().add(payload.searchId, payload, {
-    jobId: `${payload.tenantId}:${payload.searchId}`,
+    jobId: `${payload.tenantId}-${payload.searchId}`,
   });
 }
 
 export async function enqueueInstagramExtractionJob(payload: InstagramExtractionJobPayload): Promise<void> {
   await getInstagramExtractionQueue().add(payload.rawResultId, payload, {
-    jobId: `${payload.tenantId}:${payload.rawResultId}`,
+    jobId: `${payload.tenantId}-${payload.rawResultId}`,
   });
 }
 
 export async function enqueueLeadNormalizationJob(payload: LeadNormalizationJobPayload): Promise<void> {
   await getLeadNormalizationQueue().add(payload.rawResultId, payload, {
-    jobId: `${payload.tenantId}:${payload.rawResultId}`,
+    jobId: `${payload.tenantId}-${payload.rawResultId}`,
   });
 }

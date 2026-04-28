@@ -306,9 +306,9 @@ function ActivityTimeline({ activities, onFollowupToggle }: {
                   )}
                   {activity.type === 'STATUS_CHANGED' && activity.metadata?.from && activity.metadata?.to && (
                     <p className="text-xs text-text-muted mt-0.5">
-                      {STATUS_CONFIG[activity.metadata.from as ContactStatus]?.label ?? activity.metadata.from as string}
+                      {STATUS_CONFIG[activity.metadata.from as ContactStatus]?.label ?? String(activity.metadata.from)}
                       {' → '}
-                      {STATUS_CONFIG[activity.metadata.to as ContactStatus]?.label ?? activity.metadata.to as string}
+                      {STATUS_CONFIG[activity.metadata.to as ContactStatus]?.label ?? String(activity.metadata.to)}
                     </p>
                   )}
                 </div>

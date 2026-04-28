@@ -10,6 +10,7 @@ interface ActivityRow {
   title: string;
   description: string | null;
   metadata: Record<string, unknown>;
+  created_by: string | null;
   created_at: Date;
 }
 
@@ -21,6 +22,7 @@ function toActivity(row: ActivityRow): ContactActivity {
     title: row.title,
     description: row.description ?? undefined,
     metadata: row.metadata ?? {},
+    createdBy: row.created_by ?? undefined,
     createdAt: row.created_at.toISOString(),
   };
 }
@@ -45,11 +47,12 @@ export const contactActivitiesRepository = {
     title: string;
     description?: string;
     metadata?: Record<string, unknown>;
+    createdBy?: string;
   }): Promise<ContactActivity> {
     const { rows } = await tenantQuery<ActivityRow>(
       tenantId,
-      `INSERT INTO contact_activities (id, tenant_id, contact_id, type, title, description, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO contact_activities (id, tenant_id, contact_id, type, title, description, metadata, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         uuid(),
@@ -59,6 +62,7 @@ export const contactActivitiesRepository = {
         input.title,
         input.description ?? null,
         JSON.stringify(input.metadata ?? {}),
+        input.createdBy ?? null,
       ],
     );
     if (!rows[0]) throw new Error('Failed to create activity');
@@ -71,13 +75,14 @@ export const contactActivitiesRepository = {
     title: string;
     description?: string;
     metadata?: Record<string, unknown>;
+    createdBy?: string;
   }>): Promise<void> {
     if (inputs.length === 0) return;
     const values: unknown[] = [];
     const placeholders: string[] = [];
     let idx = 1;
     for (const input of inputs) {
-      placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
       values.push(
         uuid(),
         tenantId,
@@ -86,11 +91,12 @@ export const contactActivitiesRepository = {
         input.title,
         input.description ?? null,
         JSON.stringify(input.metadata ?? {}),
+        input.createdBy ?? null,
       );
     }
     await tenantQuery(
       tenantId,
-      `INSERT INTO contact_activities (id, tenant_id, contact_id, type, title, description, metadata)
+      `INSERT INTO contact_activities (id, tenant_id, contact_id, type, title, description, metadata, created_by)
        VALUES ${placeholders.join(', ')}`,
       values,
     );

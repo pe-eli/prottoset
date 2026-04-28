@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isRestrictedMobileDevice } from '../utils/device';
 
 /* ─── Icons ─── */
 const ArrowRight = ({ className = '', size = 16 }: { className?: string; size?: number }) => (
@@ -520,15 +521,23 @@ LandingFooter.displayName = 'LandingFooter';
 export function LandingPage({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
+  const goToPrimaryCta = () => {
+    if (isAuthenticated) {
+      navigate('/home');
+      return;
+    }
+
+    navigate(isRestrictedMobileDevice() ? '/continue-no-pc' : '/login');
+  };
 
   return (
     <main className="min-h-screen bg-background text-text-primary">
       <Navigation onNavigate={go} isAuthenticated={isAuthenticated} />
-      <Hero onNavigate={go} />
+      <Hero onNavigate={goToPrimaryCta} />
       <Features />
       <HowItWorks />
       <Differentials />
-      <CTA onNavigate={go} />
+      <CTA onNavigate={goToPrimaryCta} />
       <LandingFooter />
     </main>
   );

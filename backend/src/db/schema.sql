@@ -440,8 +440,12 @@ CREATE TABLE IF NOT EXISTS contact_activities (
   title TEXT NOT NULL,
   description TEXT,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE contact_activities
+  ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_contact_activities_contact
   ON contact_activities (tenant_id, contact_id, created_at DESC);

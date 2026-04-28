@@ -77,7 +77,7 @@ export const contactUpdateSchema = z.object({
   name: z.string().trim().max(160).optional(),
   phone: z.string().trim().max(40).optional(),
   company: z.string().trim().max(160).optional(),
-  status: z.enum(['new', 'contacted', 'negotiating', 'client', 'lost']).optional(),
+  status: z.enum(['new', 'contacted', 'no_reply', 'interested', 'negotiating', 'client', 'lost']).optional(),
   notes: z.string().trim().max(5000).optional(),
 });
 
@@ -161,7 +161,7 @@ export const whatsappPromptTestSchema = z.object({
   }
 });
 
-export const contactWhatsappReplySchema = z.object({
+export const contactOutboundMessageSchema = z.object({
   messageMode: z.enum(['ai', 'manual']),
   promptBase: z.string().trim().max(1000).optional(),
   manualMessage: z.string().trim().max(1000).optional(),

@@ -211,7 +211,7 @@ export const evolutionService = {
     }
 
     const webhookUrl = `${webhookBaseUrl}/api/webhooks/evolution`;
-    const events = ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'];
+    const events = ['CONNECTION_UPDATE', 'QRCODE_UPDATED'];
     const byEvents = true;
 
     // 1. { webhook: { url, events, byEvents } }

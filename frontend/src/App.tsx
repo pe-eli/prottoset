@@ -18,6 +18,7 @@ import { WhatsAppBlastPage } from './pages/WhatsAppBlastPage';
 import { WhatsAppConnectPage } from './pages/WhatsAppConnectPage';
 import { ContactsPage } from './pages/ContactsPage';
 import { LoginPage } from './pages/LoginPage';
+import { DesktopRequiredPage } from './pages/DesktopRequiredPage';
 import { PricingPage } from './pages/PricingPage';
 import { BillingPage } from './pages/BillingPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
@@ -26,6 +27,7 @@ import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { clearLegacySavedPromptsStorage } from './features/whatsapp/saved-prompts.storage';
 import { resetApiSessionState } from './lib/axios';
+import { useRestrictedMobileDevice } from './utils/device';
 
 type SessionTransition = 'login' | 'logout';
 
@@ -75,6 +77,7 @@ function SessionTransitionOverlay({ mode }: { mode: SessionTransition }) {
 }
 
 function App() {
+  const restrictedMobileDevice = useRestrictedMobileDevice();
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [sessionTransition, setSessionTransition] = useState<SessionTransition | null>(null);
@@ -176,8 +179,9 @@ function App() {
             />
             <Route
               path="/login"
-              element={user ? <Navigate to="/home" replace /> : <LoginPage onAuthenticated={handleAuthenticated} />}
+              element={user ? <Navigate to="/home" replace /> : restrictedMobileDevice ? <Navigate to="/continue-no-pc" replace /> : <LoginPage onAuthenticated={handleAuthenticated} />}
             />
+            <Route path="/continue-no-pc" element={<DesktopRequiredPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route
               path="/pricing"

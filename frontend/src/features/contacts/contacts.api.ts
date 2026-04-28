@@ -23,7 +23,6 @@ export interface Contact {
   channel?: ContactChannel;
   lastMessage?: string;
   lastMessageAt?: string;
-  lastReadAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,16 +34,6 @@ export interface ContactActivity {
   title: string;
   description?: string;
   metadata: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface ContactMessage {
-  id: string;
-  contactId: string;
-  channel: ContactChannel;
-  direction: 'inbound' | 'outbound';
-  content: string;
-  sentAt: string;
   createdAt: string;
 }
 
@@ -81,18 +70,11 @@ export const contactsAPI = {
   completeFollowup: (contactId: string, activityId: string, done: boolean) =>
     api.patch<ContactActivity>(`/contacts/${contactId}/followups/${activityId}`, { done }),
 
-  // Legacy — kept for backwards compatibility
-  getMessages: (id: string) =>
-    api.get<ContactMessage[]>(`/contacts/${id}/messages`),
-
-  markRead: (id: string) =>
-    api.post<{ ok: boolean; lastReadAt?: string }>(`/contacts/${id}/read`),
-
-  replyWhatsapp: (id: string, data: {
+  sendOutboundMessage: (id: string, data: {
     messageMode: 'ai' | 'manual';
     promptBase?: string;
     manualMessage?: string;
-  }) => api.post<{ ok: boolean; message: string }>(`/contacts/${id}/reply`, data),
+  }) => api.post<{ ok: boolean; message: string }>(`/contacts/${id}/outbound-message`, data),
 
   /** Inicia o blast e retorna o blastId para acompanhar via SSE */
   startBlast: (emails: string[], subject: string, body: string, config: BlastConfig) =>

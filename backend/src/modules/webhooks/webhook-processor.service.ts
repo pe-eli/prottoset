@@ -1,7 +1,5 @@
 import { subscriptionService } from '../subscriptions/subscription.service';
 import { waInstanceRepository } from '../whatsapp/whatsapp-instance.repository';
-import { contactsRepository } from '../contacts/contacts.repository';
-import { contactMessagesRepository } from '../contacts/contact-messages.repository';
 
 export const webhookProcessorService = {
   async process(provider: 'mercadopago' | 'evolution' | 'stripe', payload: Record<string, unknown>): Promise<void> {
@@ -72,26 +70,8 @@ async function processEvolutionPayload(payload: Record<string, unknown>): Promis
   }
 
   if (eventName === 'messages.upsert') {
-    const messages = extractMessages(data);
-    for (const msg of messages) {
-      if (!msg.content || !msg.phone) continue;
-
-      const contact = await contactsRepository.upsertWhatsappContactByPhone(waInstance.tenantId, {
-        phone: msg.phone,
-        status: 'contacted',
-        lastMessage: msg.content,
-        lastMessageAt: msg.sentAt,
-      });
-
-      await contactMessagesRepository.create(waInstance.tenantId, {
-        contactId: contact.id,
-        channel: 'whatsapp',
-        direction: msg.fromMe ? 'outbound' : 'inbound',
-        content: msg.content,
-        sentAt: msg.sentAt,
-        externalId: msg.externalId,
-      });
-    }
+    // Outbound CRM mode: do not sync inbox replies or emulate bidirectional chat state.
+    return;
   }
 }
 

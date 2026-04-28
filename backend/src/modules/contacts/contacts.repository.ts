@@ -207,10 +207,6 @@ export const contactsRepository = {
     return toContact(rows[0]);
   },
 
-  async markRead(tenantId: string, id: string, readAt = new Date().toISOString()): Promise<Contact | null> {
-    return this.update(tenantId, id, { lastReadAt: readAt });
-  },
-
   async delete(tenantId: string, id: string): Promise<boolean> {
     const { rowCount } = await tenantQuery(tenantId, 'DELETE FROM contacts WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     return (rowCount ?? 0) > 0;

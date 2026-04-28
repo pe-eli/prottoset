@@ -34,6 +34,7 @@ export interface ContactActivity {
   title: string;
   description?: string;
   metadata: Record<string, unknown>;
+  createdBy?: string;
   createdAt: string;
 }
 

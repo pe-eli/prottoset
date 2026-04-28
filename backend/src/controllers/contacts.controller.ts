@@ -5,13 +5,14 @@ import { contactsRepository } from '../modules/contacts/contacts.repository';
 import { contactMessagesRepository } from '../modules/contacts/contact-messages.repository';
 import { contactActivitiesRepository } from '../modules/contacts/contact-activities.repository';
 import { Contact } from '../types/contacts.types';
-import { blastParamSchema, contactCreateSchema, contactUpdateSchema, contactWhatsappReplySchema, emailBlastSchema, uuidParamSchema } from '../validation/request.schemas';
+import { blastParamSchema, contactCreateSchema, contactOutboundMessageSchema, contactUpdateSchema, emailBlastSchema, uuidParamSchema } from '../validation/request.schemas';
 import { outboundRunsRepository } from '../jobs/outbound-runs.repository';
 import { waInstanceRepository } from '../modules/whatsapp/whatsapp-instance.repository';
 import { evolutionService } from '../services/evolution.service';
 import { aiOrchestrator } from '../modules/ai/ai-orchestrator.service';
 import { integrationVaultService } from '../modules/integrations/integration-vault.service';
 import { outboxDispatcherService } from '../modules/outbox/outbox-dispatcher.service';
+import type { ContactActivity, ContactMessage } from '../types/contacts.types';
 
 function openSse(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -19,6 +20,27 @@ function openSse(res: Response): void {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
+}
+
+function toLegacyActivity(message: ContactMessage): ContactActivity {
+  const isOutbound = message.direction === 'outbound';
+  return {
+    id: `legacy-message-${message.id}`,
+    contactId: message.contactId,
+    type: isOutbound ? 'MESSAGE_SENT' : 'MANUAL_INTERACTION',
+    title: isOutbound ? 'Mensagem enviada (histórico)' : 'Interação manual (histórico)',
+    description: message.content,
+    metadata: {
+      source: 'legacy_contact_messages',
+      channel: message.channel,
+      direction: message.direction,
+    },
+    createdAt: message.sentAt || message.createdAt,
+  };
+}
+
+function logContactEvent(event: string, payload: Record<string, unknown>): void {
+  console.info(`[Contacts] ${event} ${JSON.stringify(payload)}`);
 }
 
 export const contactsController = {
@@ -77,6 +99,20 @@ export const contactsController = {
       }
 
       const result = await contactsRepository.saveMany(req.tenantId!, newContacts);
+
+      if (result.saved.length > 0) {
+        await contactActivitiesRepository.createMany(req.tenantId!, result.saved.map((contact) => ({
+          contactId: contact.id,
+          type: 'CONTACT_CREATED',
+          title: 'Contato criado',
+          metadata: {
+            source: 'manual_import',
+            email: contact.email,
+          },
+          createdBy: req.authUser?.userId,
+        })));
+      }
+
       res.status(201).json(result);
     } catch (err: any) {
       console.error('[Contacts] create error:', err.message);
@@ -105,33 +141,22 @@ export const contactsController = {
           type: 'STATUS_CHANGED',
           title: `Status alterado`,
           metadata: { from: previous.status, to: parsed.data.status },
+          createdBy: req.authUser?.userId,
         }).catch((err: Error) => console.error('[Contacts] Failed to record status change activity:', err.message));
+
+        logContactEvent('status_changed', {
+          tenantId: req.tenantId,
+          contactId: contact.id,
+          from: previous.status,
+          to: parsed.data.status,
+          actor: req.authUser?.userId,
+        });
       }
 
       res.json(contact);
     } catch (err: any) {
       console.error('[Contacts] update error:', err.message);
       res.status(500).json({ error: 'Erro ao atualizar contato' });
-    }
-  },
-
-  async getMessages(req: Request, res: Response) {
-    try {
-      const paramsParsed = uuidParamSchema.safeParse(req.params);
-      if (!paramsParsed.success) {
-        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
-      }
-
-      const contact = await contactsRepository.getById(req.tenantId!, paramsParsed.data.id);
-      if (!contact) {
-        return res.status(404).json({ error: 'Contato não encontrado' });
-      }
-
-      const messages = await contactMessagesRepository.listByContact(req.tenantId!, contact.id);
-      res.json(messages);
-    } catch (err: any) {
-      console.error('[Contacts] getMessages error:', err.message);
-      res.status(500).json({ error: 'Erro ao buscar mensagens do contato' });
     }
   },
 
@@ -147,8 +172,20 @@ export const contactsController = {
         return res.status(404).json({ error: 'Contato não encontrado' });
       }
 
-      const activities = await contactActivitiesRepository.listByContact(req.tenantId!, contact.id);
-      res.json(activities);
+      const [activities, legacyMessages] = await Promise.all([
+        contactActivitiesRepository.listByContact(req.tenantId!, contact.id),
+        contactMessagesRepository.listByContact(req.tenantId!, contact.id, 120),
+      ]);
+
+      // Safe migration fallback: if the tenant still has only legacy messages, render them as timeline activities.
+      const fallbackActivities = activities.length === 0
+        ? legacyMessages.map(toLegacyActivity)
+        : [];
+
+      const timeline = [...activities, ...fallbackActivities].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+      res.json(timeline);
     } catch (err: any) {
       console.error('[Contacts] getActivities error:', err.message);
       res.status(500).json({ error: 'Erro ao buscar atividades do contato' });
@@ -180,9 +217,14 @@ export const contactsController = {
         type: 'NOTE_CREATED',
         title: 'Nota adicionada',
         description: content,
+        createdBy: req.authUser?.userId,
       });
 
-      console.info(`[Contacts] Note added for contact ${contact.id} (tenant ${req.tenantId})`);
+      logContactEvent('note_created', {
+        tenantId: req.tenantId,
+        contactId: contact.id,
+        actor: req.authUser?.userId,
+      });
       res.status(201).json(activity);
     } catch (err: any) {
       console.error('[Contacts] addNote error:', err.message);
@@ -225,9 +267,16 @@ export const contactsController = {
           priority,
           done: false,
         },
+        createdBy: req.authUser?.userId,
       });
 
-      console.info(`[Contacts] Follow-up created for contact ${contact.id} (tenant ${req.tenantId})`);
+      logContactEvent('followup_created', {
+        tenantId: req.tenantId,
+        contactId: contact.id,
+        scheduledFor: scheduledDate.toISOString(),
+        priority,
+        actor: req.authUser?.userId,
+      });
       res.status(201).json(activity);
     } catch (err: any) {
       console.error('[Contacts] createFollowup error:', err.message);
@@ -260,33 +309,14 @@ export const contactsController = {
     }
   },
 
-  async markRead(req: Request, res: Response) {
+  async sendOutboundMessage(req: Request, res: Response) {
     try {
       const paramsParsed = uuidParamSchema.safeParse(req.params);
       if (!paramsParsed.success) {
         return res.status(400).json({ error: paramsParsed.error.issues[0].message });
       }
 
-      const contact = await contactsRepository.markRead(req.tenantId!, paramsParsed.data.id);
-      if (!contact) {
-        return res.status(404).json({ error: 'Contato não encontrado' });
-      }
-
-      res.json({ ok: true, lastReadAt: contact.lastReadAt });
-    } catch (err: any) {
-      console.error('[Contacts] markRead error:', err.message);
-      res.status(500).json({ error: 'Erro ao marcar conversa como lida' });
-    }
-  },
-
-  async replyWhatsapp(req: Request, res: Response) {
-    try {
-      const paramsParsed = uuidParamSchema.safeParse(req.params);
-      if (!paramsParsed.success) {
-        return res.status(400).json({ error: paramsParsed.error.issues[0].message });
-      }
-
-      const bodyParsed = contactWhatsappReplySchema.safeParse(req.body);
+      const bodyParsed = contactOutboundMessageSchema.safeParse(req.body);
       if (!bodyParsed.success) {
         return res.status(400).json({ error: bodyParsed.error.issues[0].message });
       }
@@ -298,12 +328,12 @@ export const contactsController = {
       }
 
       if (!contact.phone) {
-        return res.status(400).json({ error: 'Contato sem telefone para resposta via WhatsApp' });
+        return res.status(400).json({ error: 'Contato sem telefone para envio via WhatsApp' });
       }
 
       const waInstance = await waInstanceRepository.findByTenant(tenantId);
       if (!waInstance || waInstance.status !== 'connected') {
-        return res.status(400).json({ error: 'WhatsApp não conectado. Conecte antes de responder.' });
+        return res.status(400).json({ error: 'WhatsApp não conectado. Conecte antes de enviar.' });
       }
 
       const { messageMode, promptBase, manualMessage } = bodyParsed.data;
@@ -329,10 +359,11 @@ export const contactsController = {
         const generated = await aiOrchestrator.generate({
           tenantId,
           prompt: normalizedPrompt,
-          source: 'reply',
-          idempotencyKey: req.header('idempotency-key')?.trim() || `reply:${contact.id}:${promptHash}`,
+          source: 'blast',
+          idempotencyKey: req.header('idempotency-key')?.trim() || `outbound:${contact.id}:${promptHash}`,
           metadata: {
             contactId: contact.id,
+            flow: 'contact_activity_center_outbound',
           },
         });
         message = (generated.message || '').trim();
@@ -362,10 +393,31 @@ export const contactsController = {
         sentAt,
       });
 
+      await contactActivitiesRepository.create(tenantId, {
+        contactId: contact.id,
+        type: 'MESSAGE_SENT',
+        title: 'Mensagem enviada',
+        description: message.length > 260 ? `${message.slice(0, 260)}...` : message,
+        metadata: {
+          channel: 'whatsapp',
+          mode: messageMode,
+          sentAt,
+        },
+        createdBy: req.authUser?.userId,
+      });
+
+      logContactEvent('message_sent', {
+        tenantId: req.tenantId,
+        contactId: contact.id,
+        channel: 'whatsapp',
+        mode: messageMode,
+        actor: req.authUser?.userId,
+      });
+
       res.json({ ok: true, message });
     } catch (err: any) {
-      console.error('[Contacts] replyWhatsapp error:', err.message);
-      res.status(500).json({ error: 'Erro ao responder contato no WhatsApp' });
+      console.error('[Contacts] sendOutboundMessage error:', err.message);
+      res.status(500).json({ error: 'Erro ao enviar mensagem outbound no WhatsApp' });
     }
   },
 

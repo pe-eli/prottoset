@@ -68,6 +68,22 @@ DO $$ BEGIN
   CREATE TYPE outbound_item_status AS ENUM ('pending','sending','sent','failed','skipped');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE feedback_type AS ENUM ('BUG','SUGGESTION','QUESTION','PROBLEM','FEATURE_REQUEST','GENERAL');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE feedback_sender_type AS ENUM ('USER','ADMIN','SYSTEM');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE feedback_status AS ENUM ('OPEN','IN_PROGRESS','RESOLVED','CLOSED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE feedback_priority AS ENUM ('LOW','MEDIUM','HIGH','CRITICAL');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- ============================================================
 -- GLOBAL TABLES (no RLS)
 -- ============================================================
@@ -706,6 +722,109 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 CREATE INDEX IF NOT EXISTS idx_outbox_events_status_available
   ON outbox_events (status, available_at, created_at);
 
+-- ─── FEEDBACK CENTER ───
+CREATE TABLE IF NOT EXISTS feedback_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type feedback_type NOT NULL,
+  subject TEXT NOT NULL,
+  status feedback_status NOT NULL DEFAULT 'OPEN',
+  priority feedback_priority NOT NULL DEFAULT 'LOW',
+  last_message_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_threads_tenant_last_message
+  ON feedback_threads (tenant_id, last_message_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_threads_type_subject
+  ON feedback_threads (type, lower(subject), last_message_at DESC);
+
+ALTER TABLE feedback_threads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS feedback_threads_tenant ON feedback_threads;
+CREATE POLICY feedback_threads_tenant ON feedback_threads
+  USING (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  )
+  WITH CHECK (
+    tenant_id = current_setting('app.current_tenant', true)::uuid
+    OR current_setting('app.security_bypass', true) = 'true'
+  );
+
+CREATE TABLE IF NOT EXISTS feedback_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES feedback_threads(id) ON DELETE CASCADE,
+  sender_type feedback_sender_type NOT NULL,
+  message TEXT NOT NULL,
+  attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_messages_thread_created
+  ON feedback_messages (thread_id, created_at ASC);
+
+ALTER TABLE feedback_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS feedback_messages_tenant ON feedback_messages;
+CREATE POLICY feedback_messages_tenant ON feedback_messages
+  USING (
+    current_setting('app.security_bypass', true) = 'true'
+    OR EXISTS (
+      SELECT 1
+      FROM feedback_threads ft
+      WHERE ft.id = feedback_messages.thread_id
+        AND ft.tenant_id = current_setting('app.current_tenant', true)::uuid
+    )
+  )
+  WITH CHECK (
+    current_setting('app.security_bypass', true) = 'true'
+    OR EXISTS (
+      SELECT 1
+      FROM feedback_threads ft
+      WHERE ft.id = feedback_messages.thread_id
+        AND ft.tenant_id = current_setting('app.current_tenant', true)::uuid
+    )
+  );
+
+CREATE TABLE IF NOT EXISTS feedback_attachments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES feedback_messages(id) ON DELETE CASCADE,
+  file_url TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size INTEGER NOT NULL CHECK (size > 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_attachments_message
+  ON feedback_attachments (message_id, created_at ASC);
+
+ALTER TABLE feedback_attachments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS feedback_attachments_tenant ON feedback_attachments;
+CREATE POLICY feedback_attachments_tenant ON feedback_attachments
+  USING (
+    current_setting('app.security_bypass', true) = 'true'
+    OR EXISTS (
+      SELECT 1
+      FROM feedback_messages fm
+      JOIN feedback_threads ft ON ft.id = fm.thread_id
+      WHERE fm.id = feedback_attachments.message_id
+        AND ft.tenant_id = current_setting('app.current_tenant', true)::uuid
+    )
+  )
+  WITH CHECK (
+    current_setting('app.security_bypass', true) = 'true'
+    OR EXISTS (
+      SELECT 1
+      FROM feedback_messages fm
+      JOIN feedback_threads ft ON ft.id = fm.thread_id
+      WHERE fm.id = feedback_attachments.message_id
+        AND ft.tenant_id = current_setting('app.current_tenant', true)::uuid
+    )
+  );
+
 -- ─── AUDIT LOGS ───
 CREATE TABLE IF NOT EXISTS audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -765,6 +884,9 @@ ALTER TABLE lead_folders FORCE ROW LEVEL SECURITY;
 ALTER TABLE lead_folder_leads FORCE ROW LEVEL SECURITY;
 ALTER TABLE contacts FORCE ROW LEVEL SECURITY;
 ALTER TABLE contact_messages FORCE ROW LEVEL SECURITY;
+ALTER TABLE feedback_threads FORCE ROW LEVEL SECURITY;
+ALTER TABLE feedback_messages FORCE ROW LEVEL SECURITY;
+ALTER TABLE feedback_attachments FORCE ROW LEVEL SECURITY;
 ALTER TABLE queues FORCE ROW LEVEL SECURITY;
 ALTER TABLE queue_phones FORCE ROW LEVEL SECURITY;
 ALTER TABLE quotes FORCE ROW LEVEL SECURITY;

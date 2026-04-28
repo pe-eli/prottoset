@@ -5,6 +5,7 @@ import { authAPI } from '../features/auth/auth.api';
 import { isAxiosError } from 'axios';
 import { useSubscription } from '../contexts/useSubscription';
 import { Card } from '../components/ui/Card';
+import { useFeedback } from '../contexts/useFeedback';
 
 function formatLimit(limit: number | null, suffix: string): string {
   if (limit === null) return 'Ilimitado';
@@ -32,6 +33,7 @@ interface ApiErrorPayload {
 export function SettingsPage() {
   const navigate = useNavigate();
   const { user } = useOutletContext<{ user: AuthUser }>();
+  const { open: openFeedback, adminEnabled } = useFeedback();
   const { subscription, loading } = useSubscription();
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
@@ -172,6 +174,34 @@ export function SettingsPage() {
             </div>
           </div>
         )}
+      </Card>
+
+      <Card>
+        <h2 className="text-sm font-semibold text-brand-400 uppercase tracking-widest mb-4">Feedback & suporte</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-text-primary">Canal rápido com o time do produto</p>
+            <p className="text-sm text-text-muted mt-1">Reporte bugs, envie sugestões e acompanhe respostas com contexto completo.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={openFeedback}
+              className="inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200 px-4 py-2 text-sm border border-brand-400/40 text-brand-300 hover:bg-brand-400/10"
+            >
+              Abrir central
+            </button>
+            {adminEnabled && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin/feedback')}
+                className="inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200 px-4 py-2 text-sm border border-border-light text-text-secondary hover:bg-surface-secondary"
+              >
+                Inbox interna
+              </button>
+            )}
+          </div>
+        </div>
       </Card>
 
       {subscription && (

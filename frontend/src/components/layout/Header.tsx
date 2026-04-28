@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { AuthUser } from '../../features/auth/auth.api';
+import { useFeedback } from '../../contexts/useFeedback';
 import { useSubscription } from '../../contexts/useSubscription';
 import { leadsAPI, type LeadsDailyQuota } from '../../features/leads/leads.api';
 
@@ -21,6 +22,7 @@ function formatSubscriptionBadge(planName: string, status: string): string {
 export function Header({ user, onLogout, logoutPending = false }: HeaderProps) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { open: openFeedback, adminEnabled } = useFeedback();
   const { subscription } = useSubscription();
   const [freeTierQuota, setFreeTierQuota] = useState<LeadsDailyQuota | null>(null);
   const hasActiveSubscription = subscription?.status === 'active';
@@ -155,6 +157,29 @@ export function Header({ user, onLogout, logoutPending = false }: HeaderProps) {
                   </svg>
                   <span>Configurações</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); openFeedback(); }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-white/[0.04] transition-colors flex items-center gap-2.5 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h6m-8 8 2.5-2.5a2 2 0 0 1 1.414-.586H19a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2Z" />
+                  </svg>
+                  <span>Feedback & suporte</span>
+                </button>
+                {adminEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); navigate('/admin/feedback'); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-white/[0.04] transition-colors flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 9h10M7 13h6" />
+                    </svg>
+                    <span>Inbox interna</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => { setMenuOpen(false); navigate('/assinatura'); }}

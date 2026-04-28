@@ -6,8 +6,11 @@ import { FeatureRail } from './components/layout/FeatureRail';
 import { WaBlastProvider } from './contexts/WaBlastContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { FeedbackProvider } from './contexts/FeedbackContext';
 import { WaBlastIndicator } from './components/WaBlastIndicator';
 import { PaywallModal } from './features/subscriptions/PaywallModal';
+import { FeedbackLauncher } from './features/feedback/FeedbackLauncher';
+import { FeedbackCenterModal } from './features/feedback/FeedbackCenterModal';
 import { authAPI } from './features/auth/auth.api';
 import type { AuthUser } from './features/auth/auth.api';
 import { LandingPage } from './pages/LandingPage';
@@ -25,6 +28,7 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfUsePage } from './pages/TermsOfUsePage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AdminFeedbackPage } from './pages/AdminFeedbackPage';
 import { clearLegacySavedPromptsStorage } from './features/whatsapp/saved-prompts.storage';
 import { resetApiSessionState } from './lib/axios';
 import { useRestrictedMobileDevice } from './utils/device';
@@ -49,14 +53,18 @@ function ProtectedLayout({ user, onLogout, logoutPending }: ProtectedLayoutProps
 
   return (
     <SubscriptionProvider>
-      {isMainHub && <Header user={user} onLogout={onLogout} logoutPending={logoutPending} />}
-      {showFeatureRail && <FeatureRail />}
-      <main className={`flex-1 px-4 py-8 ${showFeatureRail ? 'lg:pl-24' : ''}`}>
-        <Outlet context={{ user }} />
-      </main>
-      <Footer />
-      <WaBlastIndicator />
-      <PaywallModal />
+      <FeedbackProvider user={user}>
+        {isMainHub && <Header user={user} onLogout={onLogout} logoutPending={logoutPending} />}
+        {showFeatureRail && <FeatureRail />}
+        <main className={`flex-1 px-4 py-8 ${showFeatureRail ? 'lg:pl-24' : ''}`}>
+          <Outlet context={{ user }} />
+        </main>
+        <Footer />
+        <WaBlastIndicator />
+        <PaywallModal />
+        <FeedbackLauncher />
+        <FeedbackCenterModal />
+      </FeedbackProvider>
     </SubscriptionProvider>
   );
 }
@@ -212,6 +220,7 @@ function App() {
               <Route path="/leads/whatsapp/connect" element={<WhatsAppConnectPage />} />
               <Route path="/leads/contatos" element={<ContactsPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />
+              <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
               <Route path="/billing" element={<BillingPage />} />
               <Route path="/assinatura" element={<Navigate to="/pricing" replace />} />
             </Route>

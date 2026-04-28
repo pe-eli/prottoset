@@ -12,6 +12,7 @@ import leadFoldersRoutes from './routes/lead-folders.routes';
 import subscriptionRoutes from './routes/subscriptions.routes';
 import quoteRoutes from './routes/quote.routes';
 import packagesRoutes from './routes/packages.routes';
+import { feedbackRouter, adminFeedbackRouter } from './routes/feedback.routes';
 import { subscriptionsController } from './controllers/subscriptions.controller';
 import { evolutionWebhookController } from './controllers/evolution-webhook.controller';
 import { requireAuth } from './middleware/auth.middleware';
@@ -92,7 +93,7 @@ app.post('/api/webhooks/stripe', webhookLimiter, express.raw({ type: '*/*', limi
 app.post('/api/webhooks/evolution', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), evolutionWebhookController.handle);
 app.post('/api/webhooks/evolution/:event', webhookLimiter, express.raw({ type: '*/*', limit: '200kb' }), evolutionWebhookController.handle);
 
-app.use(express.json({ limit: '200kb' }));
+app.use(express.json({ limit: '4mb' }));
 
 app.use('/api/auth', setNoStoreHeaders, requireTrustedOrigin(allowedOrigins));
 app.use('/api/auth', authRoutes);
@@ -117,6 +118,8 @@ app.use('/api/lead-folders', leadFoldersRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/packages', packagesRoutes);
+app.use('/api/feedback', feedbackRouter);
+app.use('/api/admin/feedback', adminFeedbackRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

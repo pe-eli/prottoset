@@ -260,7 +260,7 @@ export const contactsController = {
     }
   },
 
-
+  async markRead(req: Request, res: Response) {
     try {
       const paramsParsed = uuidParamSchema.safeParse(req.params);
       if (!paramsParsed.success) {

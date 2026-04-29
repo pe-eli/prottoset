@@ -18,7 +18,6 @@ export function LeadSearchForm({
   onSearch,
   loading,
   freeTierQuota = null,
-  hasActiveSubscription = null,
 }: LeadSearchFormProps) {
   const [form, setForm] = useState<LeadSearchParams>({
     searchTerm: '',

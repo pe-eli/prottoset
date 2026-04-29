@@ -61,21 +61,6 @@ export function LeadSearchForm({
 
   return (
     <Card gradient>
-      <div className="mb-4 rounded-xl border border-brand-400/25 bg-brand-500/10 px-3.5 py-3">
-        <p className="text-xs font-semibold text-brand-100 uppercase tracking-wide">Restrições da prospecção</p>
-        <ul className="mt-2 space-y-1 text-xs text-brand-100/95">
-          <li>Frequência: <strong>até 10 requisições por minuto</strong> (erro 429 se exceder).</li>
-          <li>Por requisição: <strong>máximo de 100 resultados</strong> por busca.</li>
-          <li>
-            Cota diária:{' '}
-            {hasActiveSubscription
-              ? <strong>sem limite diário para assinatura ativa</strong>
-              : <strong>até {freeTierQuota?.limit ?? 50} leads por dia no plano gratuito</strong>}
-            .
-          </li>
-        </ul>
-      </div>
-
       {freeTierQuota?.applied && (
         <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3">
           <p className="text-xs font-semibold text-amber-200 uppercase tracking-wide">Plano gratuito</p>
@@ -131,23 +116,15 @@ export function LeadSearchForm({
             required
           />
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Modo de busca</label>
-              <span
-                aria-label="Discovery em breve"
-                className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300"
-              >
-                Discovery em breve
-              </span>
-            </div>
+            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Modo de busca</label>
             <select
               value={form.mode || 'maps'}
               onChange={(e) => setForm((prev) => ({ ...prev, mode: e.target.value === 'maps' ? 'maps' : 'maps' }))}
               className="px-3 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary
                 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200"
             >
-              <option value="discovery" disabled>Discovery (em breve)</option>
-              <option value="maps">Google Maps (legado)</option>
+              <option value="discovery" disabled>Instagram (em breve)</option>
+              <option value="maps">Google Maps</option>
             </select>
           </div>
         </div>

@@ -18,11 +18,15 @@ export interface DiscoverySearchRecord {
   updatedAt: string;
 }
 
-export interface GoogleSearchCandidate {
+export interface DiscoverySearchCandidate {
   title: string;
   snippet: string;
   url: string;
   instagramUrl: string | null;
+}
+
+export interface DiscoverySearchProvider {
+  searchInstagramCandidates(query: string, maxResults: number): Promise<DiscoverySearchCandidate[]>;
 }
 
 export interface InstagramProfileExtracted {

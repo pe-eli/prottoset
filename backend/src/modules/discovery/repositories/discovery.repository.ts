@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { tenantQuery, tenantTransaction } from '../../../db/pool';
-import { DiscoverySearchRecord, DiscoverySearchStatus, GoogleSearchCandidate, NormalizedLeadInput } from '../types';
+import { DiscoverySearchCandidate, DiscoverySearchRecord, DiscoverySearchStatus, NormalizedLeadInput } from '../types';
 
 interface DiscoverySearchRow {
   id: string;
@@ -225,7 +225,7 @@ export const discoveryRepository = {
     );
   },
 
-  async saveRawResults(tenantId: string, searchId: string, provider: string, candidates: GoogleSearchCandidate[]) {
+  async saveRawResults(tenantId: string, searchId: string, provider: string, candidates: DiscoverySearchCandidate[]) {
     if (candidates.length === 0) return [];
 
     const values: unknown[] = [];

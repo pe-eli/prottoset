@@ -1,7 +1,7 @@
 import { consumeRateLimit } from '../../security/rate-limit.store';
 import { structuredLogger } from '../../observability/structured-logger';
 import { enqueueDiscoverySearchJob } from '../../jobs/queues';
-import { DISCOVERY_PROVIDER_GOOGLE } from './discovery.constants';
+import { DISCOVERY_PROVIDER_DUCKDUCKGO } from './discovery.constants';
 import { discoveryRepository } from './repositories/discovery.repository';
 import { DiscoverySearchSummary } from './types';
 
@@ -49,7 +49,7 @@ export const discoveryService = {
     }
 
     const safeMaxResults = Math.max(1, Math.min(80, Math.floor(maxResults || 20)));
-    const created = await discoveryRepository.createSearch(tenantId, query, safeMaxResults, DISCOVERY_PROVIDER_GOOGLE);
+    const created = await discoveryRepository.createSearch(tenantId, query, safeMaxResults, DISCOVERY_PROVIDER_DUCKDUCKGO);
 
     await enqueueDiscoverySearchJob({
       tenantId,

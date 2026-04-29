@@ -6,11 +6,11 @@ import {
   InstagramExtractionJobPayload,
   LeadNormalizationJobPayload,
 } from '../../jobs/queues';
-import { DISCOVERY_PROVIDER_GOOGLE } from './discovery.constants';
+import { DISCOVERY_PROVIDER_DUCKDUCKGO } from './discovery.constants';
 import { InstagramExtractor } from './extractors/instagram.extractor';
 import { leadDeduplicationService } from './dedup/lead-deduplication.service';
 import { leadNormalizer } from './normalization/lead-normalizer';
-import { GoogleSearchProvider } from './providers/google-search.provider';
+import { DuckDuckGoSearchProvider } from './providers/duckduckgo-search.provider';
 import { discoveryRepository } from './repositories/discovery.repository';
 
 export interface DiscoverySearchJobPayload {
@@ -19,7 +19,7 @@ export interface DiscoverySearchJobPayload {
 }
 
 export class DiscoveryEngine {
-  private readonly googleProvider = new GoogleSearchProvider();
+  private readonly searchProvider = new DuckDuckGoSearchProvider();
   private readonly instagramExtractor = new InstagramExtractor();
 
   async processSearchJob(payload: DiscoverySearchJobPayload): Promise<void> {
@@ -30,11 +30,11 @@ export class DiscoveryEngine {
 
       await discoveryRepository.markSearchRunning(payload.tenantId, payload.searchId);
 
-      const candidates = await this.googleProvider.searchInstagramCandidates(search.query, search.requestedMaxResults);
+      const candidates = await this.searchProvider.searchInstagramCandidates(search.query, search.requestedMaxResults);
       const savedRaw = await discoveryRepository.saveRawResults(
         payload.tenantId,
         payload.searchId,
-        DISCOVERY_PROVIDER_GOOGLE,
+        DISCOVERY_PROVIDER_DUCKDUCKGO,
         candidates,
       );
 
@@ -64,12 +64,12 @@ export class DiscoveryEngine {
 
       metricsService.increment({
         name: 'discovery.search_jobs.processed',
-        labels: { provider: 'google', extractionJobs },
+        labels: { provider: 'duckduckgo', extractionJobs },
       });
       metricsService.observeDuration({
         name: 'discovery.search_jobs.duration_ms',
         startedAt,
-        labels: { provider: 'google' },
+        labels: { provider: 'duckduckgo' },
       });
 
       structuredLogger.event('discovery_search_job_completed', {

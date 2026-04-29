@@ -6,7 +6,7 @@ export const STATUS_CONFIG: Record<ContactStatus, { label: string; color: string
   contacted: { label: 'Contato iniciado', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
   no_reply: { label: 'Sem resposta', color: 'text-gray-700', bg: 'bg-gray-100 border-gray-300', dot: 'bg-gray-500' },
   interested: { label: 'Interessado', color: 'text-cyan-700', bg: 'bg-cyan-50 border-cyan-200', dot: 'bg-cyan-500' },
-  negotiating: { label: 'Em negociacao', color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200', dot: 'bg-violet-500' },
+  negotiating: { label: 'Em negociação', color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200', dot: 'bg-violet-500' },
   client: { label: 'Fechado', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
   lost: { label: 'Perdido', color: 'text-red-700', bg: 'bg-red-50 border-red-200', dot: 'bg-red-500' },
 };
@@ -132,7 +132,7 @@ function formatFollowupDue(iso: string): string {
   const dayDiff = Math.ceil((due.getTime() - now.getTime()) / 86400000);
   if (dayDiff < 0) return `Atrasado ${Math.abs(dayDiff)}d`;
   if (dayDiff === 0) return 'Hoje';
-  if (dayDiff === 1) return 'Amanha';
+  if (dayDiff === 1) return 'Amanhã';
   return due.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
@@ -158,7 +158,7 @@ function ActivityTimeline({ activities, onToggleFollowup }: {
     return (
       <div className="rounded-2xl border border-border bg-surface p-6 text-center">
         <p className="text-sm font-semibold text-text-primary">Sem atividades ainda</p>
-        <p className="text-xs text-text-muted mt-1">A timeline comercial aparecera aqui.</p>
+        <p className="text-xs text-text-muted mt-1">A timeline comercial aparecerá aqui.</p>
       </div>
     );
   }
@@ -217,7 +217,7 @@ function ActivityTimeline({ activities, onToggleFollowup }: {
                           ? 'bg-emerald-500 border-emerald-500 text-white'
                           : 'border-border text-transparent hover:text-emerald-500 hover:border-emerald-500'
                       }`}
-                      title={done ? 'Marcar pendente' : 'Marcar concluido'}
+                      title={done ? 'Marcar pendente' : 'Marcar concluído'}
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -254,13 +254,13 @@ function AddNotePanel({ onAdd }: { onAdd: (content: string) => Promise<void> }) 
     <div className="rounded-2xl border border-border bg-surface p-4 space-y-3">
       <div>
         <p className="text-sm font-semibold text-text-primary">Notas internas</p>
-        <p className="text-xs text-text-muted">Observacoes comerciais e historico manual.</p>
+        <p className="text-xs text-text-muted">Observações comerciais e histórico manual.</p>
       </div>
       <textarea
         rows={4}
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="Ex.: Cliente mencionou prioridade em automacao do atendimento"
+        placeholder="Ex.: Cliente mencionou prioridade em automação do atendimento"
         className="w-full px-3 py-2 rounded-xl border border-border bg-surface-secondary text-sm text-text-primary resize-none focus:outline-none focus:ring-2 focus:ring-brand-400/40"
       />
       <div className="flex justify-between items-center">
@@ -316,8 +316,8 @@ function FollowupPanel({
     <div className="rounded-2xl border border-border bg-surface p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-text-primary">Area de follow-up</p>
-          <p className="text-xs text-text-muted">Proximos passos, atrasos e lembretes.</p>
+          <p className="text-sm font-semibold text-text-primary">Área de follow-up</p>
+          <p className="text-xs text-text-muted">Próximos passos, atrasos e lembretes.</p>
         </div>
         {overdueCount > 0 && (
           <span className="text-[10px] px-2 py-0.5 rounded-full border border-red-300 bg-red-50 text-red-700 font-semibold">
@@ -332,11 +332,11 @@ function FollowupPanel({
           <p className="text-lg font-bold text-text-primary">{pending.length}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface-secondary p-3">
-          <p className="text-[10px] uppercase tracking-wide text-text-muted">Proximo</p>
+          <p className="text-[10px] uppercase tracking-wide text-text-muted">Próximo</p>
           <p className="text-xs font-semibold text-text-primary mt-1">
             {nextFollowup && typeof nextFollowup.metadata?.scheduledFor === 'string'
               ? `${formatFollowupDue(String(nextFollowup.metadata.scheduledFor))}`
-              : 'Nao agendado'}
+              : 'Não agendado'}
           </p>
         </div>
       </div>
@@ -344,34 +344,34 @@ function FollowupPanel({
       {!openForm && (
         <button
           onClick={() => setOpenForm(true)}
-          className="w-full text-xs px-3 py-2 rounded-xl border border-dashed border-amber-400/50 text-amber-700 hover:bg-amber-50"
+          className="w-full text-xs px-3 py-2 rounded-xl border border-dashed border-amber-500/60 text-amber-800 hover:bg-amber-100/60"
         >
           + Agendar follow-up
         </button>
       )}
 
       {openForm && (
-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+        <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-100/70 p-3">
           <div className="grid grid-cols-2 gap-2">
             <input
               type="date"
               value={date}
               min={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setDate(e.target.value)}
-              className="px-2.5 py-1.5 rounded-lg border border-amber-200 bg-white text-xs text-text-primary"
+              className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
             />
             <input
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="px-2.5 py-1.5 rounded-lg border border-amber-200 bg-white text-xs text-text-primary"
+              className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
             />
           </div>
 
           <select
             value={priority}
             onChange={(e) => setPriority(e.target.value as 'low' | 'normal' | 'high')}
-            className="w-full px-2.5 py-1.5 rounded-lg border border-amber-200 bg-white text-xs text-text-primary"
+            className="w-full px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
           >
             <option value="low">Prioridade baixa</option>
             <option value="normal">Prioridade normal</option>
@@ -383,20 +383,20 @@ function FollowupPanel({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Lembrete opcional"
-            className="w-full px-2.5 py-1.5 rounded-lg border border-amber-200 bg-white text-xs text-text-primary resize-none"
+            className="w-full px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-xs text-slate-900 placeholder:text-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400/50"
           />
 
           <div className="flex gap-2">
             <button
               onClick={() => setOpenForm(false)}
-              className="flex-1 text-xs px-3 py-1.5 rounded-lg border border-amber-200 text-amber-800 bg-white"
+              className="flex-1 text-xs px-3 py-1.5 rounded-lg border border-amber-400 text-amber-900 bg-white hover:bg-amber-50"
             >
               Cancelar
             </button>
             <button
               onClick={() => void submit()}
               disabled={!date || saving}
-              className="flex-1 text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-100 text-amber-900 disabled:opacity-50"
+              className="flex-1 text-xs px-3 py-1.5 rounded-lg border border-amber-500 bg-amber-200 text-amber-950 hover:bg-amber-300 disabled:opacity-50"
             >
               {saving ? 'Salvando...' : 'Salvar follow-up'}
             </button>
@@ -513,10 +513,15 @@ export function ContactActivityCenter({ contact, onClose, onUpdated, onDeleted }
   const [activities, setActivities] = useState<ContactActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
   const [showComposer, setShowComposer] = useState(false);
 
   useEffect(() => {
     setCurrent(contact);
+    setNameDraft(contact.name || '');
+    setEditingName(false);
   }, [contact]);
 
   const loadActivities = useCallback(async () => {
@@ -571,6 +576,17 @@ export function ContactActivityCenter({ contact, onClose, onUpdated, onDeleted }
     onClose();
   };
 
+  const handleSaveName = async () => {
+    const normalized = nameDraft.trim().slice(0, 25);
+    setSavingName(true);
+    try {
+      await updateContact({ name: normalized });
+      setEditingName(false);
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   const followups = useMemo(
     () => activities.filter((item) => item.type === 'FOLLOWUP_CREATED'),
     [activities],
@@ -606,8 +622,8 @@ export function ContactActivityCenter({ contact, onClose, onUpdated, onDeleted }
                 </svg>
               </button>
               <div>
-                <p className="text-sm font-bold text-text-primary">Contact Activity Center</p>
-                <p className="text-[11px] text-text-muted">Outbound, follow-up e organizacao comercial</p>
+                <p className="text-sm font-bold text-text-primary">Central de Atividades do Contato</p>
+                <p className="text-[11px] text-text-muted">Outbound, follow-up e organização comercial</p>
               </div>
             </div>
             {overdueCount > 0 && (
@@ -624,7 +640,55 @@ export function ContactActivityCenter({ contact, onClose, onUpdated, onDeleted }
                   {getInitial(current)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-base font-bold text-text-primary truncate">{getDisplayName(current)}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-base font-bold text-text-primary truncate">{getDisplayName(current)}</p>
+                    {!editingName && (
+                      <button
+                        onClick={() => {
+                          setNameDraft(current.name || '');
+                          setEditingName(true);
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-md border border-border bg-surface-secondary text-text-secondary hover:text-text-primary"
+                        title="Editar nome"
+                      >
+                        Editar nome
+                      </button>
+                    )}
+                  </div>
+
+                  {editingName && (
+                    <div className="mt-2 space-y-1.5">
+                      <input
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value.slice(0, 25))}
+                        maxLength={25}
+                        placeholder="Nome do contato"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-surface-secondary text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40"
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-text-muted">{nameDraft.length}/25</span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              setEditingName(false);
+                              setNameDraft(current.name || '');
+                            }}
+                            className="text-[10px] px-2 py-1 rounded-md border border-border bg-surface-secondary text-text-secondary"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => void handleSaveName()}
+                            disabled={savingName}
+                            className="text-[10px] px-2 py-1 rounded-md border border-brand-400/40 bg-brand-500/15 text-brand-300 disabled:opacity-50"
+                          >
+                            {savingName ? 'Salvando...' : 'Salvar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-xs text-text-secondary truncate">{current.company || 'Sem empresa informada'}</p>
                   <p className="text-xs text-text-muted mt-1">{current.phone ? `+${toDigits(current.phone)}` : 'Sem telefone'}</p>
                 </div>
@@ -644,8 +708,8 @@ export function ContactActivityCenter({ contact, onClose, onUpdated, onDeleted }
                   <p className="text-text-primary font-semibold mt-0.5">{getLeadOrigin(current)}</p>
                 </div>
                 <div className="rounded-xl border border-border bg-surface-secondary p-2.5">
-                  <p className="text-text-muted">Ultima interacao</p>
-                  <p className="text-text-primary font-semibold mt-0.5">{current.lastMessageAt ? formatRelativeDate(current.lastMessageAt) : 'Sem historico'}</p>
+                  <p className="text-text-muted">Última interação</p>
+                  <p className="text-text-primary font-semibold mt-0.5">{current.lastMessageAt ? formatRelativeDate(current.lastMessageAt) : 'Sem histórico'}</p>
                 </div>
               </div>
 
@@ -709,7 +773,7 @@ export function ContactActivityCenter({ contact, onClose, onUpdated, onDeleted }
             <section>
               <div className="mb-2">
                 <p className="text-sm font-semibold text-text-primary">Timeline de atividades</p>
-                <p className="text-xs text-text-muted">Historico completo de interacoes e acoes comerciais.</p>
+                <p className="text-xs text-text-muted">Histórico completo de interações e ações comerciais.</p>
               </div>
 
               {loading ? (

@@ -140,7 +140,7 @@ function ContactCard({ contact, onClick }: { contact: Contact; onClick: () => vo
                   : 'bg-surface-secondary border-border text-text-muted'
             }`}>
               {ch === 'whatsapp' ? <WaIcon /> : ch === 'email' ? <EmailIcon /> : null}
-              {ch === 'whatsapp' ? 'WhatsApp' : ch === 'email' ? 'Email' : 'Manual'}
+              {ch === 'whatsapp' ? 'WhatsApp' : ch === 'email' ? 'E-mail' : 'Manual'}
             </span>
           </div>
           {contact.lastMessage && (
@@ -253,7 +253,7 @@ export function ContactsPage() {
           <Link to="/leads/disparos">
             <Button variant="outline" size="sm">
               <EmailIcon className="w-3.5 h-3.5" />
-              Disparo Email
+              Disparo de E-mail
             </Button>
           </Link>
           <Link to="/leads/whatsapp">

@@ -24,7 +24,7 @@ export function LeadSearchForm({
     searchTerm: '',
     city: '',
     maxResults: 20,
-    mode: 'discovery',
+    mode: 'maps',
   });
 
   const [queues, setQueues] = useState<PhoneQueue[]>([]);
@@ -97,9 +97,9 @@ export function LeadSearchForm({
             </svg>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-text-primary">Discovery Engine</h3>
+            <h3 className="text-sm font-bold text-text-primary">Captação de Leads</h3>
             <p className="text-xs text-text-secondary mt-0.5">
-              Google + Instagram com processamento assíncrono e deduplicação
+              Google Maps para prospecção rápida e estável
             </p>
           </div>
         </div>
@@ -131,14 +131,22 @@ export function LeadSearchForm({
             required
           />
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Modo de busca</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Modo de busca</label>
+              <span
+                aria-label="Discovery em breve"
+                className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300"
+              >
+                Discovery em breve
+              </span>
+            </div>
             <select
-              value={form.mode || 'discovery'}
-              onChange={(e) => setForm((prev) => ({ ...prev, mode: e.target.value === 'maps' ? 'maps' : 'discovery' }))}
+              value={form.mode || 'maps'}
+              onChange={(e) => setForm((prev) => ({ ...prev, mode: e.target.value === 'maps' ? 'maps' : 'maps' }))}
               className="px-3 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary
                 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200"
             >
-              <option value="discovery">Google + Instagram (Discovery)</option>
+              <option value="discovery" disabled>Discovery (em breve)</option>
               <option value="maps">Google Maps (legado)</option>
             </select>
           </div>

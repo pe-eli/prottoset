@@ -46,8 +46,8 @@ export function LeadsDashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchMode, setSearchMode] = useState<'maps' | 'discovery'>('discovery');
-  const [searchProgressLabel, setSearchProgressLabel] = useState<string>('Encontrando empresas...');
+  const [searchMode, setSearchMode] = useState<'maps' | 'discovery'>('maps');
+  const [searchProgressLabel, setSearchProgressLabel] = useState<string>('Gerando leads...');
   const [view, setView] = useState<ViewMode>('cards');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [lastResult, setLastResult] = useState<{ saved: number; duplicates: number; metrics: LeadMetrics } | null>(null);

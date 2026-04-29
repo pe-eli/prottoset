@@ -135,8 +135,8 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
         {/* Header */}
         <div className="flex items-center justify-between p-5 pb-4 border-b border-border-light shrink-0">
           <div>
-            <h3 className="text-base font-bold text-brand-950">Gerenciar Filas</h3>
-            <p className="text-xs text-brand-400 mt-0.5">{queues.length} {queues.length === 1 ? 'fila' : 'filas'}</p>
+            <h3 className="text-base font-bold text-text-primary">Gerenciar Filas</h3>
+            <p className="text-xs text-text-secondary mt-0.5">{queues.length} {queues.length === 1 ? 'fila' : 'filas'}</p>
           </div>
           <div className="flex items-center gap-2">
             {queues.length >= 2 && (
@@ -155,7 +155,7 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
               onClick={onClose}
               className="w-7 h-7 rounded-lg bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
             >
-              <svg className="w-3.5 h-3.5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -217,11 +217,11 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
 
           {/* Queue list */}
           {loading && (
-            <p className="text-xs text-brand-300 text-center py-4">Carregando...</p>
+            <p className="text-xs text-text-secondary text-center py-4">Carregando...</p>
           )}
 
           {!loading && queues.length === 0 && (
-            <p className="text-xs text-brand-300 text-center py-4">Nenhuma fila criada</p>
+            <p className="text-xs text-text-secondary text-center py-4">Nenhuma fila criada</p>
           )}
 
           {queues.map((q) => (
@@ -280,8 +280,8 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
                     className="flex-1 min-w-0 cursor-pointer"
                     onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}
                   >
-                    <p className="text-sm font-medium text-brand-950 truncate">{q.name}</p>
-                    <p className="text-[10px] text-brand-300">
+                    <p className="text-sm font-medium text-text-primary truncate">{q.name}</p>
+                    <p className="text-[10px] text-text-secondary">
                       {q.phones.length} {q.phones.length === 1 ? 'número' : 'números'}
                     </p>
                   </div>
@@ -329,7 +329,7 @@ export function QueueManagerModal({ onClose, onChanged }: QueueManagerModalProps
               {expandedId === q.id && (
                 <div className="border-t border-border-light bg-surface px-4 py-3 animate-fade-in">
                   {q.phones.length === 0 ? (
-                    <p className="text-xs text-brand-300">Nenhum número nesta fila</p>
+                    <p className="text-xs text-text-secondary">Nenhum número nesta fila</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {q.phones.map((phone) => (

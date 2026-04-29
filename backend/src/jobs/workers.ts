@@ -17,6 +17,8 @@ import { aiOrchestrator } from '../modules/ai/ai-orchestrator.service';
 import { integrationVaultService } from '../modules/integrations/integration-vault.service';
 import { outboxDispatcherService, startOutboxDispatcherLoop } from '../modules/outbox/outbox-dispatcher.service';
 import { startDowngradeCronJob } from './downgrade-cron';
+import { startWebhookRecoveryCron } from './webhook-recovery-cron';
+import { startStripeReconciliationCron } from './stripe-reconciliation-cron';
 import {
   buildPersonalizedPrompt,
   buildPhoneKeys,
@@ -399,6 +401,8 @@ export function startBackgroundWorkers(): void {
   startOutboxDispatcherLoop();
   void outboxDispatcherService.kick(100);
   startDowngradeCronJob();
+  startWebhookRecoveryCron();
+  startStripeReconciliationCron();
 
   new Worker<BlastJobPayload>('email-blasts', async (job) => {
     if (job.attemptsMade > 0) {
@@ -414,9 +418,25 @@ export function startBackgroundWorkers(): void {
     await processWhatsAppBlast(job.data);
   }, { connection, concurrency: 2 });
 
-  new Worker<WebhookJobPayload>('webhook-events', async (job) => {
+  const webhookWorker = new Worker<WebhookJobPayload>('webhook-events', async (job) => {
     await processWebhookEvent(job.data);
   }, { connection, concurrency: 8 });
+
+  webhookWorker.on('failed', (job, err) => {
+    if (!job) return;
+
+    const attemptsMade = Number(job.attemptsMade || 0);
+    const maxAttempts = Number(job.opts.attempts || 1);
+    if (attemptsMade < maxAttempts) return;
+
+    console.error('[WebhookWorker] Exhausted retries for webhook event', {
+      provider: job.data.provider,
+      webhookEventId: job.data.webhookEventId,
+      attemptsMade,
+      maxAttempts,
+      error: err?.message ?? String(err),
+    });
+  });
 
   new Worker<DiscoverySearchJobPayload>('discovery-search-queue', async (job) => {
     await discoveryEngine.processSearchJob(job.data);

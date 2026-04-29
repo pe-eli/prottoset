@@ -1064,6 +1064,12 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS stripe_price_id TEXT;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS scheduled_plan VARCHAR(50);
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT false;
 
+-- Avoid conflict between legacy pending rows and Stripe upserts for the same user.
+DROP INDEX IF EXISTS idx_subscriptions_user_active;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_user_active_legacy
+  ON subscriptions (user_id)
+  WHERE stripe_subscription_id IS NULL AND status IN ('active', 'pending');
+
 -- Unique partial index on stripe_subscription_id (allows NULL for legacy MP rows)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_stripe_sub_id
   ON subscriptions (stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;

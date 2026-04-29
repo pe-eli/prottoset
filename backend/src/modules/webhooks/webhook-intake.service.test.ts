@@ -20,6 +20,8 @@ vi.mock('./webhook-events.repository', () => ({
   webhookEventsRepository: {
     reserveNonce: vi.fn(),
     createPending: vi.fn(),
+    findById: vi.fn(),
+    markPendingForReplay: vi.fn(),
   },
 }));
 
@@ -34,6 +36,20 @@ describe('webhookIntakeService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.EVOLUTION_WEBHOOK_ALLOWED_IPS;
+
+    vi.mocked(webhookEventsRepository.findById).mockResolvedValue({
+      id: 'evt-row-1',
+      provider: 'evolution',
+      eventId: 'evolution:nonce-abc',
+      eventType: 'messages.upsert',
+      status: 'pending',
+      payload: {},
+      signatureValid: true,
+      receivedAt: new Date().toISOString(),
+      processedAt: null,
+      failureReason: null,
+    });
+    vi.mocked(webhookEventsRepository.markPendingForReplay).mockResolvedValue(true);
   });
 
   it('fails closed when Evolution signature validation fails', async () => {
@@ -74,5 +90,53 @@ describe('webhookIntakeService', () => {
 
     expect(webhookEventsRepository.createPending).not.toHaveBeenCalled();
     expect(enqueueWebhookEventJob).not.toHaveBeenCalled();
+  });
+
+  it('re-enqueues duplicate pending events to recover from previous queue failures', async () => {
+    vi.mocked(webhookSecurityService.validateEvolutionSignature).mockReturnValue({
+      valid: true,
+      nonce: 'nonce-def',
+      timestamp: Date.now(),
+    });
+    vi.mocked(webhookEventsRepository.reserveNonce).mockResolvedValue(true);
+    vi.mocked(webhookEventsRepository.createPending).mockResolvedValue({
+      created: false,
+      event: {
+        id: 'evt-row-2',
+        provider: 'evolution',
+        eventId: 'evolution:nonce-def',
+        eventType: 'messages.upsert',
+        status: 'pending',
+        payload: {},
+        signatureValid: true,
+        receivedAt: new Date().toISOString(),
+        processedAt: null,
+        failureReason: null,
+      },
+    });
+    vi.mocked(webhookEventsRepository.findById).mockResolvedValue({
+      id: 'evt-row-2',
+      provider: 'evolution',
+      eventId: 'evolution:nonce-def',
+      eventType: 'messages.upsert',
+      status: 'pending',
+      payload: {},
+      signatureValid: true,
+      receivedAt: new Date().toISOString(),
+      processedAt: null,
+      failureReason: null,
+    });
+
+    const result = await webhookIntakeService.intakeEvolution({
+      rawBody: JSON.stringify({ event: 'MESSAGES_UPSERT' }),
+      signatureHeader: 'sig',
+      timestampHeader: `${Date.now()}`,
+      nonceHeader: 'nonce-def',
+      sourceIp: '10.10.10.10',
+    });
+
+    expect(result.duplicate).toBe(true);
+    expect(webhookEventsRepository.markPendingForReplay).toHaveBeenCalledWith('evt-row-2');
+    expect(enqueueWebhookEventJob).toHaveBeenCalledWith({ provider: 'evolution', webhookEventId: 'evt-row-2' });
   });
 });

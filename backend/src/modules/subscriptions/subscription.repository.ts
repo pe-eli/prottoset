@@ -1,4 +1,5 @@
-import { systemQuery, userQuery } from '../../db/pool';
+import { PoolClient } from 'pg';
+import { systemQuery, systemTransaction, userQuery } from '../../db/pool';
 
 interface SubscriptionRow {
   id: string;
@@ -54,6 +55,18 @@ function toSubscription(row: SubscriptionRow): Subscription {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+async function executeSystemQuery<T = Record<string, unknown>>(
+  text: string,
+  params: unknown[] | undefined,
+  client?: PoolClient,
+): Promise<{ rows: T[]; rowCount?: number | null }> {
+  if (client) {
+    const result = await client.query(text, params);
+    return { rows: result.rows as T[], rowCount: result.rowCount };
+  }
+  return systemQuery<T>(text, params);
 }
 
 export const subscriptionRepository = {
@@ -172,8 +185,19 @@ export const subscriptionRepository = {
     cancelAtPeriodEnd: boolean;
     currentPeriodStart: Date;
     currentPeriodEnd: Date;
-  }): Promise<Subscription> {
-    const { rows } = await systemQuery<SubscriptionRow>(
+  }, client?: PoolClient): Promise<Subscription> {
+    // Ensure legacy pending/active rows do not conflict with user-level unique index when creating Stripe rows.
+    await executeSystemQuery(
+      `UPDATE subscriptions
+       SET status = 'cancelled', updated_at = now()
+       WHERE user_id = $1
+         AND stripe_subscription_id IS NULL
+         AND lower(status) IN ('active','authorized','approved','trialing','in_trial','pending','in_process')`,
+      [data.userId],
+      client,
+    );
+
+    const { rows } = await executeSystemQuery<SubscriptionRow>(
       `INSERT INTO subscriptions (
         user_id, plan_id, status,
         stripe_customer_id, stripe_subscription_id, stripe_price_id,
@@ -196,7 +220,13 @@ export const subscriptionRepository = {
         data.stripeCustomerId, data.stripeSubscriptionId, data.stripePriceId,
         data.cancelAtPeriodEnd, data.currentPeriodStart, data.currentPeriodEnd,
       ],
+      client,
     );
+
+    if (!rows[0]) {
+      throw new Error('Falha ao sincronizar assinatura Stripe');
+    }
+
     return toSubscription(rows[0]);
   },
 
@@ -234,14 +264,15 @@ export const subscriptionRepository = {
   },
 
   /** Cancel all non-Stripe active subscriptions for a user (called after Stripe checkout). */
-  async cancelAllLegacyActiveForUser(userId: string, exceptStripeSubId: string): Promise<void> {
-    await systemQuery(
+  async cancelAllLegacyActiveForUser(userId: string, exceptStripeSubId: string, client?: PoolClient): Promise<void> {
+    await executeSystemQuery(
       `UPDATE subscriptions
        SET status = 'cancelled', updated_at = now()
        WHERE user_id = $1
          AND (stripe_subscription_id IS NULL OR stripe_subscription_id != $2)
          AND lower(status) IN ('active','authorized','approved','trialing','in_trial','pending','in_process')`,
       [userId, exceptStripeSubId],
+      client,
     );
   },
 
@@ -270,5 +301,65 @@ export const subscriptionRepository = {
       params,
     );
     return rows[0] ? toSubscription(rows[0]) : null;
+  },
+
+  async findByStripeSubscriptionOrCustomer(params: {
+    stripeSubscriptionId?: string | null;
+    stripeCustomerId?: string | null;
+  }): Promise<Subscription | null> {
+    if (params.stripeSubscriptionId) {
+      const direct = await this.findByStripeSubscriptionId(params.stripeSubscriptionId);
+      if (direct) return direct;
+    }
+
+    if (params.stripeCustomerId) {
+      const byCustomer = await this.findByStripeCustomerId(params.stripeCustomerId);
+      if (byCustomer) return byCustomer;
+    }
+
+    return null;
+  },
+
+  async syncStripeSubscriptionAtomically(data: {
+    userId: string;
+    planId: string;
+    status: string;
+    stripeCustomerId: string;
+    stripeSubscriptionId: string;
+    stripePriceId: string;
+    cancelAtPeriodEnd: boolean;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+  }): Promise<Subscription> {
+    return systemTransaction(async (client) => {
+      const upserted = await this.upsertByStripeSubscriptionId(data, client);
+      await this.cancelAllLegacyActiveForUser(data.userId, data.stripeSubscriptionId, client);
+      return upserted;
+    });
+  },
+
+  async listStripeManagedSubscriptions(params?: {
+    statuses?: string[];
+    updatedBeforeMinutes?: number;
+    limit?: number;
+  }): Promise<Subscription[]> {
+    const statuses = (params?.statuses && params.statuses.length > 0)
+      ? params.statuses.map((status) => status.toLowerCase())
+      : ['active', 'past_due', 'pending', 'incomplete', 'trialing'];
+    const updatedBeforeMinutes = Math.max(0, params?.updatedBeforeMinutes ?? 10);
+    const limit = Math.max(1, Math.min(500, params?.limit ?? 200));
+
+    const { rows } = await systemQuery<SubscriptionRow>(
+      `SELECT *
+       FROM subscriptions
+       WHERE stripe_subscription_id IS NOT NULL
+         AND lower(status) = ANY($1::text[])
+         AND updated_at <= now() - make_interval(mins => $2::int)
+       ORDER BY updated_at ASC
+       LIMIT $3`,
+      [statuses, updatedBeforeMinutes, limit],
+    );
+
+    return rows.map(toSubscription);
   },
 };

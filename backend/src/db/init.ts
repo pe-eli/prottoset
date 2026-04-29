@@ -42,8 +42,14 @@ async function main() {
   const sql = readFileSync(schemaPath, 'utf-8');
 
   console.log('Running schema.sql...');
-  await pool.query(sql);
-  console.log('Schema applied successfully.');
+  
+  const client = await pool.connect();
+  try {
+    await client.query(sql);
+    console.log('Schema applied successfully.');
+  } finally {
+    client.release();
+  }
 
   await pool.end();
 }

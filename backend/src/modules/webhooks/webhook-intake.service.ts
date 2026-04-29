@@ -54,6 +54,25 @@ function isIpAllowed(ip: string, allowed: string[]): boolean {
   return allowed.some((entry) => entry.trim() === normalizedIp);
 }
 
+async function enqueueWebhookWithRecovery(params: {
+  provider: WebhookProvider;
+  webhookEventId: string;
+  duplicate: boolean;
+}): Promise<void> {
+  const event = await webhookEventsRepository.findById(params.webhookEventId);
+  if (!event) {
+    throw new Error('Evento de webhook não encontrado para enfileiramento');
+  }
+
+  const shouldReplay = !params.duplicate || event.status === 'pending' || event.status === 'failed';
+  if (!shouldReplay) {
+    return;
+  }
+
+  await webhookEventsRepository.markPendingForReplay(event.id);
+  await enqueueWebhookEventJob({ provider: params.provider, webhookEventId: event.id });
+}
+
 export const webhookIntakeService = {
   async intakeMercadoPago(params: {
     rawBody: Buffer | string;
@@ -95,9 +114,11 @@ export const webhookIntakeService = {
       signatureValid: true,
     });
 
-    if (created) {
-      await enqueueWebhookEventJob({ provider: 'mercadopago', webhookEventId: event.id });
-    }
+    await enqueueWebhookWithRecovery({
+      provider: 'mercadopago',
+      webhookEventId: event.id,
+      duplicate: !created,
+    });
 
     return { accepted: true, duplicate: !created, webhookEventId: event.id };
   },
@@ -171,9 +192,11 @@ export const webhookIntakeService = {
       signatureValid: true,
     });
 
-    if (created) {
-      await enqueueWebhookEventJob({ provider: 'evolution', webhookEventId: event.id });
-    }
+    await enqueueWebhookWithRecovery({
+      provider: 'evolution',
+      webhookEventId: event.id,
+      duplicate: !created,
+    });
 
     return { accepted: true, duplicate: !created, webhookEventId: event.id };
   },
@@ -233,9 +256,11 @@ export const webhookIntakeService = {
       signatureValid: true,
     });
 
-    if (created) {
-      await enqueueWebhookEventJob({ provider: 'stripe', webhookEventId: webhookEvent.id });
-    }
+    await enqueueWebhookWithRecovery({
+      provider: 'stripe',
+      webhookEventId: webhookEvent.id,
+      duplicate: !created,
+    });
 
     return { accepted: true, duplicate: !created, webhookEventId: webhookEvent.id };
   },

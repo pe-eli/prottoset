@@ -33,5 +33,9 @@ router.post('/billing-portal', subscriptionsController.billingPortal);
 router.post('/change-plan', changePlanLimiter, subscriptionsController.changePlan);
 router.post('/cancel', cancelLimiter, subscriptionsController.cancel);
 router.post('/reactivate', subscriptionsController.reactivate);
+router.get('/webhooks/health', subscriptionsController.getWebhookHealth);
+router.post('/webhooks/replay', subscriptionsController.replayWebhook);
+router.post('/webhooks/replay-stale', subscriptionsController.replayStaleWebhooks);
+router.post('/stripe/reconcile', subscriptionsController.reconcileStripeSubscription);
 
 export default router;

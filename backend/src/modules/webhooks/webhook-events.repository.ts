@@ -16,6 +16,12 @@ interface WebhookEventRow {
   failure_reason: string | null;
 }
 
+interface WebhookStatusCountRow {
+  provider: WebhookProvider;
+  status: WebhookEventStatus;
+  total: string;
+}
+
 export interface WebhookEvent {
   id: string;
   provider: WebhookProvider;
@@ -131,6 +137,67 @@ export const webhookEventsRepository = {
        WHERE id = $1`,
       [id, reason.slice(0, 1200)],
     );
+  },
+
+  async markPendingForReplay(id: string): Promise<boolean> {
+    const { rowCount } = await query(
+      `UPDATE webhook_events
+       SET status = 'pending',
+           processed_at = NULL,
+           failure_reason = NULL
+       WHERE id = $1
+         AND status IN ('pending', 'failed')`,
+      [id],
+    );
+    return (rowCount ?? 0) > 0;
+  },
+
+  async listReplayCandidates(params: {
+    provider?: WebhookProvider;
+    olderThanMinutes?: number;
+    statuses?: WebhookEventStatus[];
+    limit?: number;
+  }): Promise<WebhookEvent[]> {
+    const statuses = (params.statuses && params.statuses.length > 0)
+      ? params.statuses
+      : ['pending', 'failed'];
+    const olderThanMinutes = Math.max(0, params.olderThanMinutes ?? 2);
+    const limit = Math.max(1, Math.min(500, params.limit ?? 100));
+    const provider = params.provider ?? null;
+
+    const { rows } = await query<WebhookEventRow>(
+      `SELECT *
+       FROM webhook_events
+       WHERE status = ANY($1::text[])
+         AND received_at <= now() - make_interval(mins => $2::int)
+         AND ($3::text IS NULL OR provider = $3)
+       ORDER BY received_at ASC
+       LIMIT $4`,
+      [statuses, olderThanMinutes, provider, limit],
+    );
+
+    return rows.map(mapWebhookEvent);
+  },
+
+  async countByProviderAndStatus(provider?: WebhookProvider): Promise<Array<{
+    provider: WebhookProvider;
+    status: WebhookEventStatus;
+    total: number;
+  }>> {
+    const { rows } = await query<WebhookStatusCountRow>(
+      `SELECT provider, status, COUNT(*)::text AS total
+       FROM webhook_events
+       WHERE ($1::text IS NULL OR provider = $1)
+       GROUP BY provider, status
+       ORDER BY provider, status`,
+      [provider ?? null],
+    );
+
+    return rows.map((row) => ({
+      provider: row.provider,
+      status: row.status,
+      total: Number(row.total || 0),
+    }));
   },
 
   async reserveNonce(provider: WebhookProvider, nonce: string, ttlSeconds: number): Promise<boolean> {

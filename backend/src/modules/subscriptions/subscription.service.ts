@@ -283,38 +283,53 @@ export const subscriptionService = {
   // ── STRIPE WEBHOOK SYNC ────────────────────────────────────
 
   async syncStripeSubscription(stripeSub: Record<string, any>): Promise<void> {
-    const userId = stripeSub.metadata?.userId;
-    const planId = stripeSub.metadata?.planId;
+    const metadataUserId = typeof stripeSub.metadata?.userId === 'string' ? stripeSub.metadata.userId : null;
+    const metadataPlanId = typeof stripeSub.metadata?.planId === 'string' ? stripeSub.metadata.planId : null;
 
-    if (!userId || !planId || !isValidPlanId(planId)) {
-      console.warn('[Stripe] syncStripeSubscription: missing/invalid metadata', {
-        subId: stripeSub.id,
-        userId,
-        planId,
-      });
-      return;
+    const customerId = typeof stripeSub.customer === 'string'
+      ? stripeSub.customer
+      : stripeSub.customer?.id ?? null;
+
+    const existing = await subscriptionRepository.findByStripeSubscriptionOrCustomer({
+      stripeSubscriptionId: typeof stripeSub.id === 'string' ? stripeSub.id : null,
+      stripeCustomerId: customerId,
+    });
+
+    const userId = metadataUserId ?? existing?.userId ?? null;
+    const fallbackPlanId = existing?.planId ?? null;
+    const resolvedPlanId = metadataPlanId && isValidPlanId(metadataPlanId)
+      ? metadataPlanId
+      : (fallbackPlanId && isValidPlanId(fallbackPlanId) ? fallbackPlanId : null);
+
+    if (!userId || !resolvedPlanId) {
+      throw new Error(`Stripe sync sem referência de usuário/plano (sub=${String(stripeSub.id || 'unknown')})`);
     }
 
-    const item = stripeSub.items.data[0];
+    const item = stripeSub.items?.data?.[0];
     const priceId = item?.price?.id ?? '';
+
+    if (!customerId) {
+      throw new Error(`Stripe sync sem customer id (sub=${String(stripeSub.id || 'unknown')})`);
+    }
+
+    if (!stripeSub.current_period_start || !stripeSub.current_period_end) {
+      throw new Error(`Stripe sync sem período de cobrança (sub=${String(stripeSub.id || 'unknown')})`);
+    }
+
     const periodStart = new Date(stripeSub.current_period_start * 1000);
     const periodEnd = new Date(stripeSub.current_period_end * 1000);
-    const customerId = typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
 
-    await subscriptionRepository.upsertByStripeSubscriptionId({
+    await subscriptionRepository.syncStripeSubscriptionAtomically({
       userId,
-      planId,
-      status: stripeSub.status,
+      planId: resolvedPlanId,
+      status: String(stripeSub.status ?? 'pending'),
       stripeCustomerId: customerId,
-      stripeSubscriptionId: stripeSub.id,
+      stripeSubscriptionId: String(stripeSub.id),
       stripePriceId: priceId,
-      cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
+      cancelAtPeriodEnd: Boolean(stripeSub.cancel_at_period_end),
       currentPeriodStart: periodStart,
       currentPeriodEnd: periodEnd,
     });
-
-    // Cancel all legacy non-Stripe active subscriptions for this user
-    await subscriptionRepository.cancelAllLegacyActiveForUser(userId, stripeSub.id);
   },
 
   async handleStripeInvoice(stripeInvoice: Record<string, any>): Promise<void> {
@@ -337,6 +352,18 @@ export const subscriptionService = {
       invoicePdf: stripeInvoice.invoice_pdf ?? null,
       paidAt: stripeInvoice.status === 'paid' ? new Date(stripeInvoice.created * 1000) : null,
     });
+  },
+
+  async refreshStripeSubscriptionFromProvider(stripeSubscriptionId: string): Promise<boolean> {
+    const stripe = getStripeClient();
+    if (!stripe) return false;
+
+    const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+      expand: ['items.data.price'],
+    });
+
+    await this.syncStripeSubscription(sub as unknown as Record<string, any>);
+    return true;
   },
 
   /** Legacy MP webhook support — kept for backward compatibility */

@@ -2,9 +2,30 @@
 import { Request, Response } from 'express';
 import { subscriptionService } from '../modules/subscriptions/subscription.service';
 import { webhookIntakeService } from '../modules/webhooks/webhook-intake.service';
+import { webhookRecoveryService } from '../modules/webhooks/webhook-recovery.service';
 
 const checkoutSchema = z.object({ planId: z.string().min(1) });
 const changePlanSchema = z.object({ planId: z.string().min(1) });
+const webhookReplaySchema = z.object({
+  provider: z.enum(['stripe', 'mercadopago', 'evolution']),
+  eventId: z.string().min(3),
+});
+const webhookReplayStaleSchema = z.object({
+  provider: z.enum(['stripe', 'mercadopago', 'evolution']).optional(),
+  olderThanMinutes: z.number().int().min(0).max(24 * 60).optional(),
+  limit: z.number().int().min(1).max(500).optional(),
+});
+const stripeReconcileSchema = z.object({
+  stripeSubscriptionId: z.string().min(3),
+});
+
+function ensureOwner(req: Request, res: Response): boolean {
+  if (req.authUser?.role !== 'owner') {
+    res.status(403).json({ error: 'Acesso restrito a owner.' });
+    return false;
+  }
+  return true;
+}
 
 export const subscriptionsController = {
   // GET /api/subscriptions/plans — public
@@ -177,6 +198,83 @@ export const subscriptionsController = {
       console.error('[Stripe] webhook intake error:', err.message);
       const httpError = webhookIntakeService.toHttpError(err);
       res.status(httpError.statusCode).json({ error: httpError.message });
+    }
+  },
+
+  // GET /api/subscriptions/webhooks/health — owner only
+  async getWebhookHealth(req: Request, res: Response): Promise<void> {
+    if (!ensureOwner(req, res)) return;
+
+    try {
+      const providerRaw = typeof req.query.provider === 'string' ? req.query.provider : '';
+      const provider = providerRaw ? webhookRecoveryService.parseProvider(providerRaw) : undefined;
+      const health = await webhookRecoveryService.getHealth(provider);
+      res.json({ health });
+    } catch (err: any) {
+      console.error('[Subscriptions] getWebhookHealth error:', err.message);
+      res.status(400).json({ error: err.message || 'Erro ao obter saúde dos webhooks' });
+    }
+  },
+
+  // POST /api/subscriptions/webhooks/replay — owner only
+  async replayWebhook(req: Request, res: Response): Promise<void> {
+    if (!ensureOwner(req, res)) return;
+
+    const parsed = webhookReplaySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+
+    try {
+      const replayed = await webhookRecoveryService.replayByProviderEventId(parsed.data.provider, parsed.data.eventId);
+      res.json({ success: true, replayed });
+    } catch (err: any) {
+      console.error('[Subscriptions] replayWebhook error:', err.message);
+      res.status(500).json({ error: 'Erro ao reenfileirar webhook' });
+    }
+  },
+
+  // POST /api/subscriptions/webhooks/replay-stale — owner only
+  async replayStaleWebhooks(req: Request, res: Response): Promise<void> {
+    if (!ensureOwner(req, res)) return;
+
+    const parsed = webhookReplayStaleSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+
+    try {
+      const replay = await webhookRecoveryService.replayStale({
+        provider: parsed.data.provider,
+        olderThanMinutes: parsed.data.olderThanMinutes,
+        limit: parsed.data.limit,
+        statuses: ['pending', 'failed'],
+      });
+      res.json({ success: true, ...replay });
+    } catch (err: any) {
+      console.error('[Subscriptions] replayStaleWebhooks error:', err.message);
+      res.status(500).json({ error: 'Erro ao reenfileirar webhooks pendentes/falhos' });
+    }
+  },
+
+  // POST /api/subscriptions/stripe/reconcile — owner only
+  async reconcileStripeSubscription(req: Request, res: Response): Promise<void> {
+    if (!ensureOwner(req, res)) return;
+
+    const parsed = stripeReconcileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+
+    try {
+      const refreshed = await subscriptionService.refreshStripeSubscriptionFromProvider(parsed.data.stripeSubscriptionId);
+      res.json({ success: true, refreshed });
+    } catch (err: any) {
+      console.error('[Subscriptions] reconcileStripeSubscription error:', err.message);
+      res.status(500).json({ error: 'Erro ao reconciliar assinatura Stripe' });
     }
   },
 };

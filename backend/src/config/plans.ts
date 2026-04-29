@@ -27,7 +27,7 @@ export const PLANS: Record<PlanId, Plan> = {
   solo: {
     id: 'solo',
     name: 'Starter',
-    price_brl: 4900,
+    price_brl: 5900,
     stripe_price_id: process.env.STRIPE_PRICE_ID_SOLO || '',
     limits: {
       leads_per_month: 500,
@@ -47,14 +47,14 @@ export const PLANS: Record<PlanId, Plan> = {
   agencia: {
     id: 'agencia',
     name: 'Pro',
-    price_brl: 6900,
+    price_brl: 9900,
     stripe_price_id: process.env.STRIPE_PRICE_ID_AGENCIA || '',
     limits: {
       leads_per_month: 3000,
       whatsapp_messages: null,
       emails_per_month: 5000,
       pdf_quotes: null,
-      ai_credits: 10000,
+      ai_credits: 25000,
       seats: 3,
     },
     features: [

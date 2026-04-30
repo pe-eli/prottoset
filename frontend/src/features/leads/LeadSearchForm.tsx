@@ -19,6 +19,8 @@ export function LeadSearchForm({
   loading,
   freeTierQuota = null,
 }: LeadSearchFormProps) {
+  const maxResultsOptions = Array.from({ length: 20 }, (_, index) => (index + 1) * 10);
+
   const [form, setForm] = useState<LeadSearchParams>({
     searchTerm: '',
     city: '',
@@ -55,7 +57,18 @@ export function LeadSearchForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.searchTerm.trim() || !form.city.trim()) return;
-    onSearch(form, selectedQueue !== 'none' ? selectedQueue : undefined);
+
+    const normalizedMaxResults = maxResultsOptions.includes(form.maxResults ?? 0)
+      ? (form.maxResults as number)
+      : 20;
+
+    onSearch({ ...form, maxResults: normalizedMaxResults }, selectedQueue !== 'none' ? selectedQueue : undefined);
+  };
+
+  const handleMaxResultsChange = (value: string) => {
+    const parsedValue = Number(value);
+    if (Number.isNaN(parsedValue)) return;
+    setForm((prev) => ({ ...prev, maxResults: parsedValue }));
   };
 
   return (
@@ -105,15 +118,23 @@ export function LeadSearchForm({
             onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
             required
           />
-          <Input
-            label="Máximo de resultados"
-            type="number"
-            min={1}
-            max={100}
-            value={form.maxResults ?? 20}
-            onChange={(e) => setForm((prev) => ({ ...prev, maxResults: Number(e.target.value) }))}
-            required
-          />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-text-secondary">Máximo de resultados</label>
+            <select
+              value={String(form.maxResults ?? 20)}
+              onChange={(e) => handleMaxResultsChange(e.target.value)}
+              className="px-4 py-2.5 bg-surface border border-border rounded-xl text-sm text-text-primary
+                focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all duration-200
+                appearance-none cursor-pointer"
+              required
+            >
+              {maxResultsOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Modo de busca</label>
             <select

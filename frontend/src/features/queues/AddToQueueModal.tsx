@@ -78,16 +78,16 @@ export function AddToQueueModal({ phones, onClose }: AddToQueueModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between p-5 pb-0">
           <div>
-            <h3 className="text-sm font-bold text-brand-950">Adicionar a Fila</h3>
-            <p className="text-xs text-brand-400 mt-0.5">
+            <h3 className="text-sm font-bold text-text-primary">Adicionar a Fila</h3>
+            <p className="text-xs text-text-secondary mt-0.5">
               {phones.length} {phones.length === 1 ? 'número' : 'números'}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-lg bg-brand-50 hover:bg-brand-100 flex items-center justify-center transition-colors"
+            className="w-7 h-7 rounded-lg bg-surface-secondary hover:bg-surface-elevated flex items-center justify-center transition-colors"
           >
-            <svg className="w-3.5 h-3.5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -106,15 +106,15 @@ export function AddToQueueModal({ phones, onClose }: AddToQueueModalProps) {
 
           {/* Create new queue */}
           <div>
-            <h4 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-2">Nova fila</h4>
+            <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-2">Nova fila</h4>
             <div className="flex gap-2">
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Nome da fila..."
-                className="flex-1 px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-brand-950
-                  placeholder:text-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400
+                className="flex-1 px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm text-text-primary
+                  placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400
                   transition-all duration-200"
               />
               <button
@@ -131,7 +131,7 @@ export function AddToQueueModal({ phones, onClose }: AddToQueueModalProps) {
           {/* Existing queues */}
           {queues.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-brand-400 uppercase tracking-widest mb-2">Filas existentes</h4>
+              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-2">Filas existentes</h4>
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {queues.map((q) => {
                   const already = allInQueue(q);
@@ -139,11 +139,11 @@ export function AddToQueueModal({ phones, onClose }: AddToQueueModalProps) {
                   return (
                     <div
                       key={q.id}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-secondary border border-border-light hover:bg-brand-50/50 transition-colors"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-secondary border border-border-light hover:bg-surface-elevated transition-colors"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-brand-950 truncate">{q.name}</p>
-                        <p className="text-[10px] text-brand-300">
+                        <p className="text-sm font-medium text-text-primary truncate">{q.name}</p>
+                        <p className="text-[10px] text-text-secondary">
                           {q.phones.length} {q.phones.length === 1 ? 'número' : 'números'}
                         </p>
                       </div>
@@ -181,12 +181,12 @@ export function AddToQueueModal({ phones, onClose }: AddToQueueModalProps) {
 
           {/* Loading state */}
           {loading && (
-            <p className="text-xs text-brand-300 text-center py-2">Carregando filas...</p>
+            <p className="text-xs text-text-secondary text-center py-2">Carregando filas...</p>
           )}
 
           {/* Empty state */}
           {!loading && queues.length === 0 && (
-            <p className="text-xs text-brand-300 text-center py-2">Nenhuma fila criada. Crie uma acima.</p>
+            <p className="text-xs text-text-secondary text-center py-2">Nenhuma fila criada. Crie uma acima.</p>
           )}
         </div>
       </div>

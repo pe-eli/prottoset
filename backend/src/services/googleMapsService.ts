@@ -46,6 +46,15 @@ function isBlockedWebsite(url: string): boolean {
   }
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export const googleMapsService = {
   /**
    * Busca no Serper Maps API.
@@ -56,7 +65,11 @@ export const googleMapsService = {
     const apiKey = process.env.SERPER_API_KEY;
     if (!apiKey) throw new Error('SERPER_API_KEY não configurado no .env');
 
-    const fullQuery = `${query} ${city}`;
+    const normalizedQuery = normalizeSearchText(query);
+    const normalizedCity = normalizeSearchText(city);
+    const fullQuery = normalizedCity && normalizedQuery.includes(normalizedCity)
+      ? query.trim()
+      : `${query} ${city}`.trim();
     logger.info(`Google Maps: buscando "${fullQuery}"`);
 
     const response = await fetch('https://google.serper.dev/maps', {

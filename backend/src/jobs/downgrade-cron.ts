@@ -12,10 +12,12 @@ import Stripe = require('stripe');
 
 type StripeInstance = InstanceType<typeof Stripe>;
 import { getStripeClient } from '../infrastructure/stripe';
+import { tryAcquireDistributedLock } from '../infrastructure/distributed-lock';
 import { subscriptionRepository } from '../modules/subscriptions/subscription.repository';
 import { PLANS, isValidPlanId } from '../config/plans';
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const DOWNGRADE_LOCK_TTL_MS = 10 * 60 * 1000;
 
 export function startDowngradeCronJob(): void {
   console.log('[DowngradeCron] Starting scheduled downgrade processor');
@@ -28,6 +30,11 @@ export function startDowngradeCronJob(): void {
 }
 
 async function runDowngradeCycle(): Promise<void> {
+  const lock = await tryAcquireDistributedLock('cron-downgrade', DOWNGRADE_LOCK_TTL_MS);
+  if (!lock) {
+    return;
+  }
+
   try {
     const stripe = getStripeClient();
     if (!stripe) {
@@ -56,6 +63,8 @@ async function runDowngradeCycle(): Promise<void> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[DowngradeCron] Cycle error:', msg);
+  } finally {
+    await lock.release();
   }
 }
 

@@ -1,7 +1,9 @@
 import { subscriptionRepository } from '../modules/subscriptions/subscription.repository';
 import { subscriptionService } from '../modules/subscriptions/subscription.service';
+import { tryAcquireDistributedLock } from '../infrastructure/distributed-lock';
 
 const STRIPE_RECONCILIATION_INTERVAL_MS = 30 * 60 * 1000;
+const STRIPE_RECONCILIATION_LOCK_TTL_MS = 10 * 60 * 1000;
 
 export function startStripeReconciliationCron(): void {
   void runStripeReconciliationCycle();
@@ -12,6 +14,11 @@ export function startStripeReconciliationCron(): void {
 }
 
 async function runStripeReconciliationCycle(): Promise<void> {
+  const lock = await tryAcquireDistributedLock('cron-stripe-reconciliation', STRIPE_RECONCILIATION_LOCK_TTL_MS);
+  if (!lock) {
+    return;
+  }
+
   try {
     const candidates = await subscriptionRepository.listStripeManagedSubscriptions({
       statuses: ['active', 'past_due', 'pending', 'incomplete', 'trialing'],
@@ -58,5 +65,7 @@ async function runStripeReconciliationCycle(): Promise<void> {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido';
     console.error('[StripeReconciliation] cycle failed:', message);
+  } finally {
+    await lock.release();
   }
 }

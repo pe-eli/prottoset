@@ -94,7 +94,8 @@ export async function enqueueWhatsAppBlastJob(payload: BlastJobPayload): Promise
 
 export async function enqueueWebhookEventJob(payload: WebhookJobPayload): Promise<void> {
   await getWebhookQueue().add(payload.webhookEventId, payload, {
-    jobId: `${payload.provider}:${payload.webhookEventId}`,
+    // BullMQ rejects custom job IDs containing ':'. Keep a stable dedupe key without colons.
+    jobId: `${payload.provider}-${payload.webhookEventId}`,
   });
 }
 

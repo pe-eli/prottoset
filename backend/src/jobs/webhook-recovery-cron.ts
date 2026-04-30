@@ -1,6 +1,8 @@
 import { webhookRecoveryService } from '../modules/webhooks/webhook-recovery.service';
+import { tryAcquireDistributedLock } from '../infrastructure/distributed-lock';
 
 const WEBHOOK_RECOVERY_INTERVAL_MS = 2 * 60 * 1000;
+const WEBHOOK_RECOVERY_LOCK_TTL_MS = 90_000;
 
 export function startWebhookRecoveryCron(): void {
   void runWebhookRecoveryCycle();
@@ -11,6 +13,11 @@ export function startWebhookRecoveryCron(): void {
 }
 
 async function runWebhookRecoveryCycle(): Promise<void> {
+  const lock = await tryAcquireDistributedLock('cron-webhook-recovery', WEBHOOK_RECOVERY_LOCK_TTL_MS);
+  if (!lock) {
+    return;
+  }
+
   try {
     const replay = await webhookRecoveryService.replayStale({
       provider: 'stripe',
@@ -32,5 +39,7 @@ async function runWebhookRecoveryCycle(): Promise<void> {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido';
     console.error('[WebhookRecovery] cycle failed:', message);
+  } finally {
+    await lock.release();
   }
 }
